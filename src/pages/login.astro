@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import Header from '../components/Header.astro';
 import Logo from '../components/Logo.astro';
-import { Client, Account, Query } from 'node-appwrite';
+import { Client, Account, Query, ID } from 'node-appwrite';
 import { createAdminClient } from '../lib/server/appwrite';
 import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID, NEXT_PUBLIC_APPWRITE_ENDPOINT, NEXT_PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
 
@@ -16,18 +16,50 @@ if (Astro.request.method === 'POST') {
 		const formData = await Astro.request.formData();
 		const actionType = formData.get('actionType')?.toString();
 		const email = formData.get('email')?.toString() || '';
+		const password = formData.get('password')?.toString() || '';
 		
-		if (actionType === 'login') {
-			const password = formData.get('password')?.toString() || '';
-			
-			const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || PUBLIC_APPWRITE_ENDPOINT || NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
-			const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || PUBLIC_APPWRITE_PROJECT_ID || NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
+		const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || PUBLIC_APPWRITE_ENDPOINT || NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
+		const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || PUBLIC_APPWRITE_PROJECT_ID || NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
 
-			const authClient = new Client()
-				.setEndpoint(endpoint)
-				.setProject(projectId);
+		const authClient = new Client().setEndpoint(endpoint).setProject(projectId);
+		const account = new Account(authClient);
+		const { users, databases } = createAdminClient();
+
+		if (actionType === 'register') {
+			const nombre = formData.get('nombre')?.toString() || '';
+			const apellido = formData.get('apellido')?.toString() || '';
 			
-			const account = new Account(authClient);
+			if (!nombre || !apellido || !email || password.length < 8) {
+				throw new Error('Todos los campos son obligatorios y la contraseña debe tener al menos 8 caracteres.');
+			}
+
+			// 1. Crear usuario en Auth
+			const newUser = await users.create(ID.unique(), email, undefined, password, `${nombre} ${apellido}`);
+			
+			// 2. Crear Perfil
+			await databases.createDocument('urbanpoint', 'profiles', ID.unique(), {
+				user_id: newUser.$id,
+				role: 'cliente',
+				nombre: `${nombre} ${apellido}`,
+				email: email,
+				telefono: '',
+				saldo_disponible_centavos: 0
+			});
+
+			// 3. Login Automático
+			const session = await account.createEmailPasswordSession(email, password);
+			
+			Astro.cookies.set('up_session', session.secret, {
+				path: '/',
+				httpOnly: true,
+				secure: false,
+				sameSite: 'lax',
+				maxAge: 60 * 60 * 24 * 30
+			});
+
+			return Astro.redirect('/mi-cuenta');
+		}
+		else if (actionType === 'login') {
 			const session = await account.createEmailPasswordSession(email, password);
 			
 			Astro.cookies.set('up_session', session.secret, {
@@ -39,7 +71,6 @@ if (Astro.request.method === 'POST') {
 			});
 			
 			try {
-				const { databases } = createAdminClient();
 				const profiles = await databases.listDocuments('urbanpoint', 'profiles', [
 					Query.equal('user_id', session.userId)
 				]);
@@ -47,17 +78,16 @@ if (Astro.request.method === 'POST') {
 				const role = profiles.documents.length > 0 ? profiles.documents[0].role : 'cliente';
 				let redirectUrl = '/admin';
 				if (role === 'canillita') redirectUrl = '/canillita';
-				if (role === 'cliente') redirectUrl = '/';
+				if (role === 'cliente') redirectUrl = '/mi-cuenta';
 				
 				return Astro.redirect(redirectUrl);
 			} catch (dbErr) {
-				// If DB fails (no API key, etc), default to admin for azcurraely or client for others
 				if (email === 'azcurraely@gmail.com') return Astro.redirect('/admin');
-				return Astro.redirect('/');
+				return Astro.redirect('/mi-cuenta');
 			}
 		}
 	} catch (e: any) {
-		loginError = e.message || 'Credenciales inválidas';
+		loginError = e.message || 'Error al procesar la solicitud.';
 	}
 }
 ---
@@ -94,14 +124,32 @@ if (Astro.request.method === 'POST') {
 				<div id="successBox" class="hidden bg-emerald-50 border border-emerald-200 text-[#2D5A27] px-4 py-3 rounded-xl text-xs font-semibold mb-4"></div>
 				<div id="clientErrorBox" class="hidden bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-xs font-semibold mb-4"></div>
 
-				<!-- FORM CREAR CUENTA (Client Side Only) -->
-				<form id="registerForm" class="space-y-4 hidden">
+				<!-- FORM CREAR CUENTA (Server Side POST) -->
+				<form id="registerForm" method="POST" class="space-y-4 hidden">
+					<input type="hidden" name="actionType" value="register" />
+					
+					<div class="grid grid-cols-2 gap-4">
+						<div>
+							<label for="reg-nombre" class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">Nombre</label>
+							<input type="text" id="reg-nombre" name="nombre" required class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:outline-none transition-all font-medium text-slate-900 text-sm" placeholder="Juan" />
+						</div>
+						<div>
+							<label for="reg-apellido" class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">Apellido</label>
+							<input type="text" id="reg-apellido" name="apellido" required class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:outline-none transition-all font-medium text-slate-900 text-sm" placeholder="Pérez" />
+						</div>
+					</div>
+
 					<div>
 						<label for="reg-email" class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">Tu Correo Electrónico</label>
-						<input type="email" id="reg-email" name="email" class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:outline-none transition-all font-medium text-slate-900 text-sm" placeholder="ejemplo@correo.com" />
-						<p class="text-[11px] text-slate-500 mt-2 leading-tight">Solo pedimos tu email para crear tu cuenta al instante.</p>
+						<input type="email" id="reg-email" name="email" required class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:outline-none transition-all font-medium text-slate-900 text-sm" placeholder="ejemplo@correo.com" />
 					</div>
-					<button type="button" id="regSubmitBtn" class="w-full bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold py-4 px-6 rounded-xl shadow-lg shadow-[#2D5A27]/20 transition-all flex items-center justify-center gap-2 text-sm cursor-pointer mt-2">
+
+					<div>
+						<label for="reg-password" class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">Contraseña</label>
+						<input type="password" id="reg-password" name="password" required minlength="8" class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:outline-none transition-all font-medium text-slate-900 text-sm" placeholder="Mínimo 8 caracteres" />
+					</div>
+
+					<button type="submit" id="regSubmitBtn" class="w-full bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold py-4 px-6 rounded-xl shadow-lg shadow-[#2D5A27]/20 transition-all flex items-center justify-center gap-2 text-sm cursor-pointer mt-2">
 						Crear mi cuenta
 					</button>
 				</form>
@@ -133,11 +181,8 @@ if (Astro.request.method === 'POST') {
 <script>
 	const tabRegister = document.getElementById('tab-register');
 	const tabLogin = document.getElementById('tab-login');
-	const registerForm = document.getElementById('registerForm');
-	const loginForm = document.getElementById('loginForm');
-	const regSubmitBtn = document.getElementById('regSubmitBtn');
-	const successBox = document.getElementById('successBox');
-	const clientErrorBox = document.getElementById('clientErrorBox');
+	const registerForm = document.getElementById('registerForm') as HTMLFormElement;
+	const loginForm = document.getElementById('loginForm') as HTMLFormElement;
 
 	tabRegister?.addEventListener('click', () => {
 		tabRegister.className = "flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all bg-[#2D5A27] text-white shadow-xs";
@@ -153,37 +198,13 @@ if (Astro.request.method === 'POST') {
 		registerForm?.classList.add('hidden');
 	});
 
-	regSubmitBtn?.addEventListener('click', () => {
-		const emailInput = (document.getElementById('reg-email') as HTMLInputElement).value;
-		if (!emailInput) {
-			if (clientErrorBox) {
-				clientErrorBox.textContent = 'Ingresá tu email.';
-				clientErrorBox.classList.remove('hidden');
-			}
-			return;
-		}
-		
-		try {
-			localStorage.setItem('urbanpoint_user_email', emailInput);
-			if (successBox) {
-				successBox.textContent = `¡Cuenta lista para ${emailInput}! Redirigiendo...`;
-				successBox.classList.remove('hidden');
-			}
-			setTimeout(() => {
-				window.location.href = '/productos';
-			}, 1200);
-		} catch (err) {
-			if (clientErrorBox) {
-				clientErrorBox.textContent = 'Error guardando email.';
-				clientErrorBox.classList.remove('hidden');
-			}
-		}
+	registerForm?.addEventListener('submit', () => {
+		const btn = document.getElementById('regSubmitBtn') as HTMLButtonElement;
+		if (btn) btn.innerHTML = 'Creando...';
 	});
 
 	loginForm?.addEventListener('submit', () => {
 		const btn = document.getElementById('loginSubmitBtn') as HTMLButtonElement;
-		if (btn) {
-			btn.innerHTML = 'Ingresando...';
-		}
+		if (btn) btn.innerHTML = 'Ingresando...';
 	});
 </script>

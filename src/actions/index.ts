@@ -2,6 +2,7 @@ import { defineAction } from 'astro:actions';
 import { z } from 'astro:schema';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { Client, Databases, ID, Users, Query, Account } from 'node-appwrite';
+import { getClientProfile } from '../lib/server/auth';
 import { APPWRITE_API_KEY, MP_ACCESS_TOKEN } from 'astro:env/server';
 import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
 
@@ -188,8 +189,16 @@ export const server = {
 			pickupPointId: z.string(),
 			referralCode: z.string().optional()
 		}),
-		handler: async (input) => {
+		handler: async (input, ctx) => {
 			try {
+				let profileId = null;
+				try {
+					const profile = await getClientProfile(ctx.cookies);
+					if (profile) profileId = profile.$id;
+				} catch (e) {
+					console.error("No profile attached to checkout:", e);
+				}
+
 				let referralCodeId = null;
 				if (input.referralCode) {
 					const codeRes = await db.listDocuments('urbanpoint', 'referral_codes', [
@@ -243,13 +252,18 @@ export const server = {
 				const pickupCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
 				// Create the Order in Appwrite
-				const orderDoc = await db.createDocument('urbanpoint', 'orders', ID.unique(), {
+				const orderPayload: any = {
 					total_centavos: totalCentavos,
 					estado: 'pendiente_pago',
 					pickup_point_id: input.pickupPointId,
 					referral_code_id: referralCodeId,
 					pickup_code_hash: pickupCode
-				});
+				};
+				if (profileId) {
+					orderPayload.profile_id = profileId;
+				}
+
+				const orderDoc = await db.createDocument('urbanpoint', 'orders', ID.unique(), orderPayload);
 
 				// Create the Order Items
 				for (const oi of orderItemsData) {

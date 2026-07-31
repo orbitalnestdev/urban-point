@@ -1,0 +1,135 @@
+---
+import ClientLayout from '../../../../layouts/ClientLayout.astro';
+import { getClientProfile } from '../../../../lib/server/auth';
+import { createAdminClient } from '../../../../lib/server/appwrite';
+import { Query } from 'node-appwrite';
+
+export const prerender = false;
+
+const { id } = Astro.params;
+const profile = await getClientProfile(Astro.cookies);
+if (!profile) return Astro.redirect('/login');
+
+let order = null;
+let orderItems = [];
+let pickupPoint = null;
+
+try {
+	const { databases } = createAdminClient();
+	order = await databases.getDocument('urbanpoint', 'orders', id as string);
+	
+	if (order.profile_id !== profile.$id) {
+		return Astro.redirect('/mi-cuenta/pedidos');
+	}
+
+	const itemsRes = await databases.listDocuments('urbanpoint', 'order_items', [
+		Query.equal('order_id', order.$id)
+	]);
+	orderItems = itemsRes.documents;
+
+	pickupPoint = await databases.getDocument('urbanpoint', 'pickup_points', order.pickup_point_id);
+
+} catch (e) {
+	return Astro.redirect('/mi-cuenta/pedidos');
+}
+
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+
+const getStatusBadge = (status: string) => {
+	switch(status) {
+		case 'pendiente_pago': return '<span class="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-full">Pendiente de Pago</span>';
+		case 'pagado': return '<span class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1.5 rounded-full">Procesando</span>';
+		case 'en_transito': return '<span class="bg-purple-100 text-purple-800 text-xs font-bold px-3 py-1.5 rounded-full">En Camino</span>';
+		case 'listo_retiro': return '<span class="bg-emerald-100 text-[#2D5A27] text-xs font-bold px-3 py-1.5 rounded-full">¡Listo para Retirar!</span>';
+		case 'entregado': return '<span class="bg-slate-200 text-slate-700 text-xs font-bold px-3 py-1.5 rounded-full">Entregado</span>';
+		case 'cancelado': return '<span class="bg-red-100 text-red-800 text-xs font-bold px-3 py-1.5 rounded-full">Cancelado</span>';
+		default: return `<span class="bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1.5 rounded-full">${status}</span>`;
+	}
+};
+---
+
+<ClientLayout title={`Pedido #${order.$id.substring(0,6).toUpperCase()} | UrbanPoint`} activeTab="pedidos">
+	<div class="mb-4">
+		<a href="/mi-cuenta/pedidos" class="text-sm font-bold text-slate-500 hover:text-[#2D5A27]">← Volver a Mis Pedidos</a>
+	</div>
+	
+	<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+		<!-- Main Order Details -->
+		<div class="lg:col-span-2 space-y-6">
+			<div class="bg-white rounded-3xl p-6 md:p-8 border border-slate-200/80 shadow-sm">
+				<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-100">
+					<div>
+						<h2 class="text-2xl font-black text-slate-900">Pedido #{order.$id.substring(0,6).toUpperCase()}</h2>
+						<p class="text-sm text-slate-500 font-medium">
+							{new Date(order.$createdAt).toLocaleDateString('es-AR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+						</p>
+					</div>
+					<div>
+						<Fragment set:html={getStatusBadge(order.estado)} />
+					</div>
+				</div>
+
+				<h3 class="font-bold text-slate-900 mb-4">Artículos</h3>
+				<div class="space-y-4">
+					{orderItems.map((item) => (
+						<div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+							<div class="flex gap-4 items-center">
+								<div class="w-12 h-12 bg-white rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 font-bold">
+									{item.cantidad}x
+								</div>
+								<div>
+									<p class="font-bold text-slate-900 text-sm">{JSON.parse(item.product_snapshot).nombre}</p>
+									<p class="text-xs text-slate-500">SKU: {JSON.parse(item.product_snapshot).sku}</p>
+								</div>
+							</div>
+							<p class="font-black text-slate-900">{formateador.format(item.subtotal_centavos / 100)}</p>
+						</div>
+					))}
+				</div>
+				
+				<div class="mt-6 pt-6 border-t border-slate-100 flex justify-between items-center">
+					<p class="text-lg font-bold text-slate-600">Total pagado</p>
+					<p class="text-2xl font-black text-[#2D5A27]">{formateador.format(order.total_centavos / 100)}</p>
+				</div>
+			</div>
+		</div>
+		
+		<!-- Sidebar / QR Code -->
+		<div class="space-y-6">
+			{order.estado === 'listo_retiro' && (
+				<div class="bg-[#2D5A27] rounded-3xl p-6 text-white text-center shadow-lg shadow-[#2D5A27]/20 border border-white/10 relative overflow-hidden">
+					<div class="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -translate-y-16 translate-x-16"></div>
+					
+					<h3 class="font-bold text-lg mb-2 relative z-10">Código de Retiro</h3>
+					<p class="text-sm text-emerald-100 mb-6 relative z-10">Mostrá este código al Canillita para llevarte tu pedido.</p>
+					
+					<div class="bg-white p-4 rounded-2xl inline-block mx-auto mb-4 relative z-10 shadow-inner">
+						<img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${order.pickup_code_hash}`} alt="QR Retiro" class="w-32 h-32" />
+					</div>
+					
+					<p class="text-3xl font-black tracking-widest relative z-10">{order.pickup_code_hash}</p>
+				</div>
+			)}
+			
+			<div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
+				<h3 class="font-bold text-slate-900 mb-4 flex items-center gap-2">
+					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+					Punto de Retiro
+				</h3>
+				{pickupPoint && (
+					<div>
+						<p class="font-bold text-slate-900 text-sm mb-1">{pickupPoint.nombre}</p>
+						<p class="text-sm text-slate-600 mb-4">{pickupPoint.direccion}</p>
+						
+						{pickupPoint.map_url && (
+							<a href={pickupPoint.map_url} target="_blank" class="text-xs font-bold text-[#2D5A27] hover:underline flex items-center gap-1">
+								Ver en Google Maps
+								<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+							</a>
+						)}
+					</div>
+				)}
+			</div>
+		</div>
+	</div>
+</ClientLayout>

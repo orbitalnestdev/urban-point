@@ -1,0 +1,88 @@
+---
+import ClientLayout from '../../../layouts/ClientLayout.astro';
+import { getClientProfile } from '../../../lib/server/auth';
+import { createAdminClient } from '../../../lib/server/appwrite';
+import { Query } from 'node-appwrite';
+
+export const prerender = false;
+
+const profile = await getClientProfile(Astro.cookies);
+if (!profile) return Astro.redirect('/login');
+
+let orders: any[] = [];
+try {
+	const { databases } = createAdminClient();
+	const res = await databases.listDocuments('urbanpoint', 'orders', [
+		Query.equal('profile_id', profile.$id),
+		Query.orderDesc('$createdAt')
+	]);
+	orders = res.documents;
+} catch (e) {
+	console.error('Error fetching orders:', e);
+}
+
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+
+const getStatusBadge = (status: string) => {
+	switch(status) {
+		case 'pendiente_pago': return '<span class="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-full">Pendiente de Pago</span>';
+		case 'pagado': return '<span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-full">Procesando</span>';
+		case 'en_transito': return '<span class="bg-purple-100 text-purple-800 text-xs font-bold px-2.5 py-1 rounded-full">En Camino</span>';
+		case 'listo_retiro': return '<span class="bg-emerald-100 text-[#2D5A27] text-xs font-bold px-2.5 py-1 rounded-full">¡Listo para Retirar!</span>';
+		case 'entregado': return '<span class="bg-slate-200 text-slate-700 text-xs font-bold px-2.5 py-1 rounded-full">Entregado</span>';
+		case 'cancelado': return '<span class="bg-red-100 text-red-800 text-xs font-bold px-2.5 py-1 rounded-full">Cancelado</span>';
+		default: return `<span class="bg-slate-100 text-slate-600 text-xs font-bold px-2.5 py-1 rounded-full">${status}</span>`;
+	}
+};
+---
+
+<ClientLayout title="Mis Pedidos | UrbanPoint" activeTab="pedidos">
+	<div class="bg-white rounded-3xl p-6 md:p-8 border border-slate-200/80 shadow-sm">
+		<h2 class="text-2xl font-extrabold text-slate-900 mb-6">Mis Pedidos</h2>
+		
+		{orders.length === 0 ? (
+			<div class="text-center py-12">
+				<div class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4 text-slate-400">
+					<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+				</div>
+				<h3 class="text-lg font-bold text-slate-800 mb-2">Aún no hiciste ningún pedido</h3>
+				<p class="text-sm text-slate-500 mb-6">Explorá nuestro catálogo y encontrá las mejores ofertas para tu barrio.</p>
+				<a href="/productos" class="px-6 py-3 bg-[#2D5A27] text-white font-bold text-sm rounded-xl hover:bg-[#1E3E1B] transition-colors shadow-sm">
+					Ir a la tienda
+				</a>
+			</div>
+		) : (
+			<div class="space-y-4">
+				{orders.map((order) => (
+					<a href={`/mi-cuenta/pedidos/${order.$id}`} class="block bg-slate-50 border border-slate-200 rounded-2xl p-5 hover:border-[#2D5A27]/50 hover:bg-slate-50/50 transition-colors group">
+						<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+							<div class="flex items-center gap-4">
+								<div class="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-[#2D5A27] shrink-0">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path></svg>
+								</div>
+								<div>
+									<div class="flex items-center gap-2 mb-1">
+										<span class="font-extrabold text-slate-900 text-sm md:text-base">Pedido #{order.$id.substring(0,6).toUpperCase()}</span>
+										<Fragment set:html={getStatusBadge(order.estado)} />
+									</div>
+									<p class="text-xs text-slate-500">
+										{new Date(order.$createdAt).toLocaleDateString('es-AR', { year: 'numeric', month: 'long', day: 'numeric' })}
+									</p>
+								</div>
+							</div>
+							<div class="flex items-center justify-between md:justify-end gap-6 md:border-l md:border-slate-200 md:pl-6">
+								<div>
+									<p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total</p>
+									<p class="font-black text-slate-900">{formateador.format(order.total_centavos / 100)}</p>
+								</div>
+								<div class="text-slate-400 group-hover:text-[#2D5A27] transition-colors">
+									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+								</div>
+							</div>
+						</div>
+					</a>
+				))}
+			</div>
+		)}
+	</div>
+</ClientLayout>
