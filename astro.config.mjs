@@ -23,7 +23,7 @@ export default defineConfig({
   env: {
     schema: {
       PUBLIC_APPWRITE_ENDPOINT: envField.string({ context: 'client', access: 'public', default: 'https://aw.orbitalnest.net/v1' }),
-      PUBLIC_APPWRITE_PROJECT_ID: envField.string({ context: 'client', access: 'public', default: '679c1ab70038cb12bc4f' }),
+      PUBLIC_APPWRITE_PROJECT_ID: envField.string({ context: 'client', access: 'public', default: '6a6a5321001439f06817' }),
       NEXT_PUBLIC_APPWRITE_ENDPOINT: envField.string({ context: 'client', access: 'public', optional: true, default: '' }),
       NEXT_PUBLIC_APPWRITE_PROJECT_ID: envField.string({ context: 'client', access: 'public', optional: true, default: '' }),
       APPWRITE_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true, default: '' }),
