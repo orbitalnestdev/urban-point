@@ -9,6 +9,14 @@ import { resolverComisiones, cancelarOrdenYRestaurarStock } from '../lib/commiss
 
 import { createAdminClient } from '../lib/server/appwrite';
 
+const client = new Proxy({} as Client, {
+	get(_target, prop: keyof Client) {
+		const instance = createAdminClient().client;
+		const val = instance[prop];
+		return typeof val === 'function' ? val.bind(instance) : val;
+	}
+});
+
 const db = new Proxy({} as Databases, {
 	get(_target, prop: keyof Databases) {
 		const instance = createAdminClient().databases;

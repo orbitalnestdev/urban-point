@@ -1,4 +1,4 @@
-import { Client, Databases, Users } from 'node-appwrite';
+import { Client, Databases, Users, Storage, Account } from 'node-appwrite';
 import { APPWRITE_API_KEY } from 'astro:env/server';
 import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID, NEXT_PUBLIC_APPWRITE_ENDPOINT, NEXT_PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
 
@@ -22,11 +22,18 @@ export const createAdminClient = () => {
     }
 
     return {
+        client,
         get databases() {
             return new Databases(client);
         },
         get users() {
             return new Users(client);
+        },
+        get storage() {
+            return new Storage(client);
+        },
+        get account() {
+            return new Account(client);
         }
     };
 };
