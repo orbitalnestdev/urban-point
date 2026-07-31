@@ -10,14 +10,28 @@ export const prerender = false;
 let pickupPoints: any[] = [];
 try {
 	const { databases } = createAdminClient();
-	const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-		Query.equal('estado', 'activo')
-	]);
-	pickupPoints = pickupRes.documents.map(p => ({
-		$id: p.$id,
-		nombre_comercial: p.nombre_comercial,
-		direccion: p.direccion
-	}));
+	try {
+		const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
+			Query.equal('estado', 'activo'),
+			Query.limit(100)
+		]);
+		pickupPoints = pickupRes.documents.map(p => ({
+			$id: p.$id,
+			nombre_comercial: p.nombre_comercial,
+			direccion: p.direccion
+		}));
+	} catch (err1) {
+		const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
+			Query.limit(100)
+		]);
+		pickupPoints = pickupRes.documents
+			.filter((p: any) => p.estado === 'activo' || !p.estado)
+			.map(p => ({
+				$id: p.$id,
+				nombre_comercial: p.nombre_comercial,
+				direccion: p.direccion
+			}));
+	}
 } catch (e) {
 	console.error('Error cargando puntos de retiro para /carrito:', e);
 }
