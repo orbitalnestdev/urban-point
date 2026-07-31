@@ -15,26 +15,48 @@ let pickupPoints: any[] = [];
 try {
 	const { databases } = createAdminClient();
 	
-	// Fetch Active Products
-	const prodRes = await databases.listDocuments('urbanpoint', 'products', [
-		Query.equal('estado', 'activo'),
-		Query.limit(100)
-	]);
-	products = prodRes.documents;
+	try {
+		const prodRes = await databases.listDocuments('urbanpoint', 'products', [
+			Query.equal('estado', 'activo'),
+			Query.limit(100)
+		]);
+		products = prodRes.documents;
+	} catch (errProd) {
+		const prodRes = await databases.listDocuments('urbanpoint', 'products', [
+			Query.limit(100)
+		]);
+		products = prodRes.documents.filter((p: any) => p.estado === 'activo' || !p.estado);
+	}
 
-	// Fetch Categories
-	const catRes = await databases.listDocuments('urbanpoint', 'categories');
-	categories = catRes.documents;
+	try {
+		const catRes = await databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
+		categories = catRes.documents;
+	} catch (e) {}
 
-	// Fetch Active Pickup Points for CartDrawer
-	const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-		Query.equal('estado', 'activo')
-	]);
-	pickupPoints = pickupRes.documents.map(p => ({
-		$id: p.$id,
-		nombre_comercial: p.nombre_comercial,
-		direccion: p.direccion
-	}));
+	try {
+		const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
+			Query.equal('estado', 'activo'),
+			Query.limit(100)
+		]);
+		pickupPoints = pickupRes.documents.map(p => ({
+			$id: p.$id,
+			nombre_comercial: p.nombre_comercial,
+			direccion: p.direccion
+		}));
+	} catch (e) {
+		try {
+			const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
+				Query.limit(100)
+			]);
+			pickupPoints = pickupRes.documents
+				.filter((p: any) => p.estado === 'activo' || !p.estado)
+				.map(p => ({
+					$id: p.$id,
+					nombre_comercial: p.nombre_comercial,
+					direccion: p.direccion
+				}));
+		} catch (err2) {}
+	}
 } catch (e) {
 	console.error('Error cargando catálogo minorista:', e);
 }

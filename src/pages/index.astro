@@ -15,23 +15,38 @@ let pickupPoints: any[] = [];
 try {
 	const { databases } = createAdminClient();
 	
-	// Fetch featured active products
-	const prodRes = await databases.listDocuments('urbanpoint', 'products', [
-		Query.equal('estado', 'activo'),
-		Query.limit(8)
-	]);
-	featuredProducts = prodRes.documents;
+	try {
+		const prodRes = await databases.listDocuments('urbanpoint', 'products', [
+			Query.equal('estado', 'activo'),
+			Query.limit(8)
+		]);
+		featuredProducts = prodRes.documents;
+	} catch (errProd) {
+		const prodRes = await databases.listDocuments('urbanpoint', 'products', [
+			Query.limit(8)
+		]);
+		featuredProducts = prodRes.documents.filter((p: any) => p.estado === 'activo' || !p.estado);
+	}
 
-	// Fetch categories
-	const catRes = await databases.listDocuments('urbanpoint', 'categories');
-	categories = catRes.documents;
+	try {
+		const catRes = await databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
+		categories = catRes.documents;
+	} catch (e) {}
 
-	// Fetch pickup points
-	const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-		Query.equal('estado', 'activo'),
-		Query.limit(50)
-	]);
-	pickupPoints = pickupRes.documents;
+	try {
+		const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
+			Query.equal('estado', 'activo'),
+			Query.limit(50)
+		]);
+		pickupPoints = pickupRes.documents;
+	} catch (e) {
+		try {
+			const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
+				Query.limit(50)
+			]);
+			pickupPoints = pickupRes.documents.filter((p: any) => p.estado === 'activo' || !p.estado);
+		} catch (err2) {}
+	}
 } catch (e) {
 	console.error('Error cargando datos para home:', e);
 }
