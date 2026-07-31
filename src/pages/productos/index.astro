@@ -11,21 +11,18 @@ import { Query } from 'node-appwrite';
 let products: any[] = [];
 let categories: any[] = [];
 let pickupPoints: any[] = [];
+let debugError: string = '';
 
 try {
 	const { databases } = createAdminClient();
 	
 	try {
 		const prodRes = await databases.listDocuments('urbanpoint', 'products', [
-			Query.equal('estado', 'activo'),
-			Query.limit(100)
-		]);
-		products = prodRes.documents;
-	} catch (errProd) {
-		const prodRes = await databases.listDocuments('urbanpoint', 'products', [
 			Query.limit(100)
 		]);
 		products = prodRes.documents.filter((p: any) => p.estado === 'activo' || !p.estado);
+	} catch (errProd: any) {
+		debugError = 'Error listDocuments products: ' + (errProd?.message || errProd);
 	}
 
 	try {
@@ -35,30 +32,18 @@ try {
 
 	try {
 		const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-			Query.equal('estado', 'activo'),
 			Query.limit(100)
 		]);
-		pickupPoints = pickupRes.documents.map(p => ({
-			$id: p.$id,
-			nombre_comercial: p.nombre_comercial,
-			direccion: p.direccion
-		}));
-	} catch (e) {
-		try {
-			const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-				Query.limit(100)
-			]);
-			pickupPoints = pickupRes.documents
-				.filter((p: any) => p.estado === 'activo' || !p.estado)
-				.map(p => ({
-					$id: p.$id,
-					nombre_comercial: p.nombre_comercial,
-					direccion: p.direccion
-				}));
-		} catch (err2) {}
-	}
-} catch (e) {
-	console.error('Error cargando catálogo minorista:', e);
+		pickupPoints = pickupRes.documents
+			.filter((p: any) => p.estado === 'activo' || !p.estado)
+			.map(p => ({
+				$id: p.$id,
+				nombre_comercial: p.nombre_comercial,
+				direccion: p.direccion
+			}));
+	} catch (e) {}
+} catch (e: any) {
+	debugError = 'Error createAdminClient: ' + (e?.message || e);
 }
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
