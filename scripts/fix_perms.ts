@@ -1,38 +1,36 @@
-import { Client, Storage, Permission, Role } from 'node-appwrite';
-import fs from 'fs';
-import path from 'path';
+import { Client, Databases, Permission, Role } from 'node-appwrite';
+import { config } from 'dotenv';
+config({ path: '.env.local' });
 
-const envPath = path.resolve(process.cwd(), '.env');
-if (fs.existsSync(envPath)) {
-  const envConfig = fs.readFileSync(envPath, 'utf8');
-  for (const line of envConfig.split('\n')) {
-    const [key, val] = line.split('=');
-    if (key && val) {
-      process.env[key.trim()] = val.trim().replace(/^["']|["']$/g, '');
-    }
-  }
-}
+const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
+const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
+const apiKey = process.env.APPWRITE_API_KEY!;
 
 const client = new Client()
-  .setEndpoint(process.env.PUBLIC_APPWRITE_ENDPOINT || '')
-  .setProject(process.env.PUBLIC_APPWRITE_PROJECT_ID || '')
-  .setKey(process.env.APPWRITE_API_KEY || '');
+    .setEndpoint(endpoint)
+    .setProject(projectId)
+    .setKey(apiKey);
 
-const storage = new Storage(client);
+const db = new Databases(client);
 
-async function run() {
-  try {
-    const files = await storage.listFiles('products');
-    console.log(`Actualizando ${files.total} archivos...`);
+async function fixPermissions() {
+    const collections = ['products', 'categories', 'pickup_points', 'orders', 'canillitas', 'commission_ledger', 'payouts'];
     
-    let count = 0;
-    for (const file of files.files) {
-      await storage.updateFile('products', file.$id, file.name, [Permission.read(Role.any())]);
-      count++;
+    for (const colId of collections) {
+        try {
+            console.log(`Setting read(Role.any()) permissions on collection '${colId}'...`);
+            await db.updateCollection(
+                'urbanpoint',
+                colId,
+                colId,
+                [Permission.read(Role.any())], // Enable public read access
+                false // documentSecurity
+            );
+            console.log(`✓ Collection '${colId}' permissions updated to read(Role.any()).`);
+        } catch (e: any) {
+            console.error(`X Error updating '${colId}':`, e.message);
+        }
     }
-    console.log(`✅ ${count} archivos actualizados con permisos públicos.`);
-  } catch(e: any) {
-    console.error('Error:', e.message);
-  }
 }
-run();
+
+fixPermissions();
