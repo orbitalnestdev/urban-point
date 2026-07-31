@@ -5,50 +5,19 @@ import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import Logo from '../components/Logo.astro';
 import AddToCartBtn from '../components/shop/AddToCartBtn';
-import { createAdminClient } from '../lib/server/appwrite';
-import { Query } from 'node-appwrite';
+import { getCachedCatalog } from '../lib/server/catalogCache';
 
 let featuredProducts: any[] = [];
 let categories: any[] = [];
 let pickupPoints: any[] = [];
 
 try {
-	const { databases } = createAdminClient();
-	
-	try {
-		const prodRes = await databases.listDocuments('urbanpoint', 'products', [
-			Query.equal('estado', 'activo'),
-			Query.limit(8)
-		]);
-		featuredProducts = prodRes.documents;
-	} catch (errProd) {
-		const prodRes = await databases.listDocuments('urbanpoint', 'products', [
-			Query.limit(8)
-		]);
-		featuredProducts = prodRes.documents.filter((p: any) => p.estado === 'activo' || !p.estado);
-	}
-
-	try {
-		const catRes = await databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
-		categories = catRes.documents;
-	} catch (e) {}
-
-	try {
-		const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-			Query.equal('estado', 'activo'),
-			Query.limit(50)
-		]);
-		pickupPoints = pickupRes.documents;
-	} catch (e) {
-		try {
-			const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-				Query.limit(50)
-			]);
-			pickupPoints = pickupRes.documents.filter((p: any) => p.estado === 'activo' || !p.estado);
-		} catch (err2) {}
-	}
+	const cache = await getCachedCatalog();
+	featuredProducts = cache.products.slice(0, 8);
+	categories = cache.categories;
+	pickupPoints = cache.pickupPoints;
 } catch (e) {
-	console.error('Error cargando datos para home:', e);
+	console.error('Error cargando página de inicio:', e);
 }
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });

@@ -5,8 +5,7 @@ import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import AddToCartBtn from '../../components/shop/AddToCartBtn';
 import CartDrawer from '../../components/shop/CartDrawer';
-import { createAdminClient } from '../../lib/server/appwrite';
-import { Query } from 'node-appwrite';
+import { getCachedCatalog } from '../../lib/server/catalogCache';
 
 let products: any[] = [];
 let categories: any[] = [];
@@ -14,36 +13,12 @@ let pickupPoints: any[] = [];
 let debugError: string = '';
 
 try {
-	const { databases } = createAdminClient();
-	
-	try {
-		const prodRes = await databases.listDocuments('urbanpoint', 'products', [
-			Query.limit(100)
-		]);
-		products = prodRes.documents.filter((p: any) => p.estado === 'activo' || !p.estado);
-	} catch (errProd: any) {
-		debugError = 'Error listDocuments products: ' + (errProd?.message || errProd);
-	}
-
-	try {
-		const catRes = await databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
-		categories = catRes.documents;
-	} catch (e) {}
-
-	try {
-		const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-			Query.limit(100)
-		]);
-		pickupPoints = pickupRes.documents
-			.filter((p: any) => p.estado === 'activo' || !p.estado)
-			.map(p => ({
-				$id: p.$id,
-				nombre_comercial: p.nombre_comercial,
-				direccion: p.direccion
-			}));
-	} catch (e) {}
+	const cache = await getCachedCatalog();
+	products = cache.products;
+	categories = cache.categories;
+	pickupPoints = cache.pickupPoints;
 } catch (e: any) {
-	debugError = 'Error createAdminClient: ' + (e?.message || e);
+	debugError = 'Error getCachedCatalog: ' + (e?.message || e);
 }
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
