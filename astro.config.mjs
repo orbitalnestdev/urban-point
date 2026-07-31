@@ -7,6 +7,10 @@ import react from '@astrojs/react';
 
 // https://astro.build/config
 export default defineConfig({
+  security: {
+    checkOrigin: false
+  },
+
   server: {
     host: '0.0.0.0',
     port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000
