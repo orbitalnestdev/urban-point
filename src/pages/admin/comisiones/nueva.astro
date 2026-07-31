@@ -1,0 +1,55 @@
+---
+export const prerender = false;
+import Layout from '../../../layouts/Layout.astro';
+import RuleForm from '../../../components/admin/RuleForm';
+import { Client, Databases, Query } from 'node-appwrite';
+import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { APPWRITE_API_KEY } from 'astro:env/server';
+import { ChevronLeft } from 'lucide-react';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') {
+  return Astro.redirect('/');
+}
+
+const client = new Client()
+  .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+  .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+  .setKey(APPWRITE_API_KEY);
+
+const db = new Databases(client);
+
+// Fetch data for selects
+const categoriasRes = await db.listDocuments('urbanpoint', 'categories', [Query.limit(50)]);
+const categorias = categoriasRes.documents.map(c => ({ id: c.$id, name: c.nombre }));
+
+const canillitasRes = await db.listDocuments('urbanpoint', 'pickup_points', [
+  Query.equal('estado', 'activo'),
+  Query.limit(50)
+]);
+const canillitas = canillitasRes.documents.map(c => ({ id: typeof c.profile_id === 'string' ? c.profile_id : c.profile_id.$id, name: c.nombre_comercial }));
+---
+
+<Layout title="Nueva Regla | UrbanPoint Admin">
+  <nav class="w-full z-50 bg-slate-900 border-b border-slate-800">
+		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+			<div class="flex items-center gap-4 text-white">
+        <a href="/admin/comisiones" class="text-slate-400 hover:text-white transition-colors">
+          <ChevronLeft class="w-5 h-5" />
+        </a>
+				<span class="text-xl font-extrabold tracking-tight">Admin | Nueva Regla</span>
+			</div>
+		</div>
+	</nav>
+
+  <main class="min-h-[calc(100vh-64px)] bg-slate-50 py-12">
+    <div class="max-w-3xl mx-auto px-6">
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold text-slate-900">Crear Regla de Comisión</h1>
+        <p class="text-slate-500 mt-1">Configura cuánto se paga por referido y por fee de logística.</p>
+      </div>
+
+      <RuleForm client:only="react" canillitas={canillitas} categorias={categorias} />
+    </div>
+  </main>
+</Layout>

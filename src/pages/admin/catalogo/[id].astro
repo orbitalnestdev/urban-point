@@ -1,0 +1,1007 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { createAdminClient } from '../../../lib/server/appwrite';
+import { Query } from 'node-appwrite';
+
+export const prerender = false;
+
+const { id } = Astro.params;
+const { databases } = createAdminClient();
+
+const tipoParam = Astro.url.searchParams.get('tipo') || 'simple';
+
+let product = null;
+let categories = [];
+let allProducts = [];
+
+try {
+	product = await databases.getDocument('urbanpoint', 'products', id as string);
+	const catRes = await databases.listDocuments('urbanpoint', 'categories');
+	categories = catRes.documents;
+
+	const allProdRes = await databases.listDocuments('urbanpoint', 'products', [Query.limit(100)]);
+	allProducts = allProdRes.documents.filter(p => p.$id !== id);
+} catch (e) {
+	console.error(e);
+	return Astro.redirect('/admin/catalogo');
+}
+
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+
+let galeriaUrls: string[] = [];
+if (product.galeria_urls) {
+	try {
+		galeriaUrls = typeof product.galeria_urls === 'string' ? JSON.parse(product.galeria_urls) : product.galeria_urls;
+	} catch (e) {}
+}
+---
+
+<AdminLayout title={`Editar ${product.nombre}`}>
+	<main class="p-8 max-w-7xl mx-auto">
+		<!-- Top Header -->
+		<header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-200/80">
+			<div class="flex items-start gap-4 min-w-0 flex-1">
+				<a href="/admin/catalogo" class="w-10 h-10 rounded-xl border border-slate-200 bg-white shadow-xs flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all shrink-0 mt-1">
+					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+				</a>
+				<div class="min-w-0 flex-1">
+					<div class="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+						<span>EDITAR PRODUCTO #{product.sku || product.$id.substring(0, 6)}</span>
+						{tipoParam === 'variantes' && (
+							<span class="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded-full font-extrabold">CON VARIANTES</span>
+						)}
+						{tipoParam === 'combo' && (
+							<span class="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] rounded-full font-extrabold">COMBO</span>
+						)}
+					</div>
+					<h1 class="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight leading-tight line-clamp-2" title={product.nombre}>
+						{product.nombre}
+					</h1>
+				</div>
+			</div>
+			
+			<div class="flex items-center gap-3 shrink-0 whitespace-nowrap self-end sm:self-center">
+				<a href="/admin/catalogo" class="px-4 py-2.5 border border-slate-200 bg-white text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-all text-xs sm:text-sm">
+					Descartar
+				</a>
+				<button 
+					id="btn-guardar-producto" 
+					data-product-id={product.$id} 
+					class="px-6 py-2.5 bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold rounded-xl transition-all shadow-md shadow-[#2D5A27]/20 text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap cursor-pointer"
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+					Guardar Cambios
+				</button>
+			</div>
+		</header>
+
+		<div class="flex flex-col md:flex-row gap-8">
+			
+			{/* Sidebar Izquierdo (Tabs) */}
+			<div class="w-full md:w-64 flex-shrink-0">
+				<nav class="sticky top-8 space-y-1.5" id="tab-nav-buttons">
+					<button type="button" data-tab="tab-identidad" class="tab-btn w-full text-left flex flex-col px-4 py-3 rounded-xl bg-orange-50 border border-orange-200 text-orange-900 font-bold transition-all cursor-pointer">
+						<div class="flex items-center gap-2 mb-0.5">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-orange-600"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+							Identidad
+						</div>
+						<span class="text-xs text-orange-700/80 ml-6 font-normal">Nombre &bull; fotos &bull; categoría</span>
+					</button>
+
+					<button type="button" data-tab="tab-precio" class="tab-btn w-full text-left flex flex-col px-4 py-3 rounded-xl border border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all font-bold cursor-pointer">
+						<div class="flex items-center gap-2 mb-0.5">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+							Precio
+						</div>
+						<span class="text-xs text-slate-400 ml-6 font-normal">Base &bull; costo &bull; oferta</span>
+					</button>
+
+					<button type="button" data-tab="tab-stock" class="tab-btn w-full text-left flex flex-col px-4 py-3 rounded-xl border border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all font-bold cursor-pointer">
+						<div class="flex items-center gap-2 mb-0.5">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+							Stock
+						</div>
+						<span class="text-xs text-slate-400 ml-6 font-normal">Cantidad &bull; reposición</span>
+					</button>
+
+					{tipoParam === 'variantes' && (
+						<button type="button" data-tab="tab-variantes" class="tab-btn w-full text-left flex flex-col px-4 py-3 rounded-xl border border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all font-bold cursor-pointer">
+							<div class="flex items-center gap-2 mb-0.5">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-blue-600"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+								Variantes (Talles / Colores)
+							</div>
+							<span class="text-xs text-slate-400 ml-6 font-normal">SKUs combinados &bull; stock individual</span>
+						</button>
+					)}
+
+					{tipoParam === 'combo' && (
+						<button type="button" data-tab="tab-variantes" class="tab-btn w-full text-left flex flex-col px-4 py-3 rounded-xl border border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all font-bold cursor-pointer">
+							<div class="flex items-center gap-2 mb-0.5">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-amber-600"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+								Armador de Combos
+							</div>
+							<span class="text-xs text-slate-400 ml-6 font-normal">Productos integrantes &bull; precio</span>
+						</button>
+					)}
+
+					<button type="button" data-tab="tab-envio" class="tab-btn w-full text-left flex flex-col px-4 py-3 rounded-xl border border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all font-bold cursor-pointer">
+						<div class="flex items-center gap-2 mb-0.5">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+							Envío
+						</div>
+						<span class="text-xs text-slate-400 ml-6 font-normal">Pack &bull; bulto &bull; mínimo</span>
+					</button>
+
+					<button type="button" data-tab="tab-seo" class="tab-btn w-full text-left flex flex-col px-4 py-3 rounded-xl border border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all font-bold cursor-pointer">
+						<div class="flex items-center gap-2 mb-0.5">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+							SEO
+						</div>
+						<span class="text-xs text-slate-400 ml-6 font-normal">Buscadores &bull; URL</span>
+					</button>
+				</nav>
+			</div>
+
+			{/* Contenido Principal en Pestañas Separadas */}
+			<div class="flex-1">
+				
+				{/* Pestaña 1: Identidad */}
+				<div id="tab-identidad" class="tab-panel space-y-6">
+					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+						<div class="mb-6 border-b border-slate-100 pb-4 flex justify-between items-center">
+							<div>
+								<h2 class="text-lg font-bold text-slate-900">Información básica</h2>
+								<p class="text-sm text-slate-500">Nombre claro, descripción, estado de publicación y categoría.</p>
+							</div>
+							<div>
+								<label class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Estado</label>
+								<select id="input-estado" class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+									<option value="activo" selected={product.estado === 'activo'}>Activo</option>
+									<option value="borrador" selected={product.estado === 'borrador'}>Borrador</option>
+									<option value="inactivo" selected={product.estado === 'inactivo'}>Inactivo</option>
+								</select>
+							</div>
+						</div>
+
+						<div class="space-y-6">
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Nombre del Producto <span class="text-rose-500">*</span></label>
+								<input type="text" id="input-nombre" value={product.nombre} class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+							</div>
+
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Descripción</label>
+								<textarea id="input-descripcion" rows="4" class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none">{product.descripcion || ''}</textarea>
+							</div>
+
+							<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+								<div>
+									<label class="block text-sm font-bold text-slate-900 mb-1">Marca / Fabricante</label>
+									<input 
+										type="text" 
+										id="input-marca" 
+										placeholder="Ej: Attain, Vitta, Kanji" 
+										value={product.marca || ''} 
+										class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900 h-[46px]" 
+									/>
+								</div>
+								<div>
+									<label class="block text-sm font-bold text-slate-900 mb-1">Categoría</label>
+									<select id="input-categoria" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 h-[46px]">
+										<option value="">Sin Categoría</option>
+										{categories.map((c: any) => (
+											<option value={c.$id} selected={product.categoria_id?.$id === c.$id || product.categoria_id === c.$id}>{c.nombre}</option>
+										))}
+									</select>
+								</div>
+								<div>
+									<label class="block text-sm font-bold text-slate-900 mb-1">SKU (Código único)</label>
+									<input type="text" id="input-sku" readOnly value={product.sku || 'N/A'} class="w-full px-4 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono text-slate-500 h-[46px]" />
+								</div>
+							</div>
+						</div>
+
+						<div class="mt-8 pt-8 border-t border-slate-100">
+							<div class="flex items-center justify-between mb-4">
+								<div>
+									<h3 class="text-sm font-bold text-slate-900">Fotos del Producto</h3>
+									<p class="text-xs text-slate-500">Subí imágenes de alta calidad a Appwrite Storage.</p>
+								</div>
+							</div>
+
+							<!-- Hidden Inputs for File Uploads -->
+							<input type="file" id="input-file-portada" accept="image/*" class="hidden" />
+							<input type="file" id="input-file-galeria" accept="image/*" class="hidden" />
+
+							<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" id="gallery-container">
+								
+								<!-- Portada Box -->
+								<div 
+									id="btn-upload-portada"
+									class="col-span-1 sm:col-span-2 aspect-[4/3] rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-6 hover:bg-slate-50 hover:border-indigo-400 transition-colors cursor-pointer group relative overflow-hidden"
+								>
+									<img 
+										id="img-portada-preview" 
+										src={product.portada_url || ''} 
+										class={`absolute inset-0 w-full h-full object-contain p-2 bg-slate-50 ${product.portada_url ? '' : 'hidden'}`} 
+									/>
+									<div id="portada-placeholder" class={`flex flex-col items-center ${product.portada_url ? 'hidden' : ''}`}>
+										<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400 group-hover:text-indigo-500 mb-2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+										<span class="text-sm font-bold text-slate-600 group-hover:text-indigo-600">Subir foto de portada</span>
+										<span class="text-xs text-slate-400 mt-1">Haz clic para elegir archivo</span>
+									</div>
+								</div>
+
+								<!-- Gallery Thumbnails List -->
+								<div id="gallery-list" class="col-span-1 sm:col-span-2 grid grid-cols-2 gap-4">
+									{galeriaUrls.map((url: string) => (
+										<div class="aspect-square rounded-2xl border border-slate-200 overflow-hidden relative group bg-slate-50 p-1 flex items-center justify-center gallery-item" data-url={url}>
+											<img src={url} class="w-full h-full object-contain" />
+											<button 
+												type="button" 
+												class="btn-delete-galeria absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+											>
+												×
+											</button>
+										</div>
+									))}
+									<div 
+										id="btn-upload-galeria" 
+										class="aspect-square rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-2 hover:bg-slate-50 hover:border-indigo-400 transition-colors cursor-pointer group"
+									>
+										<span class="text-2xl text-slate-300 group-hover:text-indigo-500 font-bold">+</span>
+										<span class="text-[10px] font-bold text-slate-500">Agregar foto</span>
+									</div>
+								</div>
+
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* Pestaña 2: Precio */}
+				<div id="tab-precio" class="tab-panel space-y-6 hidden">
+					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+						<div class="mb-6 border-b border-slate-100 pb-4">
+							<h2 class="text-lg font-bold text-slate-900">Precio de Venta y Margen</h2>
+							<p class="text-sm text-slate-500">Precio final de venta visible al público y costo del proveedor.</p>
+						</div>
+
+						<div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Precio de Venta <span class="text-rose-500">*</span></label>
+								<div class="relative">
+									<input type="number" id="input-precio-ars" value={product.precio / 100} class="w-full pl-4 pr-12 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900 text-base" />
+									<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">ARS</span>
+								</div>
+								<p class="text-xs text-slate-400 mt-2">Precio final visible para los clientes.</p>
+							</div>
+
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Precio de Costo</label>
+								<div class="relative">
+									<input type="number" id="input-costo" value={(product.costo || 0) / 100} class="w-full pl-4 pr-12 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900 text-base" />
+									<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">ARS</span>
+								</div>
+								<p class="text-xs text-slate-400 mt-2">Costo del proveedor (no visible al público).</p>
+							</div>
+
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Margen Calculado</label>
+								<div class="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+									<div>
+										<span class="block text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">MARGEN NETO</span>
+										<span id="label-margen" class="text-lg font-black text-emerald-700">0,0 %</span>
+									</div>
+									<div class="text-right">
+										<span class="block text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">GANANCIA</span>
+										<span id="label-ganancia" class="text-sm font-bold text-emerald-800">$0</span>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+						<div class="flex justify-between items-center mb-4">
+							<div>
+								<h2 class="text-lg font-bold text-slate-900">Tramos por cantidad</h2>
+								<p class="text-sm text-slate-500">Descontá automáticamente cuando alguien compra de más.</p>
+							</div>
+							<span class="px-3 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-full">0 tramos activos</span>
+						</div>
+
+						<div class="border border-dashed border-slate-200 rounded-xl p-8 text-center bg-slate-50/50">
+							<p class="text-sm font-bold text-slate-400 mb-1">Sin tramos por cantidad</p>
+							<p class="text-xs text-slate-400 mb-4">Sin tramos se usa el precio base para todas las cantidades.</p>
+							<button type="button" class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm">
+								+ Agregar primer tramo
+							</button>
+						</div>
+					</div>
+				</div>
+
+				{/* Pestaña 3: Stock */}
+				<div id="tab-stock" class="tab-panel space-y-6 hidden">
+					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+						<div class="mb-6 border-b border-slate-100 pb-4">
+							<h2 class="text-lg font-bold text-slate-900">Stock actual</h2>
+							<p class="text-sm text-slate-500">Cuántas unidades tenés disponibles para vender ahora.</p>
+						</div>
+
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Cantidad disponible</label>
+								<div class="relative">
+									<input type="number" id="input-stock" value={product.stock} class="w-full pl-4 pr-16 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900" />
+									<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">unidades</span>
+								</div>
+							</div>
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Stock máximo</label>
+								<div class="relative mb-1">
+									<input type="number" id="input-stock-maximo" value={product.stock_maximo || 1000} class="w-full pl-4 pr-12 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900" />
+									<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">u</span>
+								</div>
+								<p class="text-xs text-slate-400">Tope del depósito.</p>
+							</div>
+						</div>
+					</div>
+
+					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+						<div class="mb-6 border-b border-slate-100 pb-4">
+							<h2 class="text-lg font-bold text-slate-900">Reposición</h2>
+							<p class="text-sm text-slate-500">Te avisamos cuando el stock caiga del nivel de reorden.</p>
+						</div>
+
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Nivel de reorden</label>
+								<div class="relative">
+									<input type="number" id="input-nivel-reorden" value={product.nivel_reorden || 0} class="w-full pl-4 pr-12 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900" />
+									<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">u</span>
+								</div>
+							</div>
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Tiempo de reposición</label>
+								<div class="relative">
+									<input type="number" id="input-tiempo-reposicion" value={product.tiempo_reposicion || 0} class="w-full pl-4 pr-12 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900" />
+									<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">días</span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* Pestaña 4: Variantes / Personalización */}
+				<div id="tab-variantes" class="tab-panel space-y-6 hidden">
+					{tipoParam === 'variantes' && (
+						<div class="bg-white border border-blue-200 rounded-2xl p-8 shadow-sm">
+							<div class="mb-6 border-b border-slate-100 pb-4 flex justify-between items-center">
+								<div>
+									<h2 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-blue-600"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+										Gestor de Variantes (Talles / Colores)
+									</h2>
+									<p class="text-sm text-slate-500">Definí combinaciones específicas con su propio stock, precio y SKU.</p>
+								</div>
+								<button type="button" id="btn-agregar-variante" class="px-4 py-2 bg-blue-600 text-white font-bold text-sm rounded-xl hover:bg-blue-700 transition-colors shadow-md cursor-pointer">
+									+ Agregar Variante
+								</button>
+							</div>
+
+							<div class="space-y-4" id="lista-variantes"></div>
+						</div>
+					)}
+
+					{tipoParam === 'combo' && (
+						<div class="bg-white border border-amber-200 rounded-2xl p-8 shadow-sm">
+							<div class="mb-6 border-b border-slate-100 pb-4 flex justify-between items-center">
+								<div>
+									<h2 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-amber-600"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+										Armador de Combos
+									</h2>
+									<p class="text-sm text-slate-500">Seleccioná los productos que integran este combo y su estrategia de precio.</p>
+								</div>
+							</div>
+
+							<div class="space-y-6">
+								<div>
+									<label class="block text-sm font-bold text-slate-900 mb-2">Productos Integrantes del Combo</label>
+									<div class="space-y-3">
+										{allProducts.slice(0, 3).map(p => (
+											<label class="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors">
+												<div class="flex items-center gap-3">
+													<input type="checkbox" class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500" defaultChecked />
+													<div>
+														<p class="font-bold text-slate-900 text-sm">{p.nombre}</p>
+														<p class="text-xs text-slate-400">SKU: {p.sku} | Stock indiv: {p.stock}</p>
+													</div>
+												</div>
+												<span class="font-bold text-slate-900 text-sm">{formateador.format(p.precio / 100)}</span>
+											</label>
+										))}
+									</div>
+								</div>
+
+								<div class="p-4 bg-amber-50 rounded-xl border border-amber-200">
+									<p class="font-bold text-amber-900 text-sm mb-1">Estraegia de Precio Combo</p>
+									<p class="text-xs text-amber-800">El precio del combo se calcula automáticamente con el precio de los productos elegidos menos el descuento general.</p>
+								</div>
+							</div>
+						</div>
+					)}
+
+					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+						<div class="mb-6 border-b border-slate-100 pb-4">
+							<h2 class="text-lg font-bold text-slate-900">Personalización y Grabados</h2>
+							<p class="text-sm text-slate-500">Opciones adicionales para el cliente.</p>
+						</div>
+						<p class="text-sm text-slate-400">Sin opciones de personalización configuradas para este producto.</p>
+					</div>
+				</div>
+
+				{/* Pestaña 5: Envío */}
+				<div id="tab-envio" class="tab-panel space-y-6 hidden">
+					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm space-y-8">
+						<div>
+							<div class="mb-6 border-b border-slate-100 pb-4">
+								<h2 class="text-lg font-bold text-slate-900">Empaque y mínimos</h2>
+								<p class="text-sm text-slate-500">Cómo se vende y cómo se despacha.</p>
+							</div>
+							
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+								<div>
+									<label class="block text-sm font-bold text-slate-900 mb-1">Unidad de venta</label>
+									<select id="input-unidad-venta" class="w-full px-4 py-2 border border-slate-200 rounded-xl bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+										<option value="unidad">Unidad (u.)</option>
+										<option value="metro">Metro (m.)</option>
+										<option value="litro">Litro (l.)</option>
+										<option value="kilo">Kilo (kg.)</option>
+									</select>
+									<p class="text-xs text-slate-400 mt-1">Cómo lo cuenta el comprador.</p>
+								</div>
+								<div>
+									<label class="block text-sm font-bold text-slate-900 mb-1">Compra mínima</label>
+									<div class="relative">
+										<input type="number" id="input-compra-minima" placeholder="1" class="w-full pl-4 pr-12 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900" />
+										<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">u</span>
+									</div>
+								</div>
+							</div>
+
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+								<div>
+									<label class="block text-sm font-bold text-slate-900 mb-1">Tamaño de pack</label>
+									<div class="relative">
+										<input type="number" id="input-tamano-pack" placeholder="1" class="w-full pl-4 pr-12 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900" />
+										<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">u</span>
+									</div>
+								</div>
+								<div>
+									<label class="block text-sm font-bold text-slate-900 mb-1">Tamaño de bulto</label>
+									<div class="relative">
+										<input type="number" id="input-tamano-bulto" placeholder="1" class="w-full pl-4 pr-12 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900" />
+										<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">u</span>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="pt-8 border-t border-slate-100">
+							<div class="mb-6 border-b border-slate-100 pb-4">
+								<h2 class="text-lg font-bold text-slate-900">Dimensiones y peso (por bulto)</h2>
+								<p class="text-sm text-slate-500">Usado para calcular costos y factibilidad de envío.</p>
+							</div>
+
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+								<div>
+									<label class="block text-sm font-bold text-slate-900 mb-1">Peso del bulto</label>
+									<div class="relative">
+										<input type="number" step="0.01" id="input-peso-kg" placeholder="0.00" class="w-full pl-4 pr-12 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900" />
+										<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">kg</span>
+									</div>
+								</div>
+								<div>
+									<label class="block text-sm font-bold text-slate-900 mb-1">Código de barras (EAN)</label>
+									<input type="text" id="input-codigo-barras" placeholder="7790000000000" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-slate-900" />
+								</div>
+							</div>
+
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-2">Dimensiones del bulto</label>
+								<div class="flex items-center gap-3">
+									<div class="relative flex-1">
+										<input type="number" id="input-dim-largo" placeholder="Largo" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900 text-sm" />
+									</div>
+									<span class="text-slate-400 font-bold">×</span>
+									<div class="relative flex-1">
+										<input type="number" id="input-dim-ancho" placeholder="Ancho" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900 text-sm" />
+									</div>
+									<span class="text-slate-400 font-bold">×</span>
+									<div class="relative flex-1">
+										<input type="number" id="input-dim-alto" placeholder="Alto" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900 text-sm" />
+									</div>
+									<select id="input-dim-unit" class="px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-700 font-bold text-sm">
+										<option value="cm">cm</option>
+										<option value="mm">mm</option>
+										<option value="m">m</option>
+									</select>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* Pestaña 6: SEO */}
+				<div id="tab-seo" class="tab-panel space-y-6 hidden">
+					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm space-y-8">
+						<div>
+							<div class="mb-6 border-b border-slate-100 pb-4">
+								<h2 class="text-lg font-bold text-slate-900">Buscadores y posicionamiento</h2>
+								<p class="text-sm text-slate-500">Sobrescribí estos campos solo si querés afinar cómo aparece en Google.</p>
+							</div>
+							
+							<div class="space-y-6">
+								<div>
+									<div class="flex items-center justify-between mb-1">
+										<label class="block text-sm font-bold text-slate-900">Título SEO</label>
+									</div>
+									<input type="text" id="input-seo-titulo" placeholder={product.nombre} class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900" />
+									<p class="text-[11px] text-slate-400 mt-1 font-medium">Hasta 60 caracteres. Si lo dejás vacío usamos el nombre del producto.</p>
+								</div>
+
+								<div>
+									<div class="flex items-center justify-between mb-1">
+										<label class="block text-sm font-bold text-slate-900">Meta Descripción</label>
+									</div>
+									<textarea id="input-seo-descripcion" rows="3" placeholder="Resumen que aparece debajo del título en los resultados" class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900 resize-none"></textarea>
+									<p class="text-[11px] text-slate-400 mt-1 font-medium">Hasta 160 caracteres. Si lo dejás vacío usamos la descripción del producto.</p>
+								</div>
+
+								<div class="flex items-center justify-between pt-4 border-t border-slate-100">
+									<div>
+										<p class="text-sm font-bold text-slate-900">Indexar en buscadores</p>
+										<p class="text-[11px] text-slate-400 font-medium">Permitir que aparezca en Google y otros buscadores.</p>
+									</div>
+									<div class="flex items-center gap-2">
+										<label class="relative inline-flex items-center cursor-pointer">
+											<input type="checkbox" id="input-seo-indexar" class="sr-only peer" checked>
+											<div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+										</label>
+										<span class="text-xs font-bold text-emerald-700" id="label-seo-indexar">Sí - visible</span>
+									</div>
+								</div>
+								
+								<div>
+									<label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 mt-4">Slug URL</label>
+									<input type="text" readOnly value={product.slug} class="w-full px-4 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono text-xs text-slate-600" />
+								</div>
+							</div>
+						</div>
+						
+						<div class="pt-8 border-t border-slate-100">
+							<div class="mb-6 border-b border-slate-100 pb-4">
+								<h2 class="text-lg font-bold text-slate-900">Orden manual</h2>
+								<p class="text-sm text-slate-500">Configurá la prioridad de aparición de este producto.</p>
+							</div>
+							
+							<div class="w-1/3 min-w-[150px]">
+								<label class="block text-sm font-bold text-slate-900 mb-1">Posición de orden</label>
+								<input type="number" id="input-seo-orden" placeholder="0" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900" />
+								<p class="text-[11px] text-slate-400 mt-1 font-medium">Números más bajos aparecen primero.</p>
+							</div>
+						</div>
+					</div>
+				</div>
+
+			</div>
+		</div>
+		<div id="product-meta-data" data-product={JSON.stringify(product)}></div>
+	</main>
+
+	<script>
+		import { actions } from 'astro:actions';
+
+		// 1. Tab Switching Logic (Event Delegation - Guaranteed to work on child elements like div, svg, span!)
+		document.addEventListener('click', (e) => {
+			const btn = (e.target as HTMLElement).closest('.tab-btn');
+			if (!btn) return;
+			e.preventDefault();
+
+			const targetTab = btn.getAttribute('data-tab');
+			if (!targetTab) return;
+
+			const tabPanels = document.querySelectorAll('.tab-panel');
+			const tabBtns = document.querySelectorAll('.tab-btn');
+
+			tabPanels.forEach(panel => {
+				if (panel.id === targetTab) {
+					panel.classList.remove('hidden');
+				} else {
+					panel.classList.add('hidden');
+				}
+			});
+
+			tabBtns.forEach(b => {
+				b.classList.remove('bg-orange-50', 'border-orange-200', 'text-orange-900', 'shadow-xs');
+				b.classList.add('border-transparent', 'text-slate-600', 'hover:bg-slate-50', 'hover:text-slate-900');
+			});
+
+			btn.classList.remove('border-transparent', 'text-slate-600', 'hover:bg-slate-50', 'hover:text-slate-900');
+			btn.classList.add('bg-orange-50', 'border-orange-200', 'text-orange-900', 'shadow-xs');
+		});
+
+		// Dynamic Variant & Product Data Setup
+		let initialProduct: any = {};
+		try {
+			const metaEl = document.getElementById('product-meta-data');
+			initialProduct = JSON.parse(metaEl?.dataset.product || '{}');
+		} catch(e) {}
+		
+		// Load Envio Config
+		let envioConfig: any = {};
+		try {
+			if (initialProduct.envio_config) {
+				envioConfig = typeof initialProduct.envio_config === 'string' ? JSON.parse(initialProduct.envio_config) : initialProduct.envio_config;
+			}
+		} catch (e) {}
+		
+		const setVal = (id: string, val: any) => {
+			const el = document.getElementById(id) as HTMLInputElement | HTMLSelectElement;
+			if (el && val !== undefined && val !== null) el.value = val;
+		};
+
+		setVal('input-unidad-venta', envioConfig.unidad_venta);
+		setVal('input-compra-minima', envioConfig.compra_minima);
+		setVal('input-compra-maxima', envioConfig.compra_maxima);
+		setVal('input-tamano-pack', envioConfig.tamano_pack);
+		setVal('input-tamano-bulto', envioConfig.tamano_bulto);
+		setVal('input-peso-kg', envioConfig.peso_kg);
+		setVal('input-codigo-barras', envioConfig.codigo_barras);
+		
+		if (envioConfig.dimensiones) {
+			setVal('input-dim-largo', envioConfig.dimensiones.largo);
+			setVal('input-dim-ancho', envioConfig.dimensiones.ancho);
+			setVal('input-dim-alto', envioConfig.dimensiones.alto);
+			setVal('input-dim-unit', envioConfig.dimensiones.unit);
+		}
+
+		// Load SEO Config
+		let seoConfig: any = {};
+		try {
+			if (initialProduct.seo_config) {
+				seoConfig = typeof initialProduct.seo_config === 'string' ? JSON.parse(initialProduct.seo_config) : initialProduct.seo_config;
+			}
+		} catch (e) {}
+		
+		setVal('input-seo-titulo', seoConfig.titulo);
+		setVal('input-seo-descripcion', seoConfig.descripcion);
+		setVal('input-seo-orden', seoConfig.orden);
+		
+		const indexarCheckbox = document.getElementById('input-seo-indexar') as HTMLInputElement;
+		const indexarLabel = document.getElementById('label-seo-indexar') as HTMLSpanElement;
+		if (indexarCheckbox && seoConfig.indexar === false) {
+			indexarCheckbox.checked = false;
+			if (indexarLabel) {
+				indexarLabel.innerText = 'No - oculto';
+				indexarLabel.className = 'text-xs font-bold text-slate-500';
+			}
+		}
+		
+		indexarCheckbox?.addEventListener('change', (e) => {
+			if (indexarLabel) {
+				if ((e.target as HTMLInputElement).checked) {
+					indexarLabel.innerText = 'Sí - visible';
+					indexarLabel.className = 'text-xs font-bold text-emerald-700';
+				} else {
+					indexarLabel.innerText = 'No - oculto';
+					indexarLabel.className = 'text-xs font-bold text-slate-500';
+				}
+			}
+		});
+
+		let currentVariants: any[] = [];
+		try {
+			if (initialProduct.variantes) {
+				currentVariants = typeof initialProduct.variantes === 'string' ? JSON.parse(initialProduct.variantes) : initialProduct.variantes;
+			}
+		} catch (e) {
+			currentVariants = [];
+		}
+
+		if (!Array.isArray(currentVariants) || currentVariants.length === 0) {
+			currentVariants = [
+				{ opcion: 'S / Estándar', sku: `${initialProduct.sku || 'SKU'}-S`, stock: 10, precio: (initialProduct.precio || 0) / 100 },
+				{ opcion: 'M / Estándar', sku: `${initialProduct.sku || 'SKU'}-M`, stock: 15, precio: (initialProduct.precio || 0) / 100 },
+				{ opcion: 'L / Estándar', sku: `${initialProduct.sku || 'SKU'}-L`, stock: 8, precio: (initialProduct.precio || 0) / 100 }
+			];
+		}
+
+		const renderVariants = () => {
+			const container = document.getElementById('lista-variantes');
+			if (!container) return;
+
+			container.innerHTML = '';
+			currentVariants.forEach((v, index) => {
+				const row = document.createElement('div');
+				row.className = 'p-4 border border-slate-200 rounded-xl bg-slate-50 grid grid-cols-1 sm:grid-cols-4 gap-4 items-center variant-row';
+				row.innerHTML = `
+					<div>
+						<label class="block text-xs font-bold text-slate-500 mb-1">Talle / Opción</label>
+						<input type="text" value="${v.opcion || ''}" class="var-opcion w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-800" />
+					</div>
+					<div>
+						<label class="block text-xs font-bold text-slate-500 mb-1">SKU Variante</label>
+						<input type="text" value="${v.sku || ''}" class="var-sku w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-mono text-slate-600" />
+					</div>
+					<div>
+						<label class="block text-xs font-bold text-slate-500 mb-1">Stock Indiv.</label>
+						<input type="number" value="${v.stock || 0}" class="var-stock w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-800" />
+					</div>
+					<div class="flex items-end justify-end pb-1 h-full">
+						<button type="button" class="btn-remove-variant text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded transition-colors" data-index="${index}">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+						</button>
+					</div>
+				`;
+				container.appendChild(row);
+			});
+
+			document.querySelectorAll('.btn-remove-variant').forEach(btn => {
+				btn.addEventListener('click', (e) => {
+					const index = parseInt((e.currentTarget as HTMLButtonElement).dataset.index || '0');
+					currentVariants.splice(index, 1);
+					renderVariants();
+				});
+			});
+		};
+
+		renderVariants();
+
+		document.getElementById('btn-agregar-variante')?.addEventListener('click', () => {
+			currentVariants.push({
+				opcion: 'Nueva Opción',
+				sku: `${initialProduct.sku || 'SKU'}-VAR-${currentVariants.length + 1}`,
+				stock: 10,
+				precio: (initialProduct.precio || 0) / 100
+			});
+			renderVariants();
+		});
+
+		const calcMargin = () => {
+			const precio = parseFloat((document.getElementById('input-precio-ars') as HTMLInputElement)?.value || '0');
+			const costo = parseFloat((document.getElementById('input-costo') as HTMLInputElement)?.value || '0');
+			const labelMargen = document.getElementById('label-margen');
+			const labelGanancia = document.getElementById('label-ganancia');
+
+			const ganancia = precio - costo;
+			if (labelGanancia) {
+				labelGanancia.innerText = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Math.max(0, ganancia));
+			}
+
+			if (labelMargen) {
+				if (costo > 0 && precio > 0) {
+					const margin = ((precio - costo) / costo) * 100;
+					labelMargen.innerText = margin.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %';
+				} else {
+					labelMargen.innerText = '0,0 %';
+				}
+			}
+		};
+
+		document.getElementById('input-precio-ars')?.addEventListener('input', calcMargin);
+		document.getElementById('input-costo')?.addEventListener('input', calcMargin);
+		calcMargin();
+
+		document.getElementById('btn-guardar-producto')?.addEventListener('click', async (e) => {
+			const btn = e.currentTarget as HTMLButtonElement;
+			const productId = btn.dataset.productId;
+			if (!productId) return;
+
+			const nombre = (document.getElementById('input-nombre') as HTMLInputElement)?.value;
+			const marca = (document.getElementById('input-marca') as HTMLInputElement)?.value;
+			const descripcion = (document.getElementById('input-descripcion') as HTMLTextAreaElement)?.value;
+			const precioArs = parseFloat((document.getElementById('input-precio-ars') as HTMLInputElement)?.value || '0');
+			const costoArs = parseFloat((document.getElementById('input-costo') as HTMLInputElement)?.value || '0');
+			
+			const stock = parseInt((document.getElementById('input-stock') as HTMLInputElement)?.value || '0', 10);
+			const stockMaximo = parseInt((document.getElementById('input-stock-maximo') as HTMLInputElement)?.value || '0', 10);
+			const nivelReorden = parseInt((document.getElementById('input-nivel-reorden') as HTMLInputElement)?.value || '0', 10);
+			const tiempoReposicion = parseInt((document.getElementById('input-tiempo-reposicion') as HTMLInputElement)?.value || '0', 10);
+			
+			const estado = (document.getElementById('input-estado') as HTMLSelectElement)?.value as any;
+			const categoriaId = (document.getElementById('input-categoria') as HTMLSelectElement)?.value;
+
+			const envioConfig = {
+				unidad_venta: (document.getElementById('input-unidad-venta') as HTMLSelectElement)?.value || 'unidad',
+				compra_minima: (document.getElementById('input-compra-minima') as HTMLInputElement)?.value || '',
+				compra_maxima: (document.getElementById('input-compra-maxima') as HTMLInputElement)?.value || '',
+				tamano_pack: (document.getElementById('input-tamano-pack') as HTMLInputElement)?.value || '',
+				tamano_bulto: (document.getElementById('input-tamano-bulto') as HTMLInputElement)?.value || '',
+				peso_kg: (document.getElementById('input-peso-kg') as HTMLInputElement)?.value || '',
+				codigo_barras: (document.getElementById('input-codigo-barras') as HTMLInputElement)?.value || '',
+				dimensiones: {
+					largo: (document.getElementById('input-dim-largo') as HTMLInputElement)?.value || '',
+					ancho: (document.getElementById('input-dim-ancho') as HTMLInputElement)?.value || '',
+					alto: (document.getElementById('input-dim-alto') as HTMLInputElement)?.value || '',
+					unit: (document.getElementById('input-dim-unit') as HTMLSelectElement)?.value || 'cm'
+				}
+			};
+
+			const seoConfig = {
+				titulo: (document.getElementById('input-seo-titulo') as HTMLInputElement)?.value || '',
+				descripcion: (document.getElementById('input-seo-descripcion') as HTMLTextAreaElement)?.value || '',
+				indexar: (document.getElementById('input-seo-indexar') as HTMLInputElement)?.checked,
+				orden: parseInt((document.getElementById('input-seo-orden') as HTMLInputElement)?.value || '0', 10)
+			};
+
+			const variantRows = document.querySelectorAll('.variant-row');
+			const updatedVariants: any[] = [];
+			variantRows.forEach(row => {
+				const opcion = (row.querySelector('.var-opcion') as HTMLInputElement)?.value || '';
+				const sku = (row.querySelector('.var-sku') as HTMLInputElement)?.value || '';
+				const vStock = parseInt((row.querySelector('.var-stock') as HTMLInputElement)?.value || '0', 10);
+				updatedVariants.push({ opcion, sku, stock: vStock, precio: precioArs });
+			});
+
+			if (!nombre) {
+				alert('El nombre es obligatorio.');
+				return;
+			}
+
+			btn.disabled = true;
+			btn.innerText = 'Guardando...';
+
+			let finalStock = Math.max(0, stock);
+			if (updatedVariants.length > 0) {
+				const sumStock = updatedVariants.reduce((acc, curr) => acc + (curr.stock || 0), 0);
+				if (sumStock > 0) finalStock = sumStock;
+			}
+
+			try {
+				const { data, error } = await actions.updateProduct({
+					id: productId,
+					nombre,
+					marca,
+					descripcion,
+					precio: Math.round(precioArs * 100),
+					costo: Math.round(costoArs * 100),
+					stock: finalStock,
+					stock_maximo: stockMaximo,
+					nivel_reorden: nivelReorden,
+					tiempo_reposicion: tiempoReposicion,
+					envio_config: JSON.stringify(envioConfig),
+					seo_config: JSON.stringify(seoConfig),
+					portada_url: currentPortadaUrl,
+					galeria_urls: JSON.stringify(currentGaleriaUrls),
+					estado,
+					categoria_id: categoriaId
+				});
+
+				if (error || !data?.success) {
+					alert('Error al guardar el producto: ' + (error?.message || data?.error));
+					btn.disabled = false;
+					btn.innerText = 'Guardar Cambios';
+					return;
+				}
+
+				alert('¡Producto guardado exitosamente!');
+				window.location.reload();
+			} catch (err: any) {
+				alert('Error al guardar: ' + err.message);
+				btn.disabled = false;
+				btn.innerText = 'Guardar Cambios';
+			}
+		});
+
+		let currentPortadaUrl = initialProduct.portada_url || '';
+		let currentGaleriaUrls: string[] = typeof galeriaUrls !== 'undefined' ? galeriaUrls : [];
+
+		const filePortada = document.getElementById('input-file-portada') as HTMLInputElement;
+		const fileGaleria = document.getElementById('input-file-galeria') as HTMLInputElement;
+		const btnUploadPortada = document.getElementById('btn-upload-portada');
+		const btnUploadGaleria = document.getElementById('btn-upload-galeria');
+		const imgPortadaPreview = document.getElementById('img-portada-preview') as HTMLImageElement;
+		const portadaPlaceholder = document.getElementById('portada-placeholder');
+
+		if (btnUploadPortada && filePortada) {
+			btnUploadPortada.addEventListener('click', () => filePortada.click());
+			filePortada.addEventListener('change', async () => {
+				if (filePortada.files && filePortada.files[0]) {
+					const formData = new FormData();
+					formData.append('file', filePortada.files[0]);
+					try {
+						const res = await fetch('/api/upload-image', { method: 'POST', body: formData });
+						const json = await res.json();
+						if (json.success && json.url) {
+							currentPortadaUrl = json.url;
+							if (imgPortadaPreview) {
+								imgPortadaPreview.src = json.url;
+								imgPortadaPreview.classList.remove('hidden');
+							}
+							if (portadaPlaceholder) portadaPlaceholder.classList.add('hidden');
+						} else {
+							alert('Error subiendo imagen: ' + (json.error || 'Intente nuevamente'));
+						}
+					} catch(e) {
+						alert('Error de conexión al subir imagen');
+					}
+				}
+			});
+		}
+
+		if (btnUploadGaleria && fileGaleria) {
+			btnUploadGaleria.addEventListener('click', () => fileGaleria.click());
+			fileGaleria.addEventListener('change', async () => {
+				if (fileGaleria.files && fileGaleria.files[0]) {
+					const formData = new FormData();
+					formData.append('file', fileGaleria.files[0]);
+					try {
+						const res = await fetch('/api/upload-image', { method: 'POST', body: formData });
+						const json = await res.json();
+						if (json.success && json.url) {
+							currentGaleriaUrls.push(json.url);
+							renderGallery();
+						} else {
+							alert('Error subiendo foto de galería');
+						}
+					} catch(e) {
+						alert('Error al subir foto');
+					}
+				}
+			});
+		}
+
+		function renderGallery() {
+			const list = document.getElementById('gallery-list');
+			if (!list) return;
+			let html = '';
+			currentGaleriaUrls.forEach((url, idx) => {
+				html += `
+					<div class="aspect-square rounded-2xl border border-slate-200 overflow-hidden relative group bg-slate-50 p-1 flex items-center justify-center gallery-item" data-url="${url}">
+						<img src="${url}" class="w-full h-full object-contain" />
+						<button 
+							type="button" 
+							data-idx="${idx}"
+							class="btn-delete-galeria absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+						>
+							×
+						</button>
+					</div>
+				`;
+			});
+			html += `
+				<div 
+					id="btn-upload-galeria" 
+					class="aspect-square rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-2 hover:bg-slate-50 hover:border-indigo-400 transition-colors cursor-pointer group"
+				>
+					<span class="text-2xl text-slate-300 group-hover:text-indigo-500 font-bold">+</span>
+					<span class="text-[10px] font-bold text-slate-500">Agregar foto</span>
+				</div>
+			`;
+			list.innerHTML = html;
+			
+			const newBtn = document.getElementById('btn-upload-galeria');
+			if (newBtn && fileGaleria) newBtn.addEventListener('click', () => fileGaleria.click());
+
+			list.querySelectorAll('.btn-delete-galeria').forEach(btn => {
+				btn.addEventListener('click', (e) => {
+					e.stopPropagation();
+					const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+					currentGaleriaUrls.splice(idx, 1);
+					renderGallery();
+				});
+			});
+		}
+
+		document.querySelectorAll('.btn-delete-galeria').forEach((btn, idx) => {
+			btn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				currentGaleriaUrls.splice(idx, 1);
+				renderGallery();
+			});
+		});
+	</script>
+</AdminLayout>

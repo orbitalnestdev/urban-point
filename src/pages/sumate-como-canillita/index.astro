@@ -1,0 +1,117 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Logo from '../../components/Logo.astro';
+---
+
+<Layout title="Sumate como Canillita | UrbanPoint">
+	<nav class="fixed w-full z-50 transition-all duration-300 bg-white/80 backdrop-blur-md border-b border-slate-100 shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
+		<div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+			<Logo variant="light" height={36} />
+			
+			<div class="flex items-center gap-4">
+				<a href="/" class="hidden md:block text-slate-600 hover:text-[#2D5A27] font-medium transition-colors">Volver a inicio</a>
+				<a href="/sumate-como-canillita/registro" class="px-6 py-2.5 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-xl font-semibold transition-colors shadow-lg shadow-[#2D5A27]/20">
+					Registrar mi local
+				</a>
+			</div>
+		</div>
+	</nav>
+
+	<main class="pt-32 pb-24">
+		<section class="max-w-7xl mx-auto px-6 mb-24">
+			<div class="bg-slate-900 rounded-[3rem] p-8 md:p-16 lg:p-24 text-white relative overflow-hidden shadow-2xl">
+				<div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+				<div class="absolute -top-32 -right-32 w-96 h-96 bg-[#2D5A27]/30 rounded-full blur-3xl"></div>
+				<div class="absolute -bottom-32 -left-32 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl"></div>
+				
+				<div class="relative z-10 max-w-3xl mx-auto text-center">
+					<div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2D5A27]/30 border border-[#489243]/30 text-[#489243] font-semibold text-sm mb-6">
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+						Red de Puntos UrbanPoint
+					</div>
+					<h1 class="text-5xl lg:text-7xl font-extrabold tracking-tight mb-8">
+						Tu local, el <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#489243] to-emerald-400">centro</span> del barrio.
+					</h1>
+					<p class="text-xl text-slate-300 mb-10 leading-relaxed max-w-2xl mx-auto">
+						Convertite en un Canillita UrbanPoint. Recibí los paquetes de tus vecinos, generá una comisión fija por entrega y atraé cientos de clientes nuevos a tu negocio cada mes.
+					</p>
+					
+					<a href="/sumate-como-canillita/registro" class="inline-flex px-8 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:scale-105 transition-transform shadow-xl shadow-white/10 gap-2 items-center">
+						Comenzar solicitud
+						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+					</a>
+				</div>
+			</div>
+		</section>
+
+		<section class="max-w-7xl mx-auto px-6 mb-24">
+			<div class="text-center max-w-2xl mx-auto mb-16">
+				<h2 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">¿Por qué ser Canillita?</h2>
+				<p class="text-lg text-slate-600">Un modelo diseñado para que tu local crezca sin riesgo y sin inversión inicial.</p>
+			</div>
+
+			<div class="grid md:grid-cols-3 gap-8">
+				<div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/40 hover:-translate-y-1 transition-transform">
+					<div class="w-14 h-14 rounded-2xl bg-[#F2F7F3] text-[#2D5A27] flex items-center justify-center mb-6">
+						<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+					</div>
+					<h3 class="text-xl font-bold text-slate-900 mb-3">Comisiones garantizadas</h3>
+					<p class="text-slate-600">Por cada paquete que recibas y entregues, sumás una comisión fija a tu cuenta. Liquidaciones semanales directamente a tu CBU.</p>
+				</div>
+				
+				<div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/40 hover:-translate-y-1 transition-transform">
+					<div class="w-14 h-14 rounded-2xl bg-[#F2F7F3] text-[#2D5A27] flex items-center justify-center mb-6">
+						<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+					</div>
+					<h3 class="text-xl font-bold text-slate-900 mb-3">Tráfico para tu local</h3>
+					<p class="text-slate-600">Los vecinos de tu zona van a ir a tu local a retirar sus pedidos. Una excelente oportunidad para venderles tus propios productos.</p>
+				</div>
+				
+				<div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/40 hover:-translate-y-1 transition-transform">
+					<div class="w-14 h-14 rounded-2xl bg-[#F2F7F3] text-[#2D5A27] flex items-center justify-center mb-6">
+						<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+					</div>
+					<h3 class="text-xl font-bold text-slate-900 mb-3">Cero inversión</h3>
+					<p class="text-slate-600">No tenés que pagar nada para ser parte. Solo necesitás un espacio seguro en tu local para guardar los paquetes temporalmente y la app de UrbanPoint.</p>
+				</div>
+			</div>
+		</section>
+
+		<!-- Steps -->
+		<section class="max-w-7xl mx-auto px-6">
+			<div class="bg-[#F2F7F3] rounded-[3rem] p-8 md:p-16 border border-[#D4E5D6]">
+				<h2 class="text-3xl font-extrabold text-slate-900 text-center mb-12">¿Cómo es el proceso de alta?</h2>
+				<div class="grid md:grid-cols-4 gap-8">
+					<div class="text-center relative">
+						<div class="w-16 h-16 rounded-full bg-[#2D5A27] text-white flex items-center justify-center text-xl font-bold mx-auto mb-6 shadow-lg shadow-[#2D5A27]/30">1</div>
+						<h4 class="font-bold text-slate-900 mb-2">Completás el formulario</h4>
+						<p class="text-sm text-slate-600">Tus datos, los de tu local y marcás tu ubicación exacta en el mapa.</p>
+						<div class="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-[#D4E5D6]"></div>
+					</div>
+					<div class="text-center relative">
+						<div class="w-16 h-16 rounded-full bg-[#2D5A27] text-white flex items-center justify-center text-xl font-bold mx-auto mb-6 shadow-lg shadow-[#2D5A27]/30">2</div>
+						<h4 class="font-bold text-slate-900 mb-2">Revisamos tu solicitud</h4>
+						<p class="text-sm text-slate-600">Validamos que no haya otro punto demasiado cerca y aprobamos tu perfil.</p>
+						<div class="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-[#D4E5D6]"></div>
+					</div>
+					<div class="text-center relative">
+						<div class="w-16 h-16 rounded-full bg-[#2D5A27] text-white flex items-center justify-center text-xl font-bold mx-auto mb-6 shadow-lg shadow-[#2D5A27]/30">3</div>
+						<h4 class="font-bold text-slate-900 mb-2">Activás tu cuenta</h4>
+						<p class="text-sm text-slate-600">Cargás tu CBU, confirmás tus horarios y firmás las condiciones.</p>
+						<div class="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-[#D4E5D6]"></div>
+					</div>
+					<div class="text-center relative">
+						<div class="w-16 h-16 rounded-full bg-[#2D5A27] text-white flex items-center justify-center text-xl font-bold mx-auto mb-6 shadow-lg shadow-[#2D5A27]/30">4</div>
+						<h4 class="font-bold text-slate-900 mb-2">¡Listo para operar!</h4>
+						<p class="text-sm text-slate-600">Aparecés en el mapa y podés empezar a recibir pedidos de inmediato.</p>
+					</div>
+				</div>
+				<div class="mt-16 text-center">
+					<a href="/sumate-como-canillita/registro" class="px-8 py-4 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-xl font-bold shadow-lg shadow-[#2D5A27]/20 inline-block transition-transform hover:-translate-y-1">
+						Quiero ser Canillita
+					</a>
+				</div>
+			</div>
+		</section>
+	</main>
+</Layout>

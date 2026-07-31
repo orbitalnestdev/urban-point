@@ -1,0 +1,110 @@
+---
+export const prerender = false;
+import Layout from '../../../layouts/Layout.astro';
+import { PayoutModal } from '../../../components/admin/liquidaciones/PayoutModal';
+import { Client, Databases, Query } from 'node-appwrite';
+import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { APPWRITE_API_KEY } from 'astro:env/server';
+import { ChevronLeft, WalletCards, CheckCircle2 } from 'lucide-react';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') {
+  return Astro.redirect('/');
+}
+
+const client = new Client()
+  .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+  .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+  .setKey(APPWRITE_API_KEY);
+
+const db = new Databases(client);
+
+// Obtener todas las comisiones pendientes
+const ledgerRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
+  Query.equal('estado', 'pendiente'),
+  Query.limit(5000)
+]);
+
+// Agrupar por canillita
+const balanceByProfile: Record<string, { id: string, name: string, balance: number }> = {};
+
+for (const item of ledgerRes.documents) {
+  const profileId = typeof item.profile_id === 'string' ? item.profile_id : item.profile_id?.$id;
+  if (!profileId) continue;
+  
+  if (!balanceByProfile[profileId]) {
+    balanceByProfile[profileId] = {
+      id: profileId,
+      name: item.profile_id?.nombre || 'Canillita Desconocido',
+      balance: 0
+    };
+  }
+  
+  balanceByProfile[profileId].balance += item.monto_centavos;
+}
+
+const pendingPayouts = Object.values(balanceByProfile).filter(p => p.balance > 0);
+---
+
+<Layout title="Liquidaciones | UrbanPoint Admin">
+  <nav class="w-full z-50 bg-slate-900 border-b border-slate-800">
+		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+			<div class="flex items-center gap-4 text-white">
+        <a href="/admin" class="text-slate-400 hover:text-white transition-colors">
+          <ChevronLeft class="w-5 h-5" />
+        </a>
+				<div class="flex items-center gap-2">
+          <WalletCards class="w-5 h-5 text-indigo-400" />
+          <span class="text-xl font-extrabold tracking-tight">Admin | Liquidaciones</span>
+        </div>
+			</div>
+		</div>
+	</nav>
+
+  <main class="min-h-[calc(100vh-64px)] bg-slate-50 py-12">
+    <div class="max-w-5xl mx-auto px-6">
+      
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold text-slate-900">Pagos Pendientes</h1>
+        <p class="text-slate-500 mt-1">Saldos devengados que necesitan ser liquidados a los canillitas.</p>
+      </div>
+
+      {pendingPayouts.length === 0 ? (
+        <div class="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-200">
+          <CheckCircle2 class="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <h2 class="text-xl font-bold text-slate-900 mb-2">¡Todo al día!</h2>
+          <p class="text-slate-500">No hay ningún canillita con saldo a favor pendiente de liquidación.</p>
+        </div>
+      ) : (
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <table class="w-full text-left">
+            <thead>
+              <tr class="bg-slate-50 text-slate-500 text-sm border-b border-slate-100">
+                <th class="px-6 py-4 font-semibold">Canillita</th>
+                <th class="px-6 py-4 font-semibold text-right">Saldo Pendiente</th>
+                <th class="px-6 py-4 font-semibold text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              {pendingPayouts.map(p => (
+                <tr class="hover:bg-slate-50/50 transition-colors">
+                  <td class="px-6 py-4">
+                    <p class="font-bold text-slate-900">{p.name}</p>
+                    <p class="text-xs font-mono text-slate-400">{p.id}</p>
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <span class="text-xl font-black text-green-600">${(p.balance / 100).toFixed(2)}</span>
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <PayoutModal client:load canillitaId={p.id} canillitaName={p.name} monto={p.balance} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+    </div>
+  </main>
+</Layout>

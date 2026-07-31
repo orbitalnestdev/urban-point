@@ -1,0 +1,314 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="Configuración de Tienda">
+	<main class="p-8 max-w-7xl mx-auto">
+		<header class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
+			<div>
+				<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Configuración</h1>
+				<p class="text-slate-500 font-medium mt-1">Ajustes generales de la tienda, métodos de pago, envíos y más.</p>
+			</div>
+			<div class="flex items-center gap-2">
+				<button class="px-6 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition-colors shadow-md">Guardar cambios</button>
+			</div>
+		</header>
+
+		<div class="flex flex-col md:flex-row gap-8">
+			
+			{/* Sidebar Izquierdo */}
+			<div class="w-full md:w-64 flex-shrink-0">
+				<nav class="sticky top-8 space-y-1">
+					<a href="#general" class="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-900 text-white font-bold">
+						<div class="flex items-center gap-3">
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+							General
+						</div>
+					</a>
+					<a href="#pagos" class="flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-bold">
+						<div class="flex items-center gap-3">
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+							Pagos
+						</div>
+					</a>
+					<a href="#envios" class="flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-bold">
+						<div class="flex items-center gap-3">
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+							Envíos
+						</div>
+					</a>
+					<a href="#red" class="flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-bold">
+						<div class="flex items-center gap-3">
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+							Red de Retiro
+						</div>
+					</a>
+					<a href="#notificaciones" class="flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-bold">
+						<div class="flex items-center gap-3">
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+							Notificaciones
+						</div>
+					</a>
+					<a href="#apariencia" class="flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors font-bold">
+						<div class="flex items-center gap-3">
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+							Apariencia
+						</div>
+					</a>
+				</nav>
+			</div>
+
+			{/* Contenido Principal */}
+			<div class="flex-1 space-y-8">
+				
+				{/* Bloque General */}
+				<div id="general" class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm scroll-mt-8">
+					<div class="mb-6 border-b border-slate-100 pb-4">
+						<h2 class="text-xl font-extrabold text-slate-900">Configuración General</h2>
+						<p class="text-sm text-slate-500">Datos principales de la tienda pública.</p>
+					</div>
+
+					<div class="space-y-6">
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Nombre de la Tienda</label>
+								<input type="text" value="UrbanPoint" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow" />
+							</div>
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">URL de la Tienda</label>
+								<div class="flex">
+									<span class="inline-flex items-center px-3 border border-r-0 border-slate-200 bg-slate-50 text-slate-500 text-sm rounded-l-xl">https://</span>
+									<input type="text" value="urbanpoint.com.ar" class="w-full px-4 py-2 border border-slate-200 rounded-r-xl focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow" />
+								</div>
+							</div>
+						</div>
+
+						<div>
+							<label class="block text-sm font-bold text-slate-900 mb-1">Descripción Breve</label>
+							<textarea rows="3" class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow resize-none">Tu tienda de artículos importados.</textarea>
+						</div>
+
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Moneda Principal</label>
+								<select class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 appearance-none pr-10 relative bg-no-repeat bg-[right_12px_center] bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2364748b%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]">
+									<option>ARS - Peso Argentino</option>
+									<option>USD - Dólar Estadounidense</option>
+								</select>
+							</div>
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Zona Horaria</label>
+								<select class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 appearance-none pr-10 relative bg-no-repeat bg-[right_12px_center] bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2364748b%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]">
+									<option>(GMT-03:00) Buenos Aires</option>
+								</select>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* Pagos */}
+				<div id="pagos" class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm scroll-mt-8">
+					<div class="mb-6 border-b border-slate-100 pb-4 flex justify-between items-center">
+						<div>
+							<h2 class="text-xl font-extrabold text-slate-900">Medios de Pago</h2>
+							<p class="text-sm text-slate-500">Configurá las pasarelas de pago habilitadas.</p>
+						</div>
+						<button class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors">Agregar</button>
+					</div>
+					
+					<div class="space-y-4">
+						<div class="flex items-center justify-between p-4 border border-slate-200 rounded-xl bg-slate-50">
+							<div class="flex items-center gap-4">
+								<div class="w-10 h-10 bg-blue-100 text-blue-600 rounded flex items-center justify-center font-bold text-sm">MP</div>
+								<div>
+									<p class="font-bold text-slate-900">Mercado Pago</p>
+									<p class="text-xs text-slate-500">Tarjetas de crédito, débito y saldo en cuenta</p>
+								</div>
+							</div>
+							<div class="flex items-center gap-3">
+								<button class="text-sm text-indigo-600 font-bold hover:underline">Configurar</button>
+								<div class="w-10 h-5 bg-emerald-500 rounded-full relative cursor-pointer">
+									<div class="w-4 h-4 bg-white rounded-full absolute right-0.5 top-0.5 shadow-sm"></div>
+								</div>
+							</div>
+						</div>
+						
+						<div class="flex items-center justify-between p-4 border border-slate-200 rounded-xl">
+							<div class="flex items-center gap-4">
+								<div class="w-10 h-10 bg-slate-100 text-slate-600 rounded flex items-center justify-center font-bold text-sm">
+									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+								</div>
+								<div>
+									<p class="font-bold text-slate-900">Transferencia Bancaria</p>
+									<p class="text-xs text-slate-500">Pago manual por transferencia o depósito</p>
+								</div>
+							</div>
+							<div class="flex items-center gap-3">
+								<button class="text-sm text-indigo-600 font-bold hover:underline">Configurar</button>
+								<div class="w-10 h-5 bg-emerald-500 rounded-full relative cursor-pointer">
+									<div class="w-4 h-4 bg-white rounded-full absolute right-0.5 top-0.5 shadow-sm"></div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* Envíos */}
+				<div id="envios" class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm scroll-mt-8">
+					<div class="mb-6 border-b border-slate-100 pb-4 flex justify-between items-center">
+						<div>
+							<h2 class="text-xl font-extrabold text-slate-900">Métodos de Envío</h2>
+							<p class="text-sm text-slate-500">Zonas de entrega y tarifas.</p>
+						</div>
+						<button class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors">Agregar Zona</button>
+					</div>
+					
+					<div class="space-y-4">
+						<div class="border border-slate-200 rounded-xl overflow-hidden">
+							<div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+								<div>
+									<p class="font-bold text-slate-900">Argentina (Todo el país)</p>
+									<p class="text-xs text-slate-500">Tarifa Nacional</p>
+								</div>
+								<button class="text-slate-400 hover:text-slate-600 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></button>
+							</div>
+							<div class="p-4">
+								<div class="flex justify-between items-center text-sm py-2">
+									<span class="text-slate-700">Andreani Estándar (3-5 días)</span>
+									<span class="font-bold text-slate-900">$4.500</span>
+								</div>
+								<div class="flex justify-between items-center text-sm py-2 border-t border-slate-100">
+									<span class="text-slate-700">Envío Gratis (Compras mayores a $50.000)</span>
+									<span class="font-bold text-emerald-600">Gratis</span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* Bloque Red de Retiro Config */}
+				<div id="red" class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm scroll-mt-8">
+					<div class="mb-6 border-b border-slate-100 pb-4">
+						<h2 class="text-xl font-extrabold text-slate-900">Configuración Red de Retiro</h2>
+						<p class="text-sm text-slate-500">Ajustes para el programa de Canillitas.</p>
+					</div>
+					
+					<div class="space-y-6">
+						<div class="flex items-center justify-between">
+							<div>
+								<p class="font-bold text-slate-900">Habilitar Red de Retiro</p>
+								<p class="text-sm text-slate-500">Permite que terceros se registren como puntos de entrega.</p>
+							</div>
+							<div class="w-12 h-6 bg-emerald-500 rounded-full relative cursor-pointer">
+								<div class="w-5 h-5 bg-white rounded-full absolute right-0.5 top-0.5 shadow-sm"></div>
+							</div>
+						</div>
+
+						<div>
+							<label class="block text-sm font-bold text-slate-900 mb-1">Comisión por defecto (%)</label>
+							<div class="flex">
+								<input type="number" value="10" class="w-32 px-4 py-2 border border-slate-200 rounded-l-xl focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow text-center font-bold" />
+								<span class="inline-flex items-center px-4 border border-l-0 border-slate-200 bg-slate-50 text-slate-500 font-bold rounded-r-xl">%</span>
+							</div>
+							<p class="text-xs text-slate-500 mt-1">Porcentaje que se lleva el punto de entrega por cada venta referida.</p>
+						</div>
+					</div>
+				</div>
+
+				{/* Notificaciones */}
+				<div id="notificaciones" class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm scroll-mt-8">
+					<div class="mb-6 border-b border-slate-100 pb-4">
+						<h2 class="text-xl font-extrabold text-slate-900">Notificaciones por Email</h2>
+						<p class="text-sm text-slate-500">Controlá los emails que se envían a los clientes.</p>
+					</div>
+					
+					<div class="space-y-4">
+						<div class="flex items-center justify-between py-2">
+							<div>
+								<p class="font-bold text-slate-900">Confirmación de Pedido</p>
+								<p class="text-xs text-slate-500">Se envía automáticamente cuando un cliente realiza una compra.</p>
+							</div>
+							<div class="w-10 h-5 bg-emerald-500 rounded-full relative cursor-pointer">
+								<div class="w-4 h-4 bg-white rounded-full absolute right-0.5 top-0.5 shadow-sm"></div>
+							</div>
+						</div>
+						<div class="flex items-center justify-between py-2 border-t border-slate-100">
+							<div>
+								<p class="font-bold text-slate-900">Pedido Enviado</p>
+								<p class="text-xs text-slate-500">Se envía al marcar un pedido como "En camino" con el número de seguimiento.</p>
+							</div>
+							<div class="w-10 h-5 bg-emerald-500 rounded-full relative cursor-pointer">
+								<div class="w-4 h-4 bg-white rounded-full absolute right-0.5 top-0.5 shadow-sm"></div>
+							</div>
+						</div>
+						<div class="flex items-center justify-between py-2 border-t border-slate-100">
+							<div>
+								<p class="font-bold text-slate-900">Carrito Abandonado</p>
+								<p class="text-xs text-slate-500">Se envía a las 24 horas a los clientes que no completaron su compra.</p>
+							</div>
+							<div class="w-10 h-5 bg-slate-200 rounded-full relative cursor-pointer">
+								<div class="w-4 h-4 bg-white rounded-full absolute left-0.5 top-0.5 shadow-sm"></div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* Apariencia */}
+				<div id="apariencia" class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm scroll-mt-8">
+					<div class="mb-6 border-b border-slate-100 pb-4">
+						<h2 class="text-xl font-extrabold text-slate-900">Apariencia</h2>
+						<p class="text-sm text-slate-500">Personaliza los colores y el logotipo de tu tienda.</p>
+					</div>
+					
+					<div class="space-y-6">
+						<div>
+							<label class="block text-sm font-bold text-slate-900 mb-2">Logotipo</label>
+							<div class="flex items-center gap-4">
+								<div class="w-24 h-24 bg-slate-100 border border-slate-200 border-dashed rounded-xl flex items-center justify-center text-slate-400">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+								</div>
+								<div class="flex-1">
+									<button class="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors">Subir imagen</button>
+									<p class="text-xs text-slate-500 mt-2">Recomendado: PNG con fondo transparente, 400x100px.</p>
+								</div>
+							</div>
+						</div>
+						
+						<div>
+							<label class="block text-sm font-bold text-slate-900 mb-2">Color Principal</label>
+							<div class="flex items-center gap-3">
+								<div class="w-10 h-10 rounded-full bg-slate-900 border-2 border-slate-200 ring-2 ring-slate-900 ring-offset-2 cursor-pointer"></div>
+								<div class="w-10 h-10 rounded-full bg-indigo-600 border-2 border-transparent cursor-pointer hover:border-slate-300"></div>
+								<div class="w-10 h-10 rounded-full bg-emerald-600 border-2 border-transparent cursor-pointer hover:border-slate-300"></div>
+								<div class="w-10 h-10 rounded-full bg-rose-600 border-2 border-transparent cursor-pointer hover:border-slate-300"></div>
+								<div class="w-10 h-10 rounded-full bg-amber-500 border-2 border-transparent cursor-pointer hover:border-slate-300"></div>
+								<input type="color" value="#0f172a" class="w-10 h-10 p-0 border-0 rounded-full cursor-pointer overflow-hidden" />
+							</div>
+						</div>
+					</div>
+				</div>
+
+			</div>
+		</div>
+	</main>
+	<script>
+		// Simple smooth scrolling for sidebar links
+		document.querySelectorAll('nav a').forEach(anchor => {
+			anchor.addEventListener('click', function (e) {
+				const href = this.getAttribute('href');
+				if (href?.startsWith('#')) {
+					e.preventDefault();
+					const targetId = href.substring(1);
+					const targetElement = document.getElementById(targetId);
+					if (targetElement) {
+						targetElement.scrollIntoView({
+							behavior: 'smooth'
+						});
+					}
+				}
+			});
+		});
+	</script>
+</AdminLayout>

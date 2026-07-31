@@ -1,0 +1,554 @@
+---
+export const prerender = false;
+
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import { createAdminClient } from '../lib/server/appwrite';
+import { Query } from 'node-appwrite';
+
+let pickupPoints: any[] = [];
+let provincias: string[] = [];
+
+try {
+  const { databases } = createAdminClient();
+  const res = await databases.listDocuments('urbanpoint', 'pickup_points', [
+    Query.equal('estado', 'activo'),
+    Query.limit(100)
+  ]);
+  pickupPoints = res.documents.map(p => ({
+    id: p.$id,
+    nombre: p.nombre_comercial,
+    direccion: p.direccion,
+    localidad: p.localidad,
+    provincia: p.provincia || 'CABA',
+    lat: p.lat,
+    lng: p.lng,
+    horarios: p.horarios,
+    telefono: p.telefono || '(11) 2478-5603',
+    condicion_fiscal: p.condicion_fiscal || ''
+  }));
+
+  provincias = Array.from(new Set(pickupPoints.map(p => p.provincia))).sort();
+} catch (e) {
+  console.error('Error cargando puntos de retiro para /puntos-de-retiro:', e);
+}
+---
+
+<Layout title="Puntos de Retiro | UrbanPoint">
+  <!-- Performance Preconnects for Map Tiles & Assets -->
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <link rel="preconnect" href="https://mt0.google.com" crossorigin />
+  <link rel="preconnect" href="https://mt1.google.com" crossorigin />
+  <link rel="preconnect" href="https://mt2.google.com" crossorigin />
+  <link rel="preconnect" href="https://mt3.google.com" crossorigin />
+
+  <!-- Leaflet CSS -->
+  <link 
+    rel="stylesheet" 
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+    crossorigin="" 
+  />
+
+  <Header activePage="puntos" />
+
+  <main class="bg-white min-h-[calc(100vh-140px)] py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto w-full">
+      
+      <!-- Title Header Section (UrbanPoint Brand Palette) -->
+      <div class="text-center mb-6 sm:mb-8 pt-2">
+        <h1 class="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight inline-flex items-center justify-center gap-2 sm:gap-3 leading-tight flex-wrap">
+          <span class="text-[#2D5A27]">Puntos de Retiro</span>
+        </h1>
+      </div>
+
+      <!-- Main 2-Column Container -->
+      <div class="puntos-container">
+        
+        <!-- Left Sidebar: Controls & Store List -->
+        <div class="puntos-sidebar">
+          
+          <div class="space-y-4 mb-4 shrink-0">
+            <!-- Filter 1: Provincia Dropdown -->
+            <div>
+              <label for="provincia-select" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Seleccioná Tu Provincia
+              </label>
+              <div class="relative">
+                <select 
+                  id="provincia-select" 
+                  class="w-full appearance-none px-4 py-3 bg-[#F2F7F3] hover:bg-[#E2EFE4] border border-[#D4E5D6] rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-[#2D5A27] focus:outline-none cursor-pointer transition-colors pr-10"
+                >
+                  <option value="todas">Todas</option>
+                  {provincias.map(prov => (
+                    <option value={prov}>{prov}</option>
+                  ))}
+                </select>
+                <div class="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-[#2D5A27]">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- Filter 2: Search Input -->
+            <div>
+              <label for="address-search-input" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                O Buscá por una dirección
+              </label>
+              <div class="relative">
+                <input 
+                  type="text" 
+                  id="address-search-input"
+                  placeholder="Calle 123, barrio, localidad..." 
+                  class="w-full pl-4 pr-11 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-[#2D5A27] focus:outline-none shadow-xs"
+                />
+                <button 
+                  id="btn-address-search" 
+                  class="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-500 hover:text-[#2D5A27] transition-colors"
+                  aria-label="Buscar"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Counter Header -->
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <span id="counter-heading" class="text-sm font-bold text-slate-800">
+                {pickupPoints.length} Puntos de Retiro
+              </span>
+              <button 
+                id="btn-reset-filters" 
+                class="hidden text-xs font-bold text-[#2D5A27] hover:underline cursor-pointer"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          </div>
+
+          <!-- Cards List Container (Scrollable) -->
+          <div id="points-list-container" class="flex-1 overflow-y-auto pr-1 space-y-3.5 custom-scrollbar">
+            <!-- Dynamically populated via Client JS -->
+          </div>
+        </div>
+
+        <!-- Right Panel: Google Maps Container -->
+        <div class="puntos-map-wrapper relative">
+          <!-- Top Left Google Maps Layer Switcher Control -->
+          <div class="absolute top-3 left-3 z-[400] flex bg-white rounded-lg shadow-md border border-slate-300/80 overflow-hidden text-xs font-semibold">
+            <button 
+              id="btn-map-type-roadmap" 
+              class="px-3.5 py-2 bg-white text-slate-900 font-bold border-r border-slate-200 hover:bg-slate-50 transition-colors shadow-inner cursor-pointer"
+            >
+              Mapa
+            </button>
+            <button 
+              id="btn-map-type-hybrid" 
+              class="px-3.5 py-2 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              Satélite
+            </button>
+          </div>
+
+          <!-- Bottom Left Google Logo Badge -->
+          <div class="absolute bottom-2 left-2 z-[400] pointer-events-none">
+            <img src="https://maps.gstatic.com/mapfiles/api-3/images/google4.png" alt="Google" class="h-6 object-contain drop-shadow-sm" />
+          </div>
+
+          <!-- Bottom Right Google Street View Pegman Control -->
+          <div class="absolute bottom-10 right-3 z-[400] w-9 h-9 bg-white rounded-lg shadow-md border border-slate-300 flex items-center justify-center cursor-pointer hover:bg-slate-50 text-amber-500 transition-colors" title="Arrastrar para Street View">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm3 7h-6a2 2 0 0 0-2 2v6h2.5v5h5.5v-5H17v-6a2 2 0 0 0-2-2z"/></svg>
+          </div>
+
+          <!-- Bottom Right Google Attribution Bar -->
+          <div class="absolute bottom-1 right-2 z-[400] hidden sm:flex items-center gap-2 text-[10px] text-slate-700 bg-white/90 backdrop-blur-xs px-2 py-0.5 rounded border border-slate-200 shadow-xs pointer-events-auto">
+            <span>Combinaciones de teclas</span>
+            <span>•</span>
+            <span>Datos del mapa ©2026 Google</span>
+            <span>•</span>
+            <a href="https://www.google.com/permissions/geotargeting/" target="_blank" class="hover:underline text-slate-700">Términos</a>
+            <span>•</span>
+            <span class="cursor-pointer hover:underline">Notificar un problema de Maps</span>
+          </div>
+
+          <!-- The Leaflet Map Instance -->
+          <div id="map"></div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <style>
+    .puntos-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      width: 100%;
+      align-items: flex-start;
+    }
+
+    @media (min-width: 1024px) {
+      .puntos-container {
+        flex-direction: row;
+      }
+    }
+
+    .puntos-sidebar {
+      width: 100%;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      height: 720px;
+      background: #ffffff;
+      padding: 1.25rem;
+      border-radius: 1rem;
+      border: 1px solid #e5e7eb;
+    }
+
+    @media (min-width: 1024px) {
+      .puntos-sidebar {
+        width: 380px;
+        min-width: 380px;
+        max-width: 380px;
+      }
+    }
+
+    .puntos-map-wrapper {
+      width: 100%;
+      flex: 1;
+      height: 720px;
+      min-height: 500px;
+      background: #ffffff;
+      border-radius: 1rem;
+      border: 1px solid #e5e7eb;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #map {
+      width: 100% !important;
+      height: 100% !important;
+      min-height: 500px !important;
+      z-index: 10;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #2D5A27;
+      border-radius: 9999px;
+    }
+  </style>
+
+  <!-- Embed Data for Client JS -->
+  <script type="application/json" id="pickup-points-json" set:html={JSON.stringify(pickupPoints)} />
+
+  <!-- Leaflet JS CDN -->
+  <script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', () => {
+      const jsonEl = document.getElementById('pickup-points-json');
+      if (!jsonEl) return;
+
+      const rawPoints = JSON.parse(jsonEl.textContent || '[]');
+      const provinciaSelect = document.getElementById('provincia-select');
+      const searchInput = document.getElementById('address-search-input');
+      const searchBtn = document.getElementById('btn-address-search');
+      const counterHeading = document.getElementById('counter-heading');
+      const resetBtn = document.getElementById('btn-reset-filters');
+      const listContainer = document.getElementById('points-list-container');
+      const mapEl = document.getElementById('map');
+      const btnRoadmap = document.getElementById('btn-map-type-roadmap');
+      const btnHybrid = document.getElementById('btn-map-type-hybrid');
+
+      if (!mapEl || typeof L === 'undefined') {
+        console.error('Leaflet no está disponible.');
+        return;
+      }
+
+      // Initialize Leaflet Map
+      const map = L.map('map', {
+        zoomControl: true
+      }).setView([-34.5878, -58.4116], 12);
+
+      // Official Google Maps Tile Layers
+      const googleRoadmap = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        attribution: 'Google'
+      });
+
+      const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        attribution: 'Google'
+      });
+
+      // Default: Google Roadmap
+      googleRoadmap.addTo(map);
+
+      // Layer switcher logic
+      if (btnRoadmap && btnHybrid) {
+        btnRoadmap.addEventListener('click', () => {
+          map.removeLayer(googleHybrid);
+          googleRoadmap.addTo(map);
+          btnRoadmap.className = "px-3.5 py-2 bg-white text-slate-900 font-bold border-r border-slate-200 hover:bg-slate-50 transition-colors shadow-inner cursor-pointer";
+          btnHybrid.className = "px-3.5 py-2 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer";
+        });
+
+        btnHybrid.addEventListener('click', () => {
+          map.removeLayer(googleRoadmap);
+          googleHybrid.addTo(map);
+          btnHybrid.className = "px-3.5 py-2 bg-white text-slate-900 font-bold border-r border-slate-200 hover:bg-slate-50 transition-colors shadow-inner cursor-pointer";
+          btnRoadmap.className = "px-3.5 py-2 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer";
+        });
+      }
+
+      // Force size recalculation
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 300);
+
+      // Custom Store Pin Marker Icon in UrbanPoint Primary Green (#2D5A27)
+      function createCustomIcon(isSelected = false) {
+        const bg = isSelected ? '#1E3E1B' : '#2D5A27';
+        const scale = isSelected ? 'scale(1.25)' : 'scale(1.0)';
+        return L.divIcon({
+          className: 'custom-leaflet-marker',
+          html: `<div style="transform: ${scale}; transition: transform 0.2s;" class="flex items-center justify-center">
+            <div style="background-color: ${bg}; border: 2px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.3);" class="w-8 h-8 rounded-full flex items-center justify-center text-white cursor-pointer">
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+            </div>
+          </div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+          popupAnchor: [0, -16]
+        });
+      }
+
+      let markersMap = new Map();
+      let activeMarkerId = null;
+      let markersGroup = L.featureGroup().addTo(map);
+
+      function renderPoints(filteredPoints) {
+        // Clear list & map
+        listContainer.innerHTML = '';
+        markersGroup.clearLayers();
+        markersMap.clear();
+
+        // Update counter heading
+        const count = filteredPoints.length;
+        if (counterHeading) {
+          counterHeading.textContent = `${count} ${count === 1 ? 'Punto de Retiro' : 'Puntos de Retiro'}`;
+        }
+
+        // Show/Hide reset button
+        if (resetBtn) {
+          const isFiltered = (provinciaSelect && provinciaSelect.value !== 'todas') || (searchInput && searchInput.value.trim() !== '');
+          resetBtn.classList.toggle('hidden', !isFiltered);
+        }
+
+        // Handle 0 results state
+        if (count === 0) {
+          listContainer.innerHTML = `
+            <div class="py-12 px-2 text-left space-y-4">
+              <h3 class="text-xl font-bold text-slate-900 leading-snug">
+                Disculpa por el momento no contamos con puntos de retiro en tu ubicación
+              </h3>
+              <p class="text-xs text-slate-500 leading-relaxed">
+                Podés probar seleccionando otra provincia o ingresando una localidad diferente.
+              </p>
+              <button id="empty-state-reset-btn" class="px-4 py-2 bg-[#2D5A27] text-white font-bold text-xs rounded-xl shadow-sm hover:bg-[#23471F] transition-all cursor-pointer">
+                Ver todos los Puntos de Retiro
+              </button>
+            </div>
+          `;
+
+          const emptyResetBtn = document.getElementById('empty-state-reset-btn');
+          if (emptyResetBtn) {
+            emptyResetBtn.addEventListener('click', resetFilters);
+          }
+          return;
+        }
+
+        // Render point cards and add map markers
+        const bounds = [];
+
+        filteredPoints.forEach(point => {
+          // Add marker if lat & lng exist
+          if (point.lat && point.lng) {
+            const marker = L.marker([point.lat, point.lng], {
+              icon: createCustomIcon(point.id === activeMarkerId)
+            });
+
+            const popupContent = `
+              <div class="p-1 font-sans">
+                <strong class="text-sm font-bold text-[#2D5A27] block mb-1">UrbanPoint - ${point.provincia} - ${point.localidad}</strong>
+                <p class="text-xs font-semibold text-slate-800 mb-1 flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-[#2D5A27] shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                  <span>${point.direccion}</span>
+                </p>
+                <p class="text-[11px] text-slate-500 mb-2 flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  <span>${point.horarios || 'Lunes a Sábado - 9 a 20hs'}</span>
+                </p>
+                <a 
+                  href="https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1 text-[11px] font-bold text-[#2D5A27] hover:underline mt-1"
+                >
+                  <span>Cómo llegar</span> →
+                </a>
+              </div>
+            `;
+
+            marker.bindPopup(popupContent);
+            marker.on('click', () => selectPoint(point.id, false));
+
+            markersGroup.addLayer(marker);
+            markersMap.set(point.id, marker);
+            bounds.push([point.lat, point.lng]);
+          }
+
+          // Create Card HTML (UrbanPoint Green Brand Palette)
+          const isSelected = point.id === activeMarkerId;
+          const card = document.createElement('div');
+          card.id = `card-point-${point.id}`;
+          card.className = `p-4 rounded-2xl border transition-all cursor-pointer relative ${
+            isSelected 
+              ? 'bg-[#F2F7F3] border-[#2D5A27] shadow-sm' 
+              : 'bg-white border-slate-200 hover:border-slate-300'
+          }`;
+
+          card.innerHTML = `
+            <div class="${isSelected ? 'block' : 'hidden'} absolute right-0 top-4 bottom-4 w-1 bg-[#2D5A27] rounded-l-full"></div>
+            
+            <div class="space-y-2 text-left pr-2">
+              <h3 class="font-bold text-[#2D5A27] text-sm leading-snug">
+                UrbanPoint - ${point.provincia} - ${point.localidad}
+              </h3>
+              
+              <div class="flex items-start gap-2.5 text-xs text-slate-700 font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[#2D5A27] shrink-0 mt-0.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                <div>
+                  <span class="block text-slate-800 font-semibold">${point.direccion}</span>
+                  <span class="block text-slate-500 text-[11px]">${point.localidad}, ${point.provincia}</span>
+                  <button 
+                    type="button"
+                    class="btn-ver-en-mapa text-[11px] font-bold text-[#2D5A27] underline mt-0.5 block cursor-pointer" 
+                    data-id="${point.id}"
+                  >
+                    Ver en mapa
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex items-start gap-2.5 text-xs text-slate-600 font-medium pt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[#2D5A27] shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <span class="text-[11px] text-slate-600">${point.horarios || 'Lunes a Sábado - 9 a 20hs'}</span>
+              </div>
+
+              ${point.telefono ? `
+                <div class="flex items-center gap-2.5 text-xs text-slate-600 pt-0.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[#2D5A27] shrink-0"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                  <span class="text-[11px] text-slate-600">${point.telefono}</span>
+                </div>
+              ` : ''}
+            </div>
+          `;
+
+          card.addEventListener('click', (e) => {
+            selectPoint(point.id, true);
+          });
+
+          listContainer.appendChild(card);
+        });
+
+        // Fit map view to bounds if markers exist
+        if (bounds.length > 0) {
+          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+        }
+      }
+
+      function selectPoint(pointId, panMap = true) {
+        activeMarkerId = pointId;
+        
+        // Highlight active card
+        document.querySelectorAll('#points-list-container > div').forEach(c => {
+          c.classList.remove('bg-[#F2F7F3]', 'border-[#2D5A27]');
+          c.classList.add('bg-white', 'border-slate-200');
+          const bar = c.querySelector('.bg-\\[\\#2D5A27\\]');
+          if (bar) bar.classList.replace('block', 'hidden');
+        });
+
+        const activeCard = document.getElementById(`card-point-${pointId}`);
+        if (activeCard) {
+          activeCard.classList.remove('bg-white', 'border-slate-200');
+          activeCard.classList.add('bg-[#F2F7F3]', 'border-[#2D5A27]');
+          const activeBar = activeCard.querySelector('.bg-\\[\\#2D5A27\\]');
+          if (activeBar) activeBar.classList.replace('hidden', 'block');
+          activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Open map popup and pan
+        const marker = markersMap.get(pointId);
+        if (marker) {
+          if (panMap) {
+            map.flyTo(marker.getLatLng(), 15, { duration: 0.8 });
+          }
+          marker.openPopup();
+        }
+      }
+
+      function getFilteredPoints() {
+        const selectedProvincia = provinciaSelect ? provinciaSelect.value : 'todas';
+        const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+        return rawPoints.filter(p => {
+          const matchProv = selectedProvincia === 'todas' || (p.provincia && p.provincia.toLowerCase() === selectedProvincia.toLowerCase());
+          const matchQuery = !query || 
+            (p.nombre && p.nombre.toLowerCase().includes(query)) ||
+            (p.direccion && p.direccion.toLowerCase().includes(query)) ||
+            (p.localidad && p.localidad.toLowerCase().includes(query)) ||
+            (p.provincia && p.provincia.toLowerCase().includes(query));
+
+          return matchProv && matchQuery;
+        });
+      }
+
+      function filterAndRender() {
+        const filtered = getFilteredPoints();
+        renderPoints(filtered);
+      }
+
+      function resetFilters() {
+        if (provinciaSelect) provinciaSelect.value = 'todas';
+        if (searchInput) searchInput.value = '';
+        filterAndRender();
+      }
+
+      // Event listeners
+      if (provinciaSelect) provinciaSelect.addEventListener('change', filterAndRender);
+      if (searchInput) {
+        searchInput.addEventListener('input', filterAndRender);
+        searchInput.addEventListener('keyup', (e) => {
+          if (e.key === 'Enter') filterAndRender();
+        });
+      }
+      if (searchBtn) searchBtn.addEventListener('click', filterAndRender);
+      if (resetBtn) resetBtn.addEventListener('click', resetFilters);
+
+      // Initial render
+      renderPoints(rawPoints);
+    });
+  </script>
+</Layout>

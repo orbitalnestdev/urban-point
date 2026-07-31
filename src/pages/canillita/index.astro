@@ -1,0 +1,207 @@
+---
+export const prerender = false;
+import Layout from '../../layouts/Layout.astro';
+import { Client, Databases, Query } from 'node-appwrite';
+import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { APPWRITE_API_KEY } from 'astro:env/server';
+import { AlertCircle, Package, DollarSign, MapPin, Share2, Copy, WalletCards } from 'lucide-react';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'canillita') {
+  return Astro.redirect('/');
+}
+
+const adminClient = new Client()
+  .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+  .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+  .setKey(APPWRITE_API_KEY);
+
+const db = new Databases(adminClient);
+
+let point = null;
+let referralCodeDoc = null;
+let pendingOrdersCount = 0;
+let saldoPendienteCentavos = 0;
+
+try {
+  const points = await db.listDocuments('urbanpoint', 'pickup_points', [
+    Query.equal('profile_id', user.profileId)
+  ]);
+
+  if (points.documents.length === 0) {
+    return Astro.redirect('/');
+  }
+
+  point = points.documents[0];
+
+  // Referral code
+  const refRes = await db.listDocuments('urbanpoint', 'referral_codes', [
+    Query.equal('owner_id', user.profileId),
+    Query.limit(1)
+  ]);
+  if (refRes.documents.length > 0) {
+    referralCodeDoc = refRes.documents[0];
+  }
+
+  // Pending orders
+  const ordersRes = await db.listDocuments('urbanpoint', 'orders', [
+    Query.equal('pickup_point_id', point.$id),
+    Query.equal('estado', 'listo')
+  ]);
+  pendingOrdersCount = ordersRes.documents.length;
+
+  // Pending balance
+  const ledgerRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
+    Query.equal('profile_id', user.profileId),
+    Query.equal('estado', 'pendiente')
+  ]);
+  saldoPendienteCentavos = ledgerRes.documents.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
+
+} catch (e) {
+  console.error("Canillita Dashboard Error:", e);
+}
+
+const isPending = point?.estado === 'pendiente';
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCodeDoc.code}` : '';
+---
+
+<Layout title="Panel de Canillita | UrbanPoint">
+	<nav class="w-full z-50 bg-white border-b border-slate-200">
+		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+			<div class="flex items-center gap-2">
+				<div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">
+					C
+				</div>
+				<span class="text-xl font-extrabold tracking-tight text-slate-900">Panel Canillita</span>
+			</div>
+			<div class="flex items-center gap-4">
+				<span class="text-sm font-medium text-slate-600">{user.name}</span>
+				<a href="/canillita/liquidaciones" class="text-sm font-bold text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1">
+					<WalletCards class="w-4 h-4" />
+					Mis Cobros
+				</a>
+				<form method="post" action={'/_actions/auth_logout'}>
+					<button class="text-sm text-red-600 font-semibold hover:text-red-700 transition-colors">Salir</button>
+				</form>
+			</div>
+		</div>
+	</nav>
+
+	<main class="min-h-[calc(100vh-64px)] bg-slate-50 py-12">
+		<div class="max-w-7xl mx-auto px-6">
+			{isPending && (
+				<div class="bg-indigo-600 text-white rounded-2xl p-8 mb-8 shadow-xl shadow-indigo-600/20 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+					<div class="relative z-10">
+						<h2 class="text-2xl font-bold mb-2 flex items-center gap-2">
+							<AlertCircle class="w-6 h-6" />
+							¡Último paso para empezar!
+						</h2>
+						<p class="text-indigo-100 max-w-2xl">
+							Tu local <strong>{point.nombre_comercial}</strong> fue aprobado. Para empezar a recibir paquetes y ganar comisiones, necesitamos que completes tus datos bancarios y aceptes los términos.
+						</p>
+					</div>
+					<a href="/canillita/activar" class="relative z-10 whitespace-nowrap px-8 py-4 bg-white text-indigo-600 hover:bg-slate-50 font-bold rounded-xl shadow-lg transition-transform hover:-translate-y-0.5">
+						Activar mi Cuenta
+					</a>
+				</div>
+			)}
+
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+				<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+					<div class="flex items-center justify-between mb-4">
+						<h3 class="text-slate-500 font-semibold text-sm">Paquetes para entregar</h3>
+						<div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+							<Package class="w-5 h-5" />
+						</div>
+					</div>
+					<p class="text-3xl font-extrabold text-slate-900">{pendingOrdersCount}</p>
+				</div>
+
+				<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+					<div class="flex items-center justify-between mb-4">
+						<h3 class="text-slate-500 font-semibold text-sm">Comisiones a liquidar</h3>
+						<div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+							<DollarSign class="w-5 h-5" />
+						</div>
+					</div>
+					<p class="text-3xl font-extrabold text-emerald-600">{formateador.format(saldoPendienteCentavos / 100)}</p>
+				</div>
+
+				<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+					<div class="flex items-center justify-between mb-4">
+						<h3 class="text-slate-500 font-semibold text-sm">Estado del local</h3>
+						<div class={`w-10 h-10 rounded-full flex items-center justify-center ${isPending ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+							<MapPin class="w-5 h-5" />
+						</div>
+					</div>
+					<p class="text-lg font-extrabold text-slate-900">
+						{isPending ? 'Pendiente de activación' : 'Activo y visible'}
+					</p>
+				</div>
+			</div>
+
+			{/* Bloque de Referidos para Canillita */}
+			{referralCodeDoc && (
+				<div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-8 mb-8">
+					<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+						<div>
+							<div class="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 text-indigo-700 font-bold text-xs rounded-full uppercase tracking-wider mb-3">
+								Programa de Referidos
+							</div>
+							<h2 class="text-2xl font-bold text-slate-900">
+								Tu Código: <span class="text-indigo-600 font-mono tracking-wider">{referralCodeDoc.code}</span>
+							</h2>
+							<p class="text-slate-500 text-sm mt-1 max-w-xl">
+								Mi código &rarr; Compartir &rarr; Personas referidas &rarr; Compras &rarr; Comisiones. Ganás comisiones por cada compra que se realice desde tu link.
+							</p>
+						</div>
+
+						<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+							<input 
+								type="text" 
+								readOnly 
+								value={shareUrl}
+								class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono text-slate-700 w-full sm:w-80 outline-none"
+							/>
+							<button 
+								id="btn-copiar-referido"
+								data-url={shareUrl}
+								class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl shadow-md transition-all shrink-0 flex items-center justify-center gap-2 cursor-pointer"
+							>
+								<Copy class="w-4 h-4" />
+								<span id="btn-copiar-text">Copiar Link</span>
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			<div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center text-slate-500">
+				<p class="font-medium text-slate-700">Panel operativo sincronizado con Appwrite.</p>
+				<p class="text-sm text-slate-400 mt-1">Los paquetes recibidos y las liquidaciones se actualizarán automáticamente.</p>
+			</div>
+		</div>
+	</main>
+
+	<script>
+		document.getElementById('btn-copiar-referido')?.addEventListener('click', (e) => {
+			const btn = e.currentTarget as HTMLButtonElement;
+			const textSpan = document.getElementById('btn-copiar-text');
+			const url = btn.dataset.url || '';
+			if (!url) return;
+
+			navigator.clipboard.writeText(url).then(() => {
+				if (textSpan) textSpan.innerText = '¡Copiado!';
+				btn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+				btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+
+				setTimeout(() => {
+					if (textSpan) textSpan.innerText = 'Copiar Link';
+					btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+					btn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+				}, 2000);
+			});
+		});
+	</script>
+</Layout>

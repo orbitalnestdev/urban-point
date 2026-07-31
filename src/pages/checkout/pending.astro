@@ -1,0 +1,28 @@
+---
+import Layout from '../../layouts/Layout.astro';
+export const prerender = false;
+---
+
+<Layout title="Pago Pendiente | UrbanPoint">
+	<div class="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center">
+		<div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-amber-500/20">
+			<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+		</div>
+		<h1 class="text-4xl font-extrabold text-slate-900 mb-4">Pago pendiente</h1>
+		<p class="text-lg text-slate-600 max-w-md mx-auto mb-8">
+			Estamos esperando la confirmación de tu pago. Si pagaste en efectivo, puede demorar hasta 48 horas en acreditarse.
+		</p>
+		
+		<div class="flex gap-4">
+			<a href="/tienda" class="bg-indigo-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/20">
+				Volver a la Tienda
+			</a>
+		</div>
+	</div>
+</Layout>
+
+<script>
+	import { clearCart } from '../../store/cart';
+	// Limpiamos el carrito local
+	clearCart();
+</script>

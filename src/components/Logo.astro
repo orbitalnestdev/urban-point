@@ -1,0 +1,19 @@
+---
+interface Props {
+  variant?: 'light' | 'dark';
+  class?: string;
+  height?: number | string;
+}
+
+const { class: className = '', height = 38 } = Astro.props;
+const heightStyle = typeof height === 'number' ? `${height}px` : height;
+---
+
+<a href="/" class={`inline-flex items-center group transition-opacity hover:opacity-95 ${className}`}>
+  <img 
+    src="/images/logo.png" 
+    alt="UrbanPoint" 
+    style={`height: ${heightStyle}; width: auto;`} 
+    class="object-contain max-h-full"
+  />
+</a>

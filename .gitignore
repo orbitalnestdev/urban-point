@@ -15,7 +15,14 @@ pnpm-debug.log*
 
 # environment variables
 .env
-.env.production
+.env.*
+
+# scratch & test files
+scratch/
+.next/
+test-*.ts
+check.ts
+make-admin.ts
 
 # macOS-specific files
 .DS_Store

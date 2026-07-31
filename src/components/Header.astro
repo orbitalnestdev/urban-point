@@ -1,0 +1,181 @@
+---
+import Logo from './Logo.astro';
+import CartDrawer from './shop/CartDrawer';
+
+interface Props {
+  activePage?: string;
+  showAnnouncement?: boolean;
+}
+
+const { activePage = '', showAnnouncement = true } = Astro.props;
+---
+
+<header class="sticky top-0 z-50 w-full transition-all duration-300">
+  <!-- Top Announcement Bar (Animated Rotating Ticker) -->
+  {showAnnouncement && (
+    <div class="bg-[#2D5A27] text-white text-xs font-semibold py-2 px-4 text-center tracking-wide shadow-xs flex items-center justify-center h-8 overflow-hidden relative">
+      <div id="announcement-ticker" class="relative h-full w-full flex items-center justify-center">
+        
+        <span class="ticker-item active flex items-center justify-center gap-1.5 transition-all duration-500 absolute inset-0 opacity-100 translate-y-0">
+          <svg class="w-3.5 h-3.5 text-emerald-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"></path></svg>
+          Retiro GRATIS en Puntos de Barrio
+        </span>
+
+        <span class="ticker-item flex items-center justify-center gap-1.5 transition-all duration-500 absolute inset-0 opacity-0 translate-y-4 pointer-events-none">
+          <svg class="w-3.5 h-3.5 text-emerald-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+          3 cuotas sin interés con todas las tarjetas
+        </span>
+
+        <span class="ticker-item flex items-center justify-center gap-1.5 transition-all duration-500 absolute inset-0 opacity-0 translate-y-4 pointer-events-none">
+          <svg class="w-3.5 h-3.5 text-emerald-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          Garantía oficial y compra directa protegida
+        </span>
+
+      </div>
+    </div>
+  )}
+
+  <!-- Floating Pill Navbar Container -->
+  <div class="pt-3 pb-1 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto bg-white/95 backdrop-blur-md rounded-full shadow-xl shadow-slate-900/10 border border-slate-200/80 px-4 sm:px-6 py-2.5 flex items-center justify-between transition-all duration-300">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3">
+        <Logo height={38} />
+      </div>
+
+      <!-- Center Navigation Links -->
+      <nav class="hidden lg:flex items-center gap-7 font-medium text-xs sm:text-sm text-slate-600">
+        <a 
+          href="/productos" 
+          class={`hover:text-[#2D5A27] transition-colors py-1 ${activePage === 'catalogo' ? 'text-[#2D5A27] font-bold' : ''}`}
+        >
+          Catálogo
+        </a>
+        <a 
+          href="/#como-funciona" 
+          class="hover:text-[#2D5A27] transition-colors py-1"
+        >
+          Cómo funciona
+        </a>
+        <a 
+          href="/puntos-de-retiro" 
+          class={`hover:text-[#2D5A27] transition-colors py-1 ${activePage === 'puntos' ? 'text-[#2D5A27] font-bold' : ''}`}
+        >
+          Puntos UrbanPoint
+        </a>
+        <a 
+          href="/sumate-como-canillita" 
+          class={`hover:text-[#2D5A27] transition-colors py-1 ${activePage === 'canillita' ? 'text-[#2D5A27] font-bold' : ''}`}
+        >
+          Soy Canillita
+        </a>
+      </nav>
+
+      <!-- Right Actions: Ingresar, Crear cuenta pill, Cart icon -->
+      <div class="flex items-center gap-3 sm:gap-4">
+        <a 
+          href="/login" 
+          class="hidden sm:inline-block text-xs sm:text-sm font-semibold text-slate-700 hover:text-[#2D5A27] transition-colors px-2 py-1"
+        >
+          Ingresar
+        </a>
+        
+        <a 
+          href="/login" 
+          class="px-4 sm:px-5 py-2 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-full text-xs sm:text-sm font-bold shadow-md transition-all hover:scale-[1.02] flex items-center gap-1.5"
+        >
+          Crear cuenta
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </a>
+
+        <!-- Shopping Cart Button with Green Count Badge -->
+        <button 
+          id="btn-open-cart-floating" 
+          class="relative p-2 text-slate-700 hover:text-[#2D5A27] transition-colors rounded-full hover:bg-slate-100"
+          aria-label="Ver Carrito"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+          </svg>
+          <span 
+            id="cart-badge-count" 
+            class="absolute -top-1 -right-1 w-4 h-4 bg-[#2D5A27] text-white font-extrabold text-[10px] rounded-full flex items-center justify-center shadow-sm"
+          >
+            0
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cart Drawer Component Mounted Globally -->
+  <CartDrawer client:load />
+</header>
+
+<script>
+  // Open Cart drawer event
+  const cartBtn = document.getElementById('btn-open-cart-floating');
+  if (cartBtn) {
+    cartBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.dispatchEvent(new CustomEvent('cart:open'));
+      document.dispatchEvent(new CustomEvent('cart:open'));
+    });
+  }
+
+  // Listen to cart update event to update badge count
+  window.addEventListener('cart:updated', (e: any) => {
+    const badge = document.getElementById('cart-badge-count');
+    if (badge && e.detail && typeof e.detail.count === 'number') {
+      badge.textContent = e.detail.count.toString();
+    }
+  });
+
+  // Calculate initial total items from localStorage keys starting with urbanpoint_cart:
+  try {
+    let totalCount = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('urbanpoint_cart:')) {
+        const val = localStorage.getItem(key);
+        if (val) {
+          const item = JSON.parse(val);
+          if (item && item.cantidad) totalCount += Number(item.cantidad);
+        }
+      }
+    }
+    const badge = document.getElementById('cart-badge-count');
+    if (badge) badge.textContent = totalCount.toString();
+  } catch (e) {}
+
+  // Rotating Announcement Bar Ticker Animation
+  const tickerItems = document.querySelectorAll('.ticker-item');
+  if (tickerItems.length > 1) {
+    let activeIndex = 0;
+    setInterval(() => {
+      const current = tickerItems[activeIndex] as HTMLElement;
+      activeIndex = (activeIndex + 1) % tickerItems.length;
+      const next = tickerItems[activeIndex] as HTMLElement;
+
+      if (current && next) {
+        // Fade out current
+        current.classList.remove('opacity-100', 'translate-y-0');
+        current.classList.add('opacity-0', '-translate-y-4', 'pointer-events-none');
+
+        // Fade in next
+        next.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+        next.classList.add('opacity-100', 'translate-y-0');
+
+        // Reset previous position after transition
+        setTimeout(() => {
+          current.classList.remove('-translate-y-4');
+          current.classList.add('translate-y-4');
+        }, 500);
+      }
+    }, 3200);
+  }
+</script>

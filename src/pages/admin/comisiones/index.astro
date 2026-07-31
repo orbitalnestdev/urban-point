@@ -1,0 +1,109 @@
+---
+export const prerender = false;
+import Layout from '../../../layouts/Layout.astro';
+import CommissionSimulator from '../../../components/admin/CommissionSimulator';
+import { Client, Databases, Query } from 'node-appwrite';
+import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { APPWRITE_API_KEY } from 'astro:env/server';
+import { Plus, Percent, DollarSign, Settings } from 'lucide-react';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') {
+  return Astro.redirect('/');
+}
+
+const client = new Client()
+  .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+  .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+  .setKey(APPWRITE_API_KEY);
+
+const db = new Databases(client);
+
+// 1. Fetch active rules
+const rules = await db.listDocuments('urbanpoint', 'commission_rules', [
+  Query.equal('activo', true),
+  Query.orderDesc('$createdAt')
+]);
+
+// 2. Fetch products and canillitas for simulator
+const productsRes = await db.listDocuments('urbanpoint', 'products', [Query.limit(50)]);
+const products = productsRes.documents.map(p => ({ id: p.$id, name: p.nombre }));
+
+const canillitasRes = await db.listDocuments('urbanpoint', 'pickup_points', [
+  Query.equal('estado', 'activo'),
+  Query.limit(50)
+]);
+const canillitas = canillitasRes.documents.map(c => ({ id: typeof c.profile_id === 'string' ? c.profile_id : c.profile_id.$id, name: c.nombre_comercial }));
+---
+
+<Layout title="Gestión de Comisiones | UrbanPoint Admin">
+  <nav class="w-full z-50 bg-slate-900 border-b border-slate-800">
+		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+			<div class="flex items-center gap-2 text-white">
+				<Settings class="w-5 h-5 text-indigo-400" />
+				<span class="text-xl font-extrabold tracking-tight">Admin | Comisiones</span>
+			</div>
+			<div class="flex items-center gap-4">
+        <a href="/admin" class="text-slate-300 hover:text-white transition-colors text-sm">Volver al Panel</a>
+			</div>
+		</div>
+	</nav>
+
+  <main class="min-h-[calc(100vh-64px)] bg-slate-50 py-12">
+    <div class="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+      
+      {/* Left Column: Rules List */}
+      <div class="lg:col-span-2 space-y-6">
+        <div class="flex items-center justify-between mb-8">
+          <div>
+            <h1 class="text-3xl font-bold text-slate-900">Reglas Activas</h1>
+            <p class="text-slate-500 mt-1">Configuración del motor de comisiones y logística.</p>
+          </div>
+          <a href="/admin/comisiones/nueva" class="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-all shadow-sm">
+            <Plus class="w-5 h-5" /> Nueva Regla
+          </a>
+        </div>
+
+        {rules.documents.length === 0 ? (
+          <div class="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-500">
+            No hay reglas activas configuradas.
+          </div>
+        ) : (
+          <div class="grid gap-4">
+            {rules.documents.map(rule => (
+              <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                  <div class={`w-12 h-12 rounded-xl flex items-center justify-center ${rule.tipo === 'porcentaje' ? 'bg-indigo-50 text-indigo-600' : 'bg-green-50 text-green-600'}`}>
+                    {rule.tipo === 'porcentaje' ? <Percent class="w-6 h-6" /> : <DollarSign class="w-6 h-6" />}
+                  </div>
+                  <div>
+                    <h3 class="font-bold text-slate-900 capitalize text-lg">Alcance: {rule.alcance.replace('_', ' ')}</h3>
+                    <div class="flex items-center gap-3 text-sm text-slate-500 mt-1">
+                      <span class="bg-slate-100 px-2 py-0.5 rounded font-mono text-xs">ID: {rule.$id}</span>
+                      {rule.canillita_id && <span>• Canillita Específico</span>}
+                      {rule.categoria_id && <span>• Categoría Específica</span>}
+                    </div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <p class="text-2xl font-black text-slate-900">
+                    {rule.tipo === 'porcentaje' ? `${(rule.valor / 100).toFixed(2)}%` : `$${(rule.valor / 100).toFixed(2)}`}
+                  </p>
+                  <p class="text-sm text-slate-500 capitalize">{rule.tipo.replace('_', ' ')}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Right Column: Simulator */}
+      <div class="lg:col-span-1">
+        <div class="sticky top-6">
+          <CommissionSimulator client:only="react" products={products} canillitas={canillitas} />
+        </div>
+      </div>
+      
+    </div>
+  </main>
+</Layout>

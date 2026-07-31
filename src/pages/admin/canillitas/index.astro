@@ -1,0 +1,111 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { createAdminClient } from '../../../lib/server/appwrite';
+import { Query } from 'node-appwrite';
+
+export const prerender = false;
+
+const { databases } = createAdminClient();
+let puntos = [];
+let referidos = [];
+
+try {
+	const resPuntos = await databases.listDocuments('urbanpoint', 'pickup_points');
+	puntos = resPuntos.documents;
+	
+	const resReferidos = await databases.listDocuments('urbanpoint', 'referral_codes');
+	referidos = resReferidos.documents;
+} catch (e) {
+	console.error(e);
+}
+
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+---
+
+<AdminLayout title="Red de Retiro">
+	<main class="p-8">
+		<header class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
+			<div>
+				<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Red de Retiro (Canillitas)</h1>
+				<p class="text-slate-500 font-medium mt-1">Gestioná los puntos de entrega asociados y sus comisiones por ventas referidas.</p>
+			</div>
+			<div class="flex items-center gap-2">
+				<button class="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2">
+					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+					Nuevo Punto
+				</button>
+			</div>
+		</header>
+
+		{/* Top Metric Cards */}
+		<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Puntos Activos</h3>
+				<p class="text-3xl font-black text-slate-900">{puntos.filter(p => p.estado === 'activo').length}</p>
+			</div>
+			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm opacity-50">
+				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Ventas Red</h3>
+				<p class="text-3xl font-black text-emerald-600">--</p>
+			</div>
+			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm opacity-50">
+				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Comisiones a pagar</h3>
+				<p class="text-3xl font-black text-amber-600">--</p>
+			</div>
+			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm opacity-50">
+				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Promedio x Punto</h3>
+				<p class="text-3xl font-black text-indigo-600">-- <span class="text-lg font-bold text-slate-500">ventas</span></p>
+			</div>
+		</div>
+
+		{/* Tabla de Puntos */}
+		<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+			<table class="w-full text-left border-collapse">
+				<thead>
+					<tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+						<th class="p-4">Punto de Retiro</th>
+						<th class="p-4 text-center">Código REF</th>
+						<th class="p-4 text-center">Ventas (Mes)</th>
+						<th class="p-4 text-right">Comisión a Pagar</th>
+						<th class="p-4 text-center">Estado</th>
+						<th class="p-4 text-center">Acciones</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-slate-100">
+					
+					{puntos.map(punto => {
+						const codigoReferido = referidos.find(r => r.owner_id?.$id === punto.profile_id?.$id);
+						
+						return (
+							<tr class="hover:bg-slate-50">
+								<td class="p-4">
+									<p class="font-bold text-slate-900">{punto.nombre_comercial}</p>
+									<p class="text-xs text-slate-500">{punto.direccion}, {punto.localidad}</p>
+								</td>
+								<td class="p-4 text-center font-mono font-bold text-indigo-600 bg-indigo-50/50 rounded">{codigoReferido ? codigoReferido.code : 'N/A'}</td>
+								<td class="p-4 text-center font-bold text-slate-900">--</td>
+								<td class="p-4 text-right font-black text-slate-900">--</td>
+								<td class="p-4 text-center">
+									{punto.estado === 'activo' ? (
+										<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Activo</span>
+									) : (
+										<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 capitalize">{punto.estado}</span>
+									)}
+								</td>
+								<td class="p-4 text-center">
+									<button class="text-slate-400 hover:text-indigo-600 transition-colors font-bold text-sm">Ver Detalle</button>
+								</td>
+							</tr>
+						);
+					})}
+
+					{puntos.length === 0 && (
+						<tr>
+							<td colspan="6" class="p-8 text-center text-slate-500">No hay puntos de retiro registrados.</td>
+						</tr>
+					)}
+
+				</tbody>
+			</table>
+		</div>
+	</main>
+</AdminLayout>

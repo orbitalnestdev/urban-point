@@ -1,0 +1,322 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { createAdminClient } from '../../../lib/server/appwrite';
+import { Query } from 'node-appwrite';
+
+export const prerender = false;
+
+const { databases } = createAdminClient();
+let products = [];
+let categories = [];
+const activeTab = Astro.url.searchParams.get('tab') || 'reposicion';
+
+try {
+	const res = await databases.listDocuments('urbanpoint', 'products', [Query.limit(200)]);
+	products = res.documents;
+	
+	const catRes = await databases.listDocuments('urbanpoint', 'categories');
+	categories = catRes.documents;
+} catch (e) {
+	console.error(e);
+}
+
+const sinStockProducts = products.filter(p => p.stock === 0);
+const sinStockCount = 881; // Mock from screenshot
+const enStockCount = 98;
+const unidadesTotales = 47100;
+const valorInventario = 321700000;
+
+const formateadorMoneda = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 1 });
+const formateadorNumero = new Intl.NumberFormat('es-AR', { notation: "compact", compactDisplay: "short" });
+
+---
+
+<AdminLayout title="Inventario | Reposición y Movimientos">
+	<main class="p-8 max-w-[1400px] mx-auto pb-24">
+		{/* Top Header */}
+		<header class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
+			<div>
+				<div class="flex items-center gap-2 text-sm text-slate-500 mb-1">
+					<span class="text-slate-900 font-medium">Inventario</span>
+				</div>
+				<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Inventario</h1>
+			</div>
+			
+			<div class="flex items-center gap-3">
+				<button class="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon></svg>
+					Exportar stock
+				</button>
+				<button class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-colors shadow-md flex items-center gap-2">
+					Registrar movimiento
+				</button>
+			</div>
+		</header>
+
+		{/* Tabs */}
+		<div class="flex space-x-6 border-b border-slate-200 mb-6 overflow-x-auto hide-scrollbar">
+			<a href="/admin/inventario?tab=todos" class={`pb-2 text-sm font-bold whitespace-nowrap flex items-center gap-2 ${activeTab === 'todos' ? 'border-b-2 border-slate-900 text-slate-900' : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'}`}>Todos</a>
+			<a href="/admin/inventario?tab=movimientos" class={`pb-2 text-sm font-bold whitespace-nowrap flex items-center gap-2 ${activeTab === 'movimientos' ? 'border-b-2 border-slate-900 text-slate-900' : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'}`}>Movimientos</a>
+			<a href="/admin/inventario?tab=reposicion" class={`pb-2 text-sm font-bold whitespace-nowrap flex items-center gap-2 ${activeTab === 'reposicion' ? 'border-b-2 border-slate-900 text-slate-900' : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'}`}>
+				Reposición
+				<span class="bg-rose-100 text-rose-700 text-[10px] px-2 py-0.5 rounded-full font-bold">881</span>
+			</a>
+		</div>
+
+		{activeTab === 'reposicion' && (
+			<>
+				{/* Red Alert Banner */}
+				<div class="bg-rose-50 border border-rose-200 rounded-2xl p-6 shadow-sm mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+					<div class="flex items-start gap-4">
+						<div class="w-10 h-10 rounded-full bg-white text-rose-600 flex items-center justify-center shrink-0 shadow-sm">
+							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+						</div>
+						<div>
+							<h2 class="text-rose-700 font-extrabold text-lg flex items-center gap-2">881 PRODUCTOS SIN STOCK</h2>
+							<p class="text-rose-600/80 font-medium text-sm mt-1">Hay quiebre de stock en el 90% del catálogo. Te estás perdiendo ventas.</p>
+						</div>
+					</div>
+					<button class="px-5 py-2.5 bg-white text-rose-700 hover:bg-rose-50 border border-rose-200 font-bold rounded-lg shadow-sm text-sm transition-colors shrink-0">
+						Descargar reporte de reposición
+					</button>
+				</div>
+
+				{/* Summary Bar */}
+				<div class="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm flex flex-wrap items-center justify-between">
+					<div class="flex items-center gap-3 px-6">
+						<div class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+						</div>
+						<div>
+							<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Unidades en stock</p>
+							<p class="text-xl font-black text-slate-900">47.1K</p>
+						</div>
+					</div>
+
+					<div class="flex items-center gap-3 px-6 border-l border-slate-100">
+						<div class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+						</div>
+						<div>
+							<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Valor del inventario</p>
+							<p class="text-xl font-black text-slate-900">$321.7M</p>
+						</div>
+					</div>
+
+					<div class="flex items-center gap-3 px-6 border-l border-slate-100">
+						<div class="w-8 h-8 rounded-full bg-sky-50 text-sky-600 flex items-center justify-center">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+						</div>
+						<div>
+							<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">En stock</p>
+							<p class="text-xl font-black text-slate-900">98</p>
+						</div>
+					</div>
+				</div>
+
+				{/* Search/Filter bar */}
+				<div class="flex items-center gap-4 mb-6 relative">
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+					<input type="text" placeholder="Buscar por SKU, nombre o categoría..." class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-sm" />
+				</div>
+
+				{/* Cola de reposición */}
+				<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+					<div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+						<h2 class="text-base font-extrabold text-slate-900">Cola de reposición</h2>
+						<button class="text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1.5">
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+							Configurar alertas
+						</button>
+					</div>
+
+					<div class="space-y-4">
+						{/* Mocked Item 1 */}
+						<div class="p-4 border border-slate-100 hover:border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors bg-white">
+							<div class="flex items-center gap-4 flex-1">
+								<div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden border border-slate-200">
+									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+								</div>
+								<div>
+									<h3 class="font-extrabold text-slate-900 text-sm">Remera Básica Algodón</h3>
+									<div class="flex items-center gap-2 text-[11px] font-bold mt-1">
+										<span class="text-slate-500 font-mono">SKU-77489</span>
+										<span class="text-slate-300">&bull;</span>
+										<span class="text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">Publicado</span>
+									</div>
+								</div>
+							</div>
+
+							<div class="flex-1 text-center hidden md:block">
+								<span class="text-xs text-slate-500 font-bold bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">
+									Último: <span class="text-slate-700">Hace 1 mes</span>
+								</span>
+							</div>
+
+							<div class="flex items-center gap-6 justify-end flex-1">
+								<div class="text-right">
+									<p class="text-sm font-black text-rose-600">Stock actual 0</p>
+									<p class="text-[10px] font-bold text-slate-400 uppercase">Recomendado 20</p>
+								</div>
+								<div class="flex items-center gap-2">
+									<button class="px-4 py-2 border border-emerald-600 text-emerald-600 hover:bg-emerald-50 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 shadow-sm whitespace-nowrap">
+										+ Reponer
+									</button>
+									<button class="px-3 py-2 text-slate-400 hover:text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 bg-slate-50 border border-slate-200 shadow-sm">
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+										Posponer
+									</button>
+								</div>
+							</div>
+						</div>
+
+						{/* Mocked Item 2 */}
+						<div class="p-4 border border-slate-100 hover:border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors bg-white opacity-60">
+							<div class="flex items-center gap-4 flex-1">
+								<div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden border border-slate-200">
+									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+								</div>
+								<div>
+									<h3 class="font-extrabold text-slate-900 text-sm">Pantalón Denim Oversize</h3>
+									<div class="flex items-center gap-2 text-[11px] font-bold mt-1">
+										<span class="text-slate-500 font-mono">SKU-99212</span>
+										<span class="text-slate-300">&bull;</span>
+										<span class="text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">Pausado</span>
+									</div>
+								</div>
+							</div>
+
+							<div class="flex-1 text-center hidden md:block">
+								<span class="text-xs text-slate-500 font-bold bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">
+									Último: <span class="text-slate-700">Hace 3 meses</span>
+								</span>
+							</div>
+
+							<div class="flex items-center gap-6 justify-end flex-1">
+								<div class="text-right">
+									<p class="text-sm font-black text-rose-600">Stock actual 0</p>
+									<p class="text-[10px] font-bold text-slate-400 uppercase">Recomendado 15</p>
+								</div>
+								<div class="flex items-center gap-2">
+									<button class="px-4 py-2 border border-emerald-600 text-emerald-600 hover:bg-emerald-50 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 shadow-sm whitespace-nowrap">
+										+ Reponer
+									</button>
+									<button class="px-3 py-2 text-slate-400 hover:text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 bg-slate-50 border border-slate-200 shadow-sm">
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+										Posponer
+									</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</>
+		)}
+
+		{activeTab === 'movimientos' && (
+			<div class="max-w-4xl">
+				{/* Timeline Movimientos */}
+				
+				<div class="mb-8 relative pl-6 border-l-2 border-slate-200 ml-3">
+					<div class="absolute -left-[9px] top-0 w-4 h-4 bg-slate-200 rounded-full border-4 border-slate-50"></div>
+					<h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-4">HOY</h3>
+					
+					<div class="space-y-4">
+						{/* Item Venta */}
+						<div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex items-start gap-4">
+							<div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+							</div>
+							<div class="flex-1">
+								<div class="flex items-center justify-between mb-1">
+									<h4 class="font-extrabold text-slate-900 text-sm">Venta #ORD-20260722-0001</h4>
+									<span class="text-xs font-bold text-slate-400">14:32 hs</span>
+								</div>
+								<p class="text-xs text-slate-500 font-medium mb-3 flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg> Automático</p>
+								
+								<div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
+									<div class="flex items-center justify-between text-sm mb-2 last:mb-0">
+										<div class="flex items-center gap-2">
+											<span class="font-bold text-slate-700">Remera Básica Algodón</span>
+											<span class="text-slate-400 text-xs">M - Negro</span>
+										</div>
+										<span class="font-black text-rose-600">-1</span>
+									</div>
+									<div class="flex items-center justify-between text-sm mb-2 last:mb-0">
+										<div class="flex items-center gap-2">
+											<span class="font-bold text-slate-700">Pantalón Denim Oversize</span>
+											<span class="text-slate-400 text-xs">42 - Azul</span>
+										</div>
+										<span class="font-black text-rose-600">-1</span>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Item Ajuste manual */}
+						<div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex items-start gap-4">
+							<div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+							</div>
+							<div class="flex-1">
+								<div class="flex items-center justify-between mb-1">
+									<h4 class="font-extrabold text-slate-900 text-sm">Ajuste manual</h4>
+									<span class="text-xs font-bold text-slate-400">09:15 hs</span>
+								</div>
+								<p class="text-xs text-slate-500 font-medium mb-3 flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Por Juan Pérez</p>
+								
+								<div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
+									<div class="flex items-center justify-between text-sm mb-2 last:mb-0">
+										<div class="flex items-center gap-2">
+											<span class="font-bold text-slate-700">Remera Básica Algodón</span>
+											<span class="text-slate-400 text-xs">L - Blanco</span>
+										</div>
+										<span class="font-black text-emerald-600">+10</span>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="mb-8 relative pl-6 border-l-2 border-slate-200 ml-3">
+					<div class="absolute -left-[9px] top-0 w-4 h-4 bg-slate-200 rounded-full border-4 border-slate-50"></div>
+					<h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-4">AYER</h3>
+					
+					<div class="space-y-4">
+						<div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex items-start gap-4">
+							<div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+							</div>
+							<div class="flex-1">
+								<div class="flex items-center justify-between mb-1">
+									<h4 class="font-extrabold text-slate-900 text-sm">Venta #ORD-20260721-0012</h4>
+									<span class="text-xs font-bold text-slate-400">18:40 hs</span>
+								</div>
+								<p class="text-xs text-slate-500 font-medium mb-3 flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg> Automático</p>
+								
+								<div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
+									<div class="flex items-center justify-between text-sm mb-2 last:mb-0">
+										<div class="flex items-center gap-2">
+											<span class="font-bold text-slate-700">Zapatillas Urbanas</span>
+											<span class="text-slate-400 text-xs">40 - Gris</span>
+										</div>
+										<span class="font-black text-rose-600">-1</span>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		)}
+
+		{activeTab === 'todos' && (
+			<div class="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-sm">
+				<h3 class="text-lg font-bold text-slate-900 mb-2">Vista de todo el inventario</h3>
+				<p class="text-sm text-slate-500">Aquí se mostrará la tabla completa de productos con su stock.</p>
+			</div>
+		)}
+
+	</main>
+</AdminLayout>

@@ -1,0 +1,56 @@
+---
+import '../styles/global.css';
+import '../styles/design-system.css';
+
+interface Props {
+	title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es" class="scroll-smooth">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="description" content="UrbanPoint - Comprá en línea y retirá tus pedidos cerca de tu casa. O sumate como Canillita y ganá comisiones." />
+		<meta name="viewport" content="width=device-width" />
+		<link rel="icon" type="image/jpeg" href="/images/favicon.jpg" />
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+		<meta name="generator" content={Astro.generator} />
+		<title>{title}</title>
+	</head>
+	<body class="bg-[#F8FAFC] text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white flex flex-col min-h-screen">
+		<slot />
+		
+		<script>
+			import { referralCode } from '../store/cart';
+			
+			// Detectar parametro ref en la URL o recuperar de cookie
+			const urlParams = new URLSearchParams(window.location.search);
+			const ref = urlParams.get('ref');
+			
+			if (ref) {
+				// Guardar el código en el store (y localStorage) y cookie de 30 días
+				referralCode.setKey('code', ref);
+				document.cookie = "up_ref=" + encodeURIComponent(ref) + "; path=/; max-age=" + (30*24*60*60) + "; SameSite=Lax";
+				
+				// Limpiar la URL para que no quede fea
+				const url = new URL(window.location.href);
+				url.searchParams.delete('ref');
+				window.history.replaceState({}, '', url);
+			} else {
+				// Si no vino en la URL, intentar recuperar de cookie si no está seteado en store
+				const match = document.cookie.match(/(?:^|; )up_ref=([^;]*)/);
+				if (match && match[1]) {
+					const cookieRef = decodeURIComponent(match[1]);
+					if (!referralCode.get().code) {
+						referralCode.setKey('code', cookieRef);
+					}
+				}
+			}
+		</script>
+	</body>
+</html>

@@ -1,0 +1,198 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Logo from '../components/Logo.astro';
+export const prerender = false;
+---
+
+<Layout title="Crear Cuenta / Iniciar Sesión | UrbanPoint">
+	<Header />
+
+	<div class="min-h-[85vh] bg-slate-50 flex items-center justify-center p-6 py-12">
+		<div class="max-w-md w-full">
+			
+			<div class="text-center mb-8 flex flex-col items-center">
+				<Logo variant="light" height={44} class="mb-2" />
+				<p class="text-slate-500 font-medium text-sm">Comprá en tu barrio con retiro sin cargo</p>
+			</div>
+			
+			<div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 p-8 border border-slate-200/80">
+				
+				<!-- Mode Selector Tabs: Crear Cuenta vs Ingresar -->
+				<div class="flex bg-slate-100 p-1 rounded-2xl mb-6">
+					<button 
+						id="tab-register" 
+						class="flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all bg-[#2D5A27] text-white shadow-xs"
+					>
+						Crear Cuenta
+					</button>
+					<button 
+						id="tab-login" 
+						class="flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all text-slate-600 hover:text-slate-900"
+					>
+						Ingresar
+					</button>
+				</div>
+
+				<div id="errorBox" class="hidden bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-xs font-semibold mb-4">
+					{/* Error message */}
+				</div>
+
+				<div id="successBox" class="hidden bg-emerald-50 border border-emerald-200 text-[#2D5A27] px-4 py-3 rounded-xl text-xs font-semibold mb-4">
+					{/* Success message */}
+				</div>
+
+				<!-- 1. FORM CREAR CUENTA (Solo solicita Email) -->
+				<form id="registerForm" class="space-y-4">
+					<div>
+						<label for="reg-email" class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">
+							Tu Correo Electrónico
+						</label>
+						<input 
+							type="email" 
+							id="reg-email" 
+							name="email" 
+							required 
+							class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:outline-none transition-all font-medium text-slate-900 text-sm"
+							placeholder="ejemplo@correo.com"
+						/>
+						<p class="text-[11px] text-slate-500 mt-2 leading-tight">
+							 Solo pedimos tu email para crear tu cuenta al instante y enviarte la confirmación de tus pedidos.
+						</p>
+					</div>
+
+					<button 
+						type="submit" 
+						id="regSubmitBtn"
+						class="w-full bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold py-4 px-6 rounded-xl shadow-lg shadow-[#2D5A27]/20 transition-all flex items-center justify-center gap-2 text-sm cursor-pointer mt-2"
+					>
+						Crear mi cuenta
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+					</button>
+				</form>
+
+				<!-- 2. FORM INGRESAR (Email + Password para usuarios existentes / admin) -->
+				<form id="loginForm" class="space-y-4 hidden">
+					<div>
+						<label for="login-email" class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">
+							Email
+						</label>
+						<input 
+							type="email" 
+							id="login-email" 
+							name="email" 
+							required 
+							class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:outline-none transition-all font-medium text-slate-900 text-sm"
+							placeholder="tucorreo@ejemplo.com"
+						/>
+					</div>
+					
+					<div>
+						<label for="login-password" class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">
+							Contraseña
+						</label>
+						<input 
+							type="password" 
+							id="login-password" 
+							name="password" 
+							required 
+							class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:outline-none transition-all font-medium text-slate-900 text-sm"
+							placeholder="••••••••"
+						/>
+					</div>
+					
+					<button 
+						type="submit" 
+						id="loginSubmitBtn"
+						class="w-full bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold py-4 px-6 rounded-xl shadow-lg shadow-[#2D5A27]/20 transition-all flex items-center justify-center gap-2 text-sm cursor-pointer mt-2"
+					>
+						Ingresar
+					</button>
+				</form>
+
+				<p class="text-xs text-center text-slate-400 mt-6 font-medium">
+					Al continuar aceptás los términos de servicio de UrbanPoint.
+				</p>
+			</div>
+		</div>
+	</div>
+</Layout>
+
+<script>
+	import { actions } from 'astro:actions';
+	
+	const tabRegister = document.getElementById('tab-register') as HTMLButtonElement;
+	const tabLogin = document.getElementById('tab-login') as HTMLButtonElement;
+	const registerForm = document.getElementById('registerForm') as HTMLFormElement;
+	const loginForm = document.getElementById('loginForm') as HTMLFormElement;
+	const errorBox = document.getElementById('errorBox') as HTMLDivElement;
+	const successBox = document.getElementById('successBox') as HTMLDivElement;
+
+	// Toggle Tabs
+	tabRegister.addEventListener('click', () => {
+		tabRegister.className = "flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all bg-[#2D5A27] text-white shadow-xs";
+		tabLogin.className = "flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all text-slate-600 hover:text-slate-900";
+		registerForm.classList.remove('hidden');
+		loginForm.classList.add('hidden');
+		errorBox.classList.add('hidden');
+		successBox.classList.add('hidden');
+	});
+
+	tabLogin.addEventListener('click', () => {
+		tabLogin.className = "flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all bg-[#2D5A27] text-white shadow-xs";
+		tabRegister.className = "flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all text-slate-600 hover:text-slate-900";
+		loginForm.classList.remove('hidden');
+		registerForm.classList.add('hidden');
+		errorBox.classList.add('hidden');
+		successBox.classList.add('hidden');
+	});
+
+	// Register Form Handler (Mail only)
+	registerForm.addEventListener('submit', async (e) => {
+		e.preventDefault();
+		const regBtn = document.getElementById('regSubmitBtn') as HTMLButtonElement;
+		errorBox.classList.add('hidden');
+		successBox.classList.add('hidden');
+		regBtn.disabled = true;
+		regBtn.innerHTML = 'Creando cuenta...';
+
+		const emailInput = (document.getElementById('reg-email') as HTMLInputElement).value;
+		
+		// Guardar sesión rápida por email en localStorage
+		try {
+			localStorage.setItem('urbanpoint_user_email', emailInput);
+			successBox.textContent = `¡Cuenta lista para ${emailInput}! Redirigiendo al catálogo...`;
+			successBox.classList.remove('hidden');
+			setTimeout(() => {
+				window.location.href = '/productos';
+			}, 1200);
+		} catch (err) {
+			errorBox.textContent = 'Error creando cuenta.';
+			errorBox.classList.remove('hidden');
+			regBtn.disabled = false;
+			regBtn.innerHTML = 'Crear mi cuenta';
+		}
+	});
+
+	// Login Form Handler
+	loginForm.addEventListener('submit', async (e) => {
+		e.preventDefault();
+		const loginBtn = document.getElementById('loginSubmitBtn') as HTMLButtonElement;
+		errorBox.classList.add('hidden');
+		successBox.classList.add('hidden');
+		loginBtn.disabled = true;
+		loginBtn.innerHTML = 'Verificando...';
+		
+		const formData = new FormData(loginForm);
+		const { data, error } = await actions.auth_login(formData);
+		
+		if (error || !data?.success) {
+			errorBox.textContent = error?.message || data?.error || 'Error de credenciales.';
+			errorBox.classList.remove('hidden');
+			loginBtn.disabled = false;
+			loginBtn.innerHTML = 'Ingresar';
+		} else {
+			window.location.href = data.redirectUrl || '/admin';
+		}
+	});
+</script>
