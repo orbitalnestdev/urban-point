@@ -8,17 +8,20 @@ export const prerender = false;
 
 const paymentId = Astro.url.searchParams.get('payment_id');
 const preferenceId = Astro.url.searchParams.get('preference_id');
+const orderId = Astro.url.searchParams.get('order_id');
 
 let order = null;
 
-if (preferenceId) {
-	const client = new Client()
-		.setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-		.setProject(PUBLIC_APPWRITE_PROJECT_ID)
-		.setKey(APPWRITE_API_KEY);
-	const db = new Databases(client);
+const client = new Client()
+	.setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+	.setProject(PUBLIC_APPWRITE_PROJECT_ID)
+	.setKey(APPWRITE_API_KEY);
+const db = new Databases(client);
 
-	try {
+try {
+	if (orderId) {
+		order = await db.getDocument('urbanpoint', 'orders', orderId);
+	} else if (preferenceId) {
 		const res = await db.listDocuments('urbanpoint', 'orders', [
 			Query.equal('mp_preference_id', preferenceId),
 			Query.limit(1)
@@ -26,42 +29,51 @@ if (preferenceId) {
 		if (res.documents.length > 0) {
 			order = res.documents[0];
 		}
-	} catch (e) {
-		console.error('Error fetching order', e);
 	}
+} catch (e) {
+	console.error('Error fetching order', e);
 }
 ---
 
-<Layout title="¡Pago Exitoso! | UrbanPoint">
+<Layout title="¡Pedido Exitoso! | UrbanPoint">
 	<div class="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center">
-		<div class="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-emerald-500/20">
+		<div class="w-20 h-20 bg-[#F2F7F3] text-[#2D5A27] rounded-full flex items-center justify-center mb-6 shadow-lg shadow-[#2D5A27]/20 border border-[#D4E5D6]">
 			<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
 		</div>
-		<h1 class="text-4xl font-extrabold text-slate-900 mb-4">¡Pago exitoso!</h1>
+		<h1 class="text-4xl font-extrabold text-slate-900 mb-4">¡Pedido exitoso!</h1>
 		<p class="text-lg text-slate-600 max-w-md mx-auto mb-8">
-			Tu pago ha sido procesado correctamente y tu pedido ya está siendo preparado.
+			Tu pedido ha sido procesado correctamente y ya está siendo preparado.
 		</p>
 		
 		{order && order.pickup_code_hash && (
-			<div class="bg-indigo-50 border-2 border-indigo-200 p-8 rounded-3xl shadow-sm text-center max-w-md w-full mb-8 transform hover:scale-[1.02] transition-transform">
-				<h3 class="text-lg font-semibold text-indigo-900 mb-2">Código de Retiro</h3>
-				<p class="text-sm text-indigo-700 mb-6">Mostrale este código al canillita para llevarte tus productos.</p>
-				<div class="bg-white py-4 px-8 rounded-xl shadow-inner border border-indigo-100 inline-block">
-					<span class="text-4xl font-black text-indigo-600 tracking-widest">{order.pickup_code_hash}</span>
+			<div class="bg-[#F2F7F3] border-2 border-[#D4E5D6] p-8 rounded-3xl shadow-sm text-center max-w-md w-full mb-8 transform hover:scale-[1.02] transition-transform">
+				<h3 class="text-lg font-semibold text-[#2D5A27] mb-2">Código de Retiro</h3>
+				<p class="text-sm text-[#23471F] mb-6">Mostrale este código al canillita para retirar tu pedido.</p>
+				<div class="bg-white py-4 px-8 rounded-xl shadow-inner border border-[#D4E5D6] inline-block">
+					<span class="text-4xl font-black text-[#2D5A27] tracking-widest">{order.pickup_code_hash}</span>
 				</div>
 			</div>
 		)}
 		
-		<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm text-left max-w-md w-full mb-8">
-			<p class="text-sm text-slate-500 mb-1">ID de Pago Mercado Pago</p>
-			<p class="font-mono font-bold text-slate-900 mb-4">{paymentId || 'N/A'}</p>
-			
-			<p class="text-sm text-slate-500 mb-1">Referencia</p>
-			<p class="font-mono font-bold text-slate-900">{preferenceId || 'N/A'}</p>
-		</div>
+		{(paymentId || preferenceId) && (
+			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm text-left max-w-md w-full mb-8">
+				{paymentId && (
+					<>
+						<p class="text-sm text-slate-500 mb-1">ID de Pago Mercado Pago</p>
+						<p class="font-mono font-bold text-slate-900 mb-4">{paymentId}</p>
+					</>
+				)}
+				{preferenceId && (
+					<>
+						<p class="text-sm text-slate-500 mb-1">Referencia</p>
+						<p class="font-mono font-bold text-slate-900">{preferenceId}</p>
+					</>
+				)}
+			</div>
+		)}
 		
-		<a href="/tienda" class="bg-indigo-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/20">
-			Volver a la Tienda
+		<a href="/productos" class="bg-[#2D5A27] text-white font-bold px-8 py-3 rounded-xl hover:bg-[#23471F] transition-colors shadow-lg shadow-[#2D5A27]/20">
+			Volver al Catálogo
 		</a>
 	</div>
 </Layout>
