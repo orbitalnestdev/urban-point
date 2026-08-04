@@ -7,7 +7,7 @@ export const prerender = false;
 const profile = await getClientProfile(Astro.cookies);
 if (!profile) return Astro.redirect('/login');
 
-const userName = profile.name ? profile.name.split(' ')[0] : profile.email.split('@')[0];
+const userName = profile.nombre ? profile.nombre.split(' ')[0] : profile.email.split('@')[0];
 ---
 
 <ClientLayout title="Mi Cuenta | UrbanPoint" activeTab="dashboard">
