@@ -70,6 +70,12 @@ const { activePage = '', showAnnouncement = true } = Astro.props;
         >
           Soy Canillita
         </a>
+        <a 
+          href="/contacto" 
+          class={`hover:text-[#2D5A27] transition-colors py-1 ${activePage === 'contacto' ? 'text-[#2D5A27] font-bold' : ''}`}
+        >
+          Contacto
+        </a>
       </nav>
 
       <!-- Right Actions: Ingresar, Crear cuenta pill, Cart icon -->

@@ -1,10 +1,10 @@
 ---
 export const prerender = false;
-import Layout from '../../../layouts/Layout.astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { actions } from 'astro:actions';
 import { KpiCards } from '../../../components/admin/reportes/KpiCards';
 import { CanillitasRanking } from '../../../components/admin/reportes/CanillitasRanking';
-import { BarChart3, ChevronLeft, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 
 const user = Astro.locals.user;
 if (!user || user.role !== 'admin') {
@@ -25,41 +25,26 @@ const reportsData = data || {
 };
 ---
 
-<Layout title="Reportes y Métricas | UrbanPoint Admin">
-  <nav class="w-full z-50 bg-slate-900 border-b border-slate-800">
-		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-			<div class="flex items-center gap-4 text-white">
-        <a href="/admin" class="text-slate-400 hover:text-white transition-colors">
-          <ChevronLeft class="w-5 h-5" />
-        </a>
-				<div class="flex items-center gap-2">
-          <BarChart3 class="w-5 h-5 text-indigo-400" />
-          <span class="text-xl font-extrabold tracking-tight">Admin | Reportes</span>
-        </div>
-			</div>
-			<div class="flex items-center gap-4">
-        <button class="flex items-center gap-2 text-sm text-slate-300 hover:text-white transition-colors px-3 py-1.5 rounded-lg border border-slate-700 hover:border-slate-600 bg-slate-800/50">
+<AdminLayout title="Reportes y Métricas">
+  <main class="p-8 max-w-7xl mx-auto space-y-8">
+    <header class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Reportes y Métricas</h1>
+        <p class="text-slate-500 font-medium mt-1">Resumen del rendimiento de la plataforma en los últimos 30 días.</p>
+      </div>
+      <div class="flex items-center gap-4">
+        <button class="flex items-center gap-2 text-sm text-slate-700 font-bold bg-white hover:bg-slate-50 transition-colors px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm">
           <Download class="w-4 h-4" />
           Exportar CSV
         </button>
-			</div>
-		</div>
-	</nav>
-
-  <main class="min-h-[calc(100vh-64px)] bg-slate-50 py-12">
-    <div class="max-w-7xl mx-auto px-6 space-y-8">
-      
-      <div>
-        <h1 class="text-3xl font-bold text-slate-900">Métricas Principales</h1>
-        <p class="text-slate-500 mt-1">Resumen del rendimiento de la plataforma en los últimos 30 días.</p>
       </div>
+    </header>
 
-      <KpiCards data={reportsData} />
+    <KpiCards data={reportsData} />
 
-      <div class="pt-4">
-        <CanillitasRanking ranking={reportsData.ranking} />
-      </div>
-
+    <div class="pt-4">
+      <CanillitasRanking ranking={reportsData.ranking} />
     </div>
+
   </main>
-</Layout>
+</AdminLayout>

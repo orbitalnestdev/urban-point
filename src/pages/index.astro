@@ -505,9 +505,12 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 					</h2>
 				</div>
 
-				<div class="grid md:grid-cols-3 gap-8">
+				<div id="reviews-slider" class="flex overflow-x-auto snap-x snap-mandatory gap-6 pb-8 -mx-6 px-6 sm:mx-0 sm:px-0 hide-scrollbar cursor-grab active:cursor-grabbing" style="scrollbar-width: none; -ms-overflow-style: none;">
+					<style>
+						.hide-scrollbar::-webkit-scrollbar { display: none; }
+					</style>
 					<!-- Review 1 -->
-					<div class="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
 						<div>
 							<div class="flex text-amber-400 gap-1 mb-4">
 								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -530,7 +533,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 					</div>
 
 					<!-- Review 2 -->
-					<div class="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
 						<div>
 							<div class="flex text-amber-400 gap-1 mb-4">
 								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -553,7 +556,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 					</div>
 
 					<!-- Review 3 -->
-					<div class="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
 						<div>
 							<div class="flex text-amber-400 gap-1 mb-4">
 								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -571,6 +574,75 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 							<div>
 								<p class="font-bold text-slate-900 text-sm">Sofía R.</p>
 								<p class="text-xs text-slate-500">Almagro, CABA</p>
+							</div>
+						</div>
+					</div>
+
+					<!-- Review 4 -->
+					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+						<div>
+							<div class="flex text-amber-400 gap-1 mb-4">
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+							</div>
+							<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">
+								“No tuve que hacer largas filas. Pasé por el kiosco a la vuelta de la oficina y retiré en 2 minutos.”
+							</p>
+						</div>
+						<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+							<img src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=120" alt="Martín D." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+							<div>
+								<p class="font-bold text-slate-900 text-sm">Martín D.</p>
+								<p class="text-xs text-slate-500">Palermo, CABA</p>
+							</div>
+						</div>
+					</div>
+
+					<!-- Review 5 -->
+					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+						<div>
+							<div class="flex text-amber-400 gap-1 mb-4">
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+							</div>
+							<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">
+								“¡Encontré marcas que no veo en el supermercado y a un precio bárbaro!”
+							</p>
+						</div>
+						<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+							<img src="https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=120" alt="Julieta S." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+							<div>
+								<p class="font-bold text-slate-900 text-sm">Julieta S.</p>
+								<p class="text-xs text-slate-500">Belgrano, CABA</p>
+							</div>
+						</div>
+					</div>
+
+					<!-- Review 6 -->
+					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+						<div>
+							<div class="flex text-amber-400 gap-1 mb-4">
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+							</div>
+							<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">
+								“El canillita me avisó por WhatsApp ni bien llegó mi pedido. Mejor imposible.”
+							</p>
+						</div>
+						<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+							<img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120" alt="Carolina P." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+							<div>
+								<p class="font-bold text-slate-900 text-sm">Carolina P.</p>
+								<p class="text-xs text-slate-500">San Isidro, GBA</p>
 							</div>
 						</div>
 					</div>
@@ -680,6 +752,39 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 			checkBtn.addEventListener('click', performSearch);
 			locationInput.addEventListener('keyup', (e) => {
 				if (e.key === 'Enter') performSearch();
+			});
+		}
+
+		// Drag to scroll for reviews slider
+		const slider = document.getElementById('reviews-slider');
+		if (slider) {
+			let isDown = false;
+			let startX = 0;
+			let scrollLeft = 0;
+
+			slider.addEventListener('mousedown', (e) => {
+				isDown = true;
+				slider.classList.add('cursor-grabbing');
+				slider.classList.remove('snap-mandatory', 'snap-x'); // disable snap while dragging
+				startX = e.pageX - slider.offsetLeft;
+				scrollLeft = slider.scrollLeft;
+			});
+			slider.addEventListener('mouseleave', () => {
+				isDown = false;
+				slider.classList.remove('cursor-grabbing');
+				slider.classList.add('snap-mandatory', 'snap-x');
+			});
+			slider.addEventListener('mouseup', () => {
+				isDown = false;
+				slider.classList.remove('cursor-grabbing');
+				slider.classList.add('snap-mandatory', 'snap-x');
+			});
+			slider.addEventListener('mousemove', (e) => {
+				if (!isDown) return;
+				e.preventDefault();
+				const x = e.pageX - slider.offsetLeft;
+				const walk = (x - startX) * 2;
+				slider.scrollLeft = scrollLeft - walk;
 			});
 		}
 	</script>

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { actions } from 'astro:actions';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, User, Store, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
+import { MapPin, User, Store, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, Loader2, Info } from 'lucide-react';
+import MapSelector from './MapSelector';
 
 // Fix leaflet default icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -83,85 +84,96 @@ export default function RegistrationForm() {
   };
 
   return (
-    <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+    <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden relative">
       {/* Progress Header */}
       {step < 4 && (
-        <div className="bg-slate-900 px-8 py-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${step >= 1 ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400'}`}>1</div>
-            <div className={`w-8 h-1 ${step >= 2 ? 'bg-indigo-500' : 'bg-slate-700'}`}></div>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${step >= 2 ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400'}`}>2</div>
-            <div className={`w-8 h-1 ${step >= 3 ? 'bg-indigo-500' : 'bg-slate-700'}`}></div>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${step >= 3 ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400'}`}>3</div>
-          </div>
-          <div className="text-white font-medium">
-            Paso {step} de 3
+        <div className="bg-[#F2F7F3] border-b border-[#D4E5D6] px-8 py-6 relative overflow-hidden">
+          {/* Subtle background decoration */}
+          <div className="absolute right-0 top-0 w-64 h-64 bg-white/40 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
+          
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">Postulación de Local</h3>
+                <p className="text-sm text-slate-600 font-medium mt-1">Paso {step} de 3</p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-colors duration-300 ${step >= 1 ? 'bg-[#2D5A27] text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>1</div>
+              <div className={`w-12 h-1 rounded-full transition-colors duration-300 ${step >= 2 ? 'bg-[#2D5A27]' : 'bg-slate-200'}`}></div>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-colors duration-300 ${step >= 2 ? 'bg-[#2D5A27] text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>2</div>
+              <div className={`w-12 h-1 rounded-full transition-colors duration-300 ${step >= 3 ? 'bg-[#2D5A27]' : 'bg-slate-200'}`}></div>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-colors duration-300 ${step >= 3 ? 'bg-[#2D5A27] text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>3</div>
+            </div>
           </div>
         </div>
       )}
 
       {/* Form Content */}
-      <div className="p-8">
+      <div className="p-8 md:p-12">
         {error && (
-          <div className="mb-6 bg-red-50 text-red-600 p-4 rounded-xl flex items-start gap-3 border border-red-100">
+          <div className="mb-8 bg-red-50 text-red-600 p-4 rounded-xl flex items-start gap-3 border border-red-100 shadow-sm">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
             <p className="text-sm font-medium">{error}</p>
           </div>
         )}
 
         {step === 1 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="flex items-center gap-3 mb-6 text-indigo-600">
-              <User className="w-6 h-6" />
-              <h2 className="text-2xl font-bold text-slate-900">Datos Personales</h2>
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="flex items-center gap-3 mb-8 text-[#2D5A27]">
+              <div className="p-3 bg-[#F2F7F3] rounded-2xl">
+                <User className="w-6 h-6" />
+              </div>
+              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Datos Personales</h2>
             </div>
             
             <div className="grid grid-cols-2 gap-6">
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-2">Nombre</label>
-                <input type="text" value={formData.nombre} onChange={e => updateForm('nombre', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="Juan" />
+                <label className="block text-sm font-bold text-slate-700 mb-2">Nombre</label>
+                <input type="text" value={formData.nombre} onChange={e => updateForm('nombre', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400 shadow-sm" placeholder="Juan" />
               </div>
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-2">Apellido</label>
-                <input type="text" value={formData.apellido} onChange={e => updateForm('apellido', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="Pérez" />
+                <label className="block text-sm font-bold text-slate-700 mb-2">Apellido</label>
+                <input type="text" value={formData.apellido} onChange={e => updateForm('apellido', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400 shadow-sm" placeholder="Pérez" />
               </div>
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-2">DNI</label>
-                <input type="text" value={formData.dni} onChange={e => updateForm('dni', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="Sin puntos ni espacios" />
+                <label className="block text-sm font-bold text-slate-700 mb-2">DNI</label>
+                <input type="text" value={formData.dni} onChange={e => updateForm('dni', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400 shadow-sm" placeholder="Sin puntos ni espacios" />
               </div>
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-2">Teléfono / WhatsApp</label>
-                <input type="tel" value={formData.telefono} onChange={e => updateForm('telefono', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="Ej: 1145678901" />
+                <label className="block text-sm font-bold text-slate-700 mb-2">Teléfono / WhatsApp</label>
+                <input type="tel" value={formData.telefono} onChange={e => updateForm('telefono', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400 shadow-sm" placeholder="Ej: 1145678901" />
               </div>
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
-                <input type="email" value={formData.email} onChange={e => updateForm('email', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="juan@ejemplo.com" />
+                <label className="block text-sm font-bold text-slate-700 mb-2">Email</label>
+                <input type="email" value={formData.email} onChange={e => updateForm('email', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400 shadow-sm" placeholder="juan@ejemplo.com" />
               </div>
             </div>
           </div>
         )}
 
         {step === 2 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="flex items-center gap-3 mb-6 text-indigo-600">
-              <Store className="w-6 h-6" />
-              <h2 className="text-2xl font-bold text-slate-900">Datos del Local</h2>
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="flex items-center gap-3 mb-8 text-[#2D5A27]">
+              <div className="p-3 bg-[#F2F7F3] rounded-2xl">
+                <Store className="w-6 h-6" />
+              </div>
+              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Datos del Local</h2>
             </div>
 
             <div className="grid gap-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Nombre Comercial del Punto</label>
-                <input type="text" value={formData.nombre_comercial} onChange={e => updateForm('nombre_comercial', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="Kiosco de Diarios - Av. Santa Fe" />
+                <label className="block text-sm font-bold text-slate-700 mb-2">Nombre Comercial del Punto</label>
+                <input type="text" value={formData.nombre_comercial} onChange={e => updateForm('nombre_comercial', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400 shadow-sm" placeholder="Ej: Kiosco de Diarios - Av. Santa Fe" />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Barrio / Localidad</label>
-                  <input type="text" value={formData.localidad} onChange={e => updateForm('localidad', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="Ej: Palermo, Belgrano, San Isidro" />
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Barrio / Localidad</label>
+                  <input type="text" value={formData.localidad} onChange={e => updateForm('localidad', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400 shadow-sm" placeholder="Ej: Palermo, Belgrano, San Isidro" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Provincia</label>
-                  <select value={formData.provincia} onChange={e => updateForm('provincia', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white">
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Provincia</label>
+                  <select value={formData.provincia} onChange={e => updateForm('provincia', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 shadow-sm cursor-pointer">
                     <option value="CABA">CABA</option>
                     <option value="Buenos Aires">Buenos Aires</option>
                     <option value="Santa Fe">Santa Fe</option>
@@ -174,32 +186,32 @@ export default function RegistrationForm() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Dirección Exacta</label>
-                <input type="text" value={formData.direccion} onChange={e => updateForm('direccion', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="Av. Santa Fe 3250" />
+                <label className="block text-sm font-bold text-slate-700 mb-2">Dirección Exacta</label>
+                <input type="text" value={formData.direccion} onChange={e => updateForm('direccion', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400 shadow-sm" placeholder="Av. Santa Fe 3250" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Condición Fiscal</label>
-                  <select value={formData.condicion_fiscal} onChange={e => updateForm('condicion_fiscal', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white">
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Condición Fiscal</label>
+                  <select value={formData.condicion_fiscal} onChange={e => updateForm('condicion_fiscal', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 shadow-sm cursor-pointer">
                     <option value="Monotributo">Monotributo</option>
                     <option value="Responsable Inscripto">Responsable Inscripto</option>
                     <option value="Exento">Exento</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">CBU / Alias (Cobro comisiones)</label>
-                  <input type="text" value={formData.cbu} onChange={e => updateForm('cbu', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="0000003100012345678901 o alias" />
+                  <label className="block text-sm font-bold text-slate-700 mb-2">CBU / Alias (Cobro comisiones)</label>
+                  <input type="text" value={formData.cbu} onChange={e => updateForm('cbu', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400 shadow-sm" placeholder="0000003100012345678901 o alias" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center justify-between">
+                <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center justify-between">
                   <span>Ubicación en el Mapa</span>
-                  <span className="text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-1 rounded">¡IMPORTANTE!</span>
+                  <span className="text-xs text-[#2D5A27] font-bold bg-[#F2F7F3] border border-[#D4E5D6] px-2 py-1 rounded-md">¡IMPORTANTE!</span>
                 </label>
-                <p className="text-sm text-slate-500 mb-3">Arrastrá el pin para ubicar exactamente tu punto en el mapa de sucursales.</p>
-                <div className="h-[300px] w-full rounded-2xl overflow-hidden border-2 border-indigo-100 shadow-inner relative z-0">
+                <p className="text-sm text-slate-500 mb-4">Arrastrá el pin para marcar exactamente la ubicación de la puerta de tu local.</p>
+                <div className="h-[350px] w-full rounded-2xl overflow-hidden border border-slate-200 shadow-sm relative z-0">
                   <MapSelector 
                     lat={formData.lat} 
                     lng={formData.lng} 
@@ -212,62 +224,69 @@ export default function RegistrationForm() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Horarios de Atención</label>
-                <input type="text" value={formData.horarios} onChange={e => updateForm('horarios', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="Ej: Lunes a Sábado de 07:00 a 20:00 hs." />
+                <label className="block text-sm font-bold text-slate-700 mb-2">Horarios de Atención</label>
+                <input type="text" value={formData.horarios} onChange={e => updateForm('horarios', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-4 focus:ring-[#2D5A27]/10 focus:border-[#2D5A27] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400 shadow-sm" placeholder="Ej: Lunes a Sábado de 07:00 a 20:00 hs." />
               </div>
             </div>
           </div>
         )}
 
         {step === 3 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="flex items-center gap-3 mb-6 text-indigo-600">
-              <CheckCircle className="w-6 h-6" />
-              <h2 className="text-2xl font-bold text-slate-900">Confirmar Solicitud</h2>
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="flex items-center gap-3 mb-8 text-[#2D5A27]">
+              <div className="p-3 bg-[#F2F7F3] rounded-2xl">
+                <CheckCircle className="w-6 h-6" />
+              </div>
+              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Confirmar Solicitud</h2>
             </div>
             
-            <p className="text-slate-600 mb-8 text-lg">
+            <p className="text-slate-600 mb-8 text-lg font-medium">
               Estás a un paso de postularte como Canillita. Por favor revisá que la información de tu local sea correcta.
             </p>
 
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 mb-8 space-y-4">
+            <div className="bg-[#F9FAFB] p-6 rounded-2xl border border-slate-200 mb-8 space-y-4 shadow-sm">
               <div className="flex justify-between border-b border-slate-200 pb-4">
-                <span className="text-slate-500">Titular</span>
-                <span className="font-semibold text-slate-900">{formData.nombre} {formData.apellido}</span>
+                <span className="text-slate-500 font-medium">Titular</span>
+                <span className="font-bold text-slate-900">{formData.nombre} {formData.apellido}</span>
               </div>
               <div className="flex justify-between border-b border-slate-200 pb-4">
-                <span className="text-slate-500">Local</span>
-                <span className="font-semibold text-slate-900">{formData.nombre_comercial}</span>
+                <span className="text-slate-500 font-medium">Local</span>
+                <span className="font-bold text-slate-900">{formData.nombre_comercial}</span>
               </div>
               <div className="flex justify-between border-b border-slate-200 pb-4">
-                <span className="text-slate-500">Dirección</span>
-                <span className="font-semibold text-slate-900 text-right">{formData.direccion}</span>
+                <span className="text-slate-500 font-medium">Dirección</span>
+                <span className="font-bold text-slate-900 text-right">{formData.direccion}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-4">
+                <span className="text-slate-500 font-medium">Localidad</span>
+                <span className="font-bold text-slate-900 text-right">{formData.localidad}, {formData.provincia}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Horarios</span>
-                <span className="font-semibold text-slate-900">{formData.horarios}</span>
+                <span className="text-slate-500 font-medium">Horarios</span>
+                <span className="font-bold text-slate-900">{formData.horarios}</span>
               </div>
             </div>
 
-            <div className="flex items-start gap-3 bg-blue-50 p-4 rounded-xl border border-blue-100">
-              <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-              <p className="text-sm text-blue-800">
-                Al enviar la solicitud, nuestro equipo revisará los datos y la ubicación para asegurar que no haya otro punto en un radio de 100 metros. Te notificaremos por email sobre los siguientes pasos.
+            <div className="flex items-start gap-4 bg-[#F2F7F3] p-5 rounded-2xl border border-[#D4E5D6]">
+              <Info className="w-6 h-6 text-[#2D5A27] shrink-0 mt-0.5" />
+              <p className="text-sm text-[#23471F] font-medium leading-relaxed">
+                Al enviar la solicitud, nuestro equipo revisará los datos y la ubicación para asegurar que no haya otro punto en un radio de 100 metros. Te notificaremos por email sobre los siguientes pasos en un plazo de 24 a 48 horas.
               </p>
             </div>
           </div>
         )}
 
         {step === 4 && (
-          <div className="py-12 text-center animate-in zoom-in duration-500">
-            <div className="w-24 h-24 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-green-100">
-              <CheckCircle className="w-12 h-12" />
+          <div className="py-16 text-center animate-in zoom-in duration-700">
+            <div className="w-28 h-28 bg-[#F2F7F3] text-[#2D5A27] rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-[#2D5A27]/20 relative">
+                <div className="absolute inset-0 bg-[#2D5A27]/10 rounded-full animate-ping opacity-75"></div>
+                <CheckCircle className="w-14 h-14 relative z-10" />
             </div>
-            <h2 className="text-4xl font-extrabold text-slate-900 mb-4">¡Solicitud Enviada!</h2>
-            <p className="text-lg text-slate-600 mb-8 max-w-md mx-auto">
-              Hemos recibido tu postulación para <strong>{formData.nombre_comercial}</strong>. La revisaremos y nos pondremos en contacto con vos a la brevedad.
+            <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 mb-6 tracking-tight">¡Solicitud Enviada!</h2>
+            <p className="text-lg text-slate-600 mb-10 max-w-lg mx-auto leading-relaxed">
+              Hemos recibido tu postulación para <strong>{formData.nombre_comercial}</strong>. La revisaremos y nos pondremos en contacto con vos a la brevedad para activar tu cuenta.
             </p>
-            <a href="/" className="inline-flex px-8 py-3 bg-slate-900 text-white font-semibold rounded-xl hover:bg-slate-800 transition-colors">
+            <a href="/" className="inline-flex px-8 py-4 bg-[#2D5A27] text-white font-bold rounded-xl hover:bg-[#23471F] transition-all hover:scale-105 shadow-lg shadow-[#2D5A27]/20">
               Volver al Inicio
             </a>
           </div>
@@ -275,19 +294,19 @@ export default function RegistrationForm() {
 
         {/* Footer Actions */}
         {step < 4 && (
-          <div className="mt-10 pt-6 border-t border-slate-100 flex items-center justify-between">
+          <div className="mt-12 pt-8 border-t border-slate-100 flex items-center justify-between">
             {step > 1 ? (
-              <button onClick={prevStep} disabled={isSubmitting} className="px-6 py-3 text-slate-600 font-semibold hover:text-slate-900 transition-colors flex items-center gap-2 disabled:opacity-50">
+              <button onClick={prevStep} disabled={isSubmitting} className="px-6 py-3.5 text-slate-500 font-bold hover:text-slate-900 transition-colors flex items-center gap-2 disabled:opacity-50 hover:bg-slate-50 rounded-xl">
                 <ChevronLeft className="w-5 h-5" /> Atrás
               </button>
             ) : <div></div>}
             
             {step < 3 ? (
-              <button onClick={nextStep} className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2 hover:-translate-y-0.5">
-                Siguiente <ChevronRight className="w-5 h-5" />
+              <button onClick={nextStep} className="px-8 py-3.5 bg-[#2D5A27] hover:bg-[#23471F] text-white font-bold rounded-xl shadow-lg shadow-[#2D5A27]/30 transition-all flex items-center gap-2 hover:-translate-y-0.5 active:translate-y-0">
+                Siguiente Paso <ChevronRight className="w-5 h-5" />
               </button>
             ) : (
-              <button onClick={handleSubmit} disabled={isSubmitting} className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-70">
+              <button onClick={handleSubmit} disabled={isSubmitting} className="px-10 py-3.5 bg-[#2D5A27] hover:bg-[#23471F] text-white font-bold rounded-xl shadow-lg shadow-[#2D5A27]/30 transition-all flex items-center gap-3 disabled:opacity-70 hover:-translate-y-0.5 active:translate-y-0">
                 {isSubmitting && <Loader2 className="w-5 h-5 animate-spin" />}
                 {isSubmitting ? 'Enviando...' : 'Enviar Solicitud'}
               </button>
@@ -297,40 +316,4 @@ export default function RegistrationForm() {
       </div>
     </div>
   );
-}
-
-function MapSelector({ lat, lng, onChange }: { lat: number, lng: number, onChange: (lat: number, lng: number) => void }) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<L.Map | null>(null);
-  const markerInstance = useRef<L.Marker | null>(null);
-
-  useEffect(() => {
-    if (mapRef.current && !mapInstance.current) {
-      mapInstance.current = L.map(mapRef.current).setView([lat, lng], 13);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 20
-      }).addTo(mapInstance.current);
-
-      markerInstance.current = L.marker([lat, lng], { draggable: true }).addTo(mapInstance.current);
-      
-      markerInstance.current.on('dragend', (e) => {
-        const marker = e.target;
-        const position = marker.getLatLng();
-        onChange(position.lat, position.lng);
-      });
-    }
-
-    return () => {
-      if (mapInstance.current) {
-        mapInstance.current.remove();
-        mapInstance.current = null;
-      }
-    };
-  }, []); // Solo se inicializa una vez
-
-  // Si cambia externamente (ej: geocoding, no implementado aquí para mantenerlo simple, pero el draggable actualiza el estado parent)
-  
-  return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />;
 }

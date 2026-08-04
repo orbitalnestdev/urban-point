@@ -1,117 +1,241 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import Logo from '../../components/Logo.astro';
+import Footer from '../../components/Footer.astro';
 ---
 
 <Layout title="Sumate como Canillita | UrbanPoint">
-	<nav class="fixed w-full z-50 transition-all duration-300 bg-white/80 backdrop-blur-md border-b border-slate-100 shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
+	<nav class="fixed w-full z-50 transition-all duration-300 bg-white/90 backdrop-blur-md border-b border-slate-100 shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
 		<div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
 			<Logo variant="light" height={36} />
 			
 			<div class="flex items-center gap-4">
 				<a href="/" class="hidden md:block text-slate-600 hover:text-[#2D5A27] font-medium transition-colors">Volver a inicio</a>
-				<a href="/sumate-como-canillita/registro" class="px-6 py-2.5 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-xl font-semibold transition-colors shadow-lg shadow-[#2D5A27]/20">
+				<a href="/sumate-como-canillita/registro" class="px-6 py-2.5 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-xl font-semibold transition-all hover:scale-105 shadow-lg shadow-[#2D5A27]/20">
 					Registrar mi local
 				</a>
 			</div>
 		</div>
 	</nav>
 
-	<main class="pt-32 pb-24">
-		<section class="max-w-7xl mx-auto px-6 mb-24">
-			<div class="bg-slate-900 rounded-[3rem] p-8 md:p-16 lg:p-24 text-white relative overflow-hidden shadow-2xl">
-				<div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
-				<div class="absolute -top-32 -right-32 w-96 h-96 bg-[#2D5A27]/30 rounded-full blur-3xl"></div>
-				<div class="absolute -bottom-32 -left-32 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl"></div>
-				
-				<div class="relative z-10 max-w-3xl mx-auto text-center">
-					<div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2D5A27]/30 border border-[#489243]/30 text-[#489243] font-semibold text-sm mb-6">
-						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-						Red de Puntos UrbanPoint
+	<main class="pt-20">
+		<!-- Hero Section -->
+		<section class="relative bg-slate-900 overflow-hidden">
+			<div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+			<div class="absolute -top-40 -right-40 w-[600px] h-[600px] bg-[#2D5A27]/40 rounded-full blur-[100px] opacity-60"></div>
+			<div class="absolute -bottom-40 -left-40 w-[600px] h-[600px] bg-emerald-500/20 rounded-full blur-[100px] opacity-60"></div>
+			
+			<div class="max-w-7xl mx-auto px-6 pt-24 pb-32 relative z-10">
+				<div class="grid lg:grid-cols-2 gap-16 items-center">
+					<div>
+						<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#2D5A27]/30 border border-[#489243]/30 text-[#489243] font-semibold text-sm mb-8 backdrop-blur-sm">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+							Red de Puntos UrbanPoint
+						</div>
+						<h1 class="text-5xl lg:text-7xl font-extrabold text-white tracking-tight mb-8 leading-tight">
+							Tu local, el <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#489243] to-emerald-300">centro</span> del barrio.
+						</h1>
+						<p class="text-xl text-slate-300 mb-10 leading-relaxed max-w-xl">
+							Convertite en un Canillita UrbanPoint. Recibí los paquetes de tus vecinos, generá una comisión fija por entrega y atraé cientos de clientes nuevos a tu negocio sin invertir ni un peso.
+						</p>
+						<a href="/sumate-como-canillita/registro" class="inline-flex px-8 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:scale-105 hover:shadow-2xl transition-all shadow-xl shadow-white/10 gap-2 items-center group">
+							Comenzar solicitud
+							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="group-hover:translate-x-1 transition-transform"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+						</a>
 					</div>
-					<h1 class="text-5xl lg:text-7xl font-extrabold tracking-tight mb-8">
-						Tu local, el <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#489243] to-emerald-400">centro</span> del barrio.
-					</h1>
-					<p class="text-xl text-slate-300 mb-10 leading-relaxed max-w-2xl mx-auto">
-						Convertite en un Canillita UrbanPoint. Recibí los paquetes de tus vecinos, generá una comisión fija por entrega y atraé cientos de clientes nuevos a tu negocio cada mes.
-					</p>
-					
-					<a href="/sumate-como-canillita/registro" class="inline-flex px-8 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:scale-105 transition-transform shadow-xl shadow-white/10 gap-2 items-center">
-						Comenzar solicitud
-						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-					</a>
+					<div class="relative hidden lg:block">
+						<div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-10"></div>
+						<img src="/images/hero_canillita.jpg" alt="Local comercial como punto de retiro" class="rounded-3xl shadow-2xl w-full h-[600px] object-cover border border-slate-700/50" />
+						
+						<!-- Floating Badge -->
+						<div class="absolute -left-12 bottom-20 z-20 bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-3xl shadow-2xl flex items-center gap-4">
+							<div class="w-14 h-14 bg-emerald-500 rounded-full flex items-center justify-center text-white">
+								<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+							</div>
+							<div>
+								<p class="text-white font-bold text-lg">+150 clientes</p>
+								<p class="text-emerald-200 text-sm">Nuevos cada mes</p>
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
 		</section>
 
-		<section class="max-w-7xl mx-auto px-6 mb-24">
+		<!-- Beneficios -->
+		<section class="max-w-7xl mx-auto px-6 py-24">
 			<div class="text-center max-w-2xl mx-auto mb-16">
-				<h2 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">¿Por qué ser Canillita?</h2>
+				<h2 class="text-3xl md:text-5xl font-extrabold text-slate-900 mb-4 tracking-tight">¿Por qué ser Canillita?</h2>
 				<p class="text-lg text-slate-600">Un modelo diseñado para que tu local crezca sin riesgo y sin inversión inicial.</p>
 			</div>
 
 			<div class="grid md:grid-cols-3 gap-8">
-				<div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/40 hover:-translate-y-1 transition-transform">
-					<div class="w-14 h-14 rounded-2xl bg-[#F2F7F3] text-[#2D5A27] flex items-center justify-center mb-6">
-						<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+				<div class="group bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/40 hover:-translate-y-2 hover:border-[#2D5A27]/30 transition-all duration-300">
+					<div class="w-16 h-16 rounded-2xl bg-[#F2F7F3] text-[#2D5A27] flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-[#2D5A27] group-hover:text-white transition-all duration-300">
+						<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
 					</div>
-					<h3 class="text-xl font-bold text-slate-900 mb-3">Comisiones garantizadas</h3>
-					<p class="text-slate-600">Por cada paquete que recibas y entregues, sumás una comisión fija a tu cuenta. Liquidaciones semanales directamente a tu CBU.</p>
+					<h3 class="text-2xl font-bold text-slate-900 mb-4">Comisiones garantizadas</h3>
+					<p class="text-slate-600 leading-relaxed">Por cada paquete que recibas y entregues, sumás una comisión fija a tu cuenta. Liquidaciones semanales directamente a tu CBU sin demoras.</p>
 				</div>
 				
-				<div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/40 hover:-translate-y-1 transition-transform">
-					<div class="w-14 h-14 rounded-2xl bg-[#F2F7F3] text-[#2D5A27] flex items-center justify-center mb-6">
-						<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+				<div class="group bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/40 hover:-translate-y-2 hover:border-emerald-500/30 transition-all duration-300">
+					<div class="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300">
+						<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
 					</div>
-					<h3 class="text-xl font-bold text-slate-900 mb-3">Tráfico para tu local</h3>
-					<p class="text-slate-600">Los vecinos de tu zona van a ir a tu local a retirar sus pedidos. Una excelente oportunidad para venderles tus propios productos.</p>
+					<h3 class="text-2xl font-bold text-slate-900 mb-4">Tráfico para tu local</h3>
+					<p class="text-slate-600 leading-relaxed">Los vecinos de tu zona van a ir a tu local a retirar sus pedidos. Una excelente oportunidad para venderles tus propios productos mientras están ahí.</p>
 				</div>
 				
-				<div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/40 hover:-translate-y-1 transition-transform">
-					<div class="w-14 h-14 rounded-2xl bg-[#F2F7F3] text-[#2D5A27] flex items-center justify-center mb-6">
-						<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+				<div class="group bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/40 hover:-translate-y-2 hover:border-indigo-500/30 transition-all duration-300">
+					<div class="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+						<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
 					</div>
-					<h3 class="text-xl font-bold text-slate-900 mb-3">Cero inversión</h3>
-					<p class="text-slate-600">No tenés que pagar nada para ser parte. Solo necesitás un espacio seguro en tu local para guardar los paquetes temporalmente y la app de UrbanPoint.</p>
+					<h3 class="text-2xl font-bold text-slate-900 mb-4">Cero inversión</h3>
+					<p class="text-slate-600 leading-relaxed">No tenés que pagar nada para ser parte. Solo necesitás un espacio seguro en tu local para guardar los paquetes temporalmente y la app de UrbanPoint.</p>
+				</div>
+			</div>
+		</section>
+
+		<!-- Proyección / Caso de Éxito -->
+		<section class="max-w-7xl mx-auto px-6 mb-24">
+			<div class="bg-gradient-to-br from-[#2D5A27] to-[#1E3B1A] rounded-[3rem] p-10 md:p-16 text-white relative overflow-hidden shadow-2xl flex flex-col md:flex-row items-center justify-between gap-12">
+				<div class="absolute right-0 top-0 w-96 h-96 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+				
+				<div class="relative z-10 md:w-1/2">
+					<h2 class="text-3xl md:text-4xl font-extrabold mb-6 leading-tight">Pagá la luz de tu local solo recibiendo paquetes.</h2>
+					<p class="text-emerald-100 text-lg mb-8 leading-relaxed">
+						Calculamos que un local promedio, recibiendo tan solo <strong class="text-white bg-white/20 px-2 py-1 rounded">5 paquetes al día</strong>, genera ingresos suficientes en comisiones para cubrir un servicio básico del negocio a fin de mes. Todo esto sin contar las ventas cruzadas que generás cuando el cliente pisa tu comercio.
+					</p>
+					<ul class="space-y-4 font-medium">
+						<li class="flex items-center gap-3">
+							<div class="w-8 h-8 rounded-full bg-emerald-500/30 flex items-center justify-center text-emerald-300">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+							</div>
+							Ingreso extra asegurado.
+						</li>
+						<li class="flex items-center gap-3">
+							<div class="w-8 h-8 rounded-full bg-emerald-500/30 flex items-center justify-center text-emerald-300">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+							</div>
+							150 clientes nuevos pisando tu local cada mes.
+						</li>
+					</ul>
+				</div>
+
+				<div class="relative z-10 md:w-5/12 w-full">
+					<div class="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-[2rem] shadow-2xl text-center">
+						<p class="text-emerald-200 font-bold text-sm uppercase tracking-wider mb-2">Simulador mensual</p>
+						<p class="text-white text-5xl font-black tracking-tight mb-2">+ 150</p>
+						<p class="text-white font-medium mb-8">Personas nuevas en tu local</p>
+						
+						<a href="/sumate-como-canillita/registro" class="block w-full py-4 bg-white text-[#2D5A27] rounded-xl font-bold hover:bg-slate-100 transition-colors">
+							Registrarme ahora
+						</a>
+					</div>
 				</div>
 			</div>
 		</section>
 
 		<!-- Steps -->
-		<section class="max-w-7xl mx-auto px-6">
-			<div class="bg-[#F2F7F3] rounded-[3rem] p-8 md:p-16 border border-[#D4E5D6]">
-				<h2 class="text-3xl font-extrabold text-slate-900 text-center mb-12">¿Cómo es el proceso de alta?</h2>
-				<div class="grid md:grid-cols-4 gap-8">
-					<div class="text-center relative">
-						<div class="w-16 h-16 rounded-full bg-[#2D5A27] text-white flex items-center justify-center text-xl font-bold mx-auto mb-6 shadow-lg shadow-[#2D5A27]/30">1</div>
-						<h4 class="font-bold text-slate-900 mb-2">Completás el formulario</h4>
-						<p class="text-sm text-slate-600">Tus datos, los de tu local y marcás tu ubicación exacta en el mapa.</p>
-						<div class="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-[#D4E5D6]"></div>
-					</div>
-					<div class="text-center relative">
-						<div class="w-16 h-16 rounded-full bg-[#2D5A27] text-white flex items-center justify-center text-xl font-bold mx-auto mb-6 shadow-lg shadow-[#2D5A27]/30">2</div>
-						<h4 class="font-bold text-slate-900 mb-2">Revisamos tu solicitud</h4>
-						<p class="text-sm text-slate-600">Validamos que no haya otro punto demasiado cerca y aprobamos tu perfil.</p>
-						<div class="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-[#D4E5D6]"></div>
-					</div>
-					<div class="text-center relative">
-						<div class="w-16 h-16 rounded-full bg-[#2D5A27] text-white flex items-center justify-center text-xl font-bold mx-auto mb-6 shadow-lg shadow-[#2D5A27]/30">3</div>
-						<h4 class="font-bold text-slate-900 mb-2">Activás tu cuenta</h4>
-						<p class="text-sm text-slate-600">Cargás tu CBU, confirmás tus horarios y firmás las condiciones.</p>
-						<div class="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-[#D4E5D6]"></div>
-					</div>
-					<div class="text-center relative">
-						<div class="w-16 h-16 rounded-full bg-[#2D5A27] text-white flex items-center justify-center text-xl font-bold mx-auto mb-6 shadow-lg shadow-[#2D5A27]/30">4</div>
-						<h4 class="font-bold text-slate-900 mb-2">¡Listo para operar!</h4>
-						<p class="text-sm text-slate-600">Aparecés en el mapa y podés empezar a recibir pedidos de inmediato.</p>
-					</div>
+		<section class="max-w-7xl mx-auto px-6 py-12 mb-24">
+			<div class="text-center max-w-2xl mx-auto mb-16">
+				<h2 class="text-3xl md:text-5xl font-extrabold text-slate-900 mb-4 tracking-tight">¿Cómo es el proceso de alta?</h2>
+				<p class="text-lg text-slate-600">Rápido, 100% digital y sin papeleo innecesario.</p>
+			</div>
+
+			<div class="grid md:grid-cols-4 gap-8">
+				<div class="text-center relative group">
+					<div class="w-20 h-20 rounded-[1.5rem] bg-white border border-slate-200 text-[#2D5A27] flex items-center justify-center text-3xl font-black mx-auto mb-6 shadow-xl shadow-slate-200/50 group-hover:scale-110 group-hover:-translate-y-2 group-hover:bg-[#2D5A27] group-hover:text-white transition-all duration-300">1</div>
+					<h4 class="font-bold text-slate-900 text-lg mb-2">Completás el formulario</h4>
+					<p class="text-sm text-slate-600">Tus datos, los de tu local y marcás tu ubicación exacta en el mapa.</p>
+					<div class="hidden md:block absolute top-10 left-[65%] w-[70%] h-0.5 bg-slate-200 border-t border-dashed border-slate-300"></div>
 				</div>
-				<div class="mt-16 text-center">
-					<a href="/sumate-como-canillita/registro" class="px-8 py-4 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-xl font-bold shadow-lg shadow-[#2D5A27]/20 inline-block transition-transform hover:-translate-y-1">
-						Quiero ser Canillita
-					</a>
+				<div class="text-center relative group">
+					<div class="w-20 h-20 rounded-[1.5rem] bg-white border border-slate-200 text-[#2D5A27] flex items-center justify-center text-3xl font-black mx-auto mb-6 shadow-xl shadow-slate-200/50 group-hover:scale-110 group-hover:-translate-y-2 group-hover:bg-[#2D5A27] group-hover:text-white transition-all duration-300">2</div>
+					<h4 class="font-bold text-slate-900 text-lg mb-2">Revisamos tu solicitud</h4>
+					<p class="text-sm text-slate-600">Validamos que no haya otro punto demasiado cerca y aprobamos tu perfil.</p>
+					<div class="hidden md:block absolute top-10 left-[65%] w-[70%] h-0.5 bg-slate-200 border-t border-dashed border-slate-300"></div>
+				</div>
+				<div class="text-center relative group">
+					<div class="w-20 h-20 rounded-[1.5rem] bg-white border border-slate-200 text-[#2D5A27] flex items-center justify-center text-3xl font-black mx-auto mb-6 shadow-xl shadow-slate-200/50 group-hover:scale-110 group-hover:-translate-y-2 group-hover:bg-[#2D5A27] group-hover:text-white transition-all duration-300">3</div>
+					<h4 class="font-bold text-slate-900 text-lg mb-2">Activás tu cuenta</h4>
+					<p class="text-sm text-slate-600">Cargás tu CBU, confirmás tus horarios y firmás las condiciones.</p>
+					<div class="hidden md:block absolute top-10 left-[65%] w-[70%] h-0.5 bg-slate-200 border-t border-dashed border-slate-300"></div>
+				</div>
+				<div class="text-center relative group">
+					<div class="w-20 h-20 rounded-[1.5rem] bg-white border border-slate-200 text-emerald-500 flex items-center justify-center text-3xl font-black mx-auto mb-6 shadow-xl shadow-slate-200/50 group-hover:scale-110 group-hover:-translate-y-2 group-hover:bg-emerald-500 group-hover:text-white transition-all duration-300">
+						<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+					</div>
+					<h4 class="font-bold text-slate-900 text-lg mb-2">¡Listo para operar!</h4>
+					<p class="text-sm text-slate-600">Aparecés en el mapa y podés empezar a recibir pedidos de inmediato.</p>
 				</div>
 			</div>
 		</section>
+
+		<!-- FAQ Section -->
+		<section class="max-w-4xl mx-auto px-6 mb-32">
+			<div class="text-center mb-16">
+				<h2 class="text-3xl md:text-5xl font-extrabold text-slate-900 mb-4 tracking-tight">Preguntas Frecuentes</h2>
+				<p class="text-lg text-slate-600">Todo lo que necesitás saber antes de sumarte a la red.</p>
+			</div>
+
+			<div class="space-y-4">
+				<details class="group bg-white border border-slate-200 rounded-2xl cursor-pointer">
+					<summary class="flex items-center justify-between p-6 font-bold text-lg text-slate-900 select-none">
+						¿Qué tipo de paquetes voy a recibir?
+						<span class="ml-4 flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 group-open:rotate-180 transition-transform">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+						</span>
+					</summary>
+					<div class="px-6 pb-6 text-slate-600">
+						Recibirás paquetes de tamaño chico a mediano, que los clientes de UrbanPoint compran en nuestra tienda online. No enviamos electrodomésticos ni objetos que ocupen demasiado volumen, asegurando que puedas guardarlos sin afectar el funcionamiento de tu local.
+					</div>
+				</details>
+				
+				<details class="group bg-white border border-slate-200 rounded-2xl cursor-pointer">
+					<summary class="flex items-center justify-between p-6 font-bold text-lg text-slate-900 select-none">
+						¿Cuándo y cómo me pagan las comisiones?
+						<span class="ml-4 flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 group-open:rotate-180 transition-transform">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+						</span>
+					</summary>
+					<div class="px-6 pb-6 text-slate-600">
+						Las liquidaciones se realizan de forma semanal. Todo el saldo acumulado por paquetes entregados con éxito durante la semana se transfiere automáticamente al CBU o CVU que hayas registrado en tu perfil de Canillita.
+					</div>
+				</details>
+				
+				<details class="group bg-white border border-slate-200 rounded-2xl cursor-pointer">
+					<summary class="flex items-center justify-between p-6 font-bold text-lg text-slate-900 select-none">
+						¿Qué pasa si un cliente no retira su paquete?
+						<span class="ml-4 flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 group-open:rotate-180 transition-transform">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+						</span>
+					</summary>
+					<div class="px-6 pb-6 text-slate-600">
+						Los clientes tienen un plazo máximo de 7 días corridos para retirar su pedido. Si no lo hacen, el paquete queda catalogado como "Vencido" y un repartidor de UrbanPoint pasará a buscarlo por tu local. No te preocupes, ¡vos igual cobrás una parte de la comisión por el resguardo!
+					</div>
+				</details>
+				
+				<details class="group bg-white border border-slate-200 rounded-2xl cursor-pointer">
+					<summary class="flex items-center justify-between p-6 font-bold text-lg text-slate-900 select-none">
+						¿Tiene algún costo ser parte de la red?
+						<span class="ml-4 flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 group-open:rotate-180 transition-transform">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+						</span>
+					</summary>
+					<div class="px-6 pb-6 text-slate-600">
+						No, es 100% gratuito. Nunca te cobraremos suscripciones ni gastos de mantenimiento. Nuestro modelo se basa en pagarte a vos por brindar el servicio de cercanía a nuestros clientes.
+					</div>
+				</details>
+			</div>
+
+			<div class="mt-12 text-center">
+				<a href="/sumate-como-canillita/registro" class="px-8 py-4 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-xl font-bold shadow-lg shadow-[#2D5A27]/20 inline-block transition-transform hover:-translate-y-1">
+					Quiero registrar mi local ahora
+				</a>
+			</div>
+		</section>
+
 	</main>
+	<Footer />
 </Layout>

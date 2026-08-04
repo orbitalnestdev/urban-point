@@ -1,20 +1,70 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getSiteSettings } from '../../../lib/server/settings';
+import { createAdminClient } from '../../../lib/server/appwrite';
 
 export const prerender = false;
+
+let settings = await getSiteSettings();
+let successMessage = '';
+let errorMessage = '';
+
+if (Astro.request.method === 'POST') {
+	try {
+		const formData = await Astro.request.formData();
+		const whatsapp = formData.get('whatsapp_number')?.toString() || '';
+		const email = formData.get('contact_email')?.toString() || '';
+
+		const { databases } = createAdminClient();
+		
+		try {
+			await databases.updateDocument('urbanpoint', 'settings', 'general', {
+				whatsapp_number: whatsapp,
+				contact_email: email
+			});
+		} catch (e: any) {
+			if (e.code === 404) {
+				await databases.createDocument('urbanpoint', 'settings', 'general', {
+					whatsapp_number: whatsapp,
+					contact_email: email
+				});
+			} else {
+				throw e;
+			}
+		}
+
+		settings = { whatsapp_number: whatsapp, contact_email: email };
+		successMessage = 'Configuración actualizada correctamente.';
+	} catch (e: any) {
+		console.error(e);
+		errorMessage = 'Ocurrió un error al guardar la configuración.';
+	}
+}
 ---
 
 <AdminLayout title="Configuración de Tienda">
-	<main class="p-8 max-w-7xl mx-auto">
+	<form method="POST" class="p-8 max-w-7xl mx-auto">
 		<header class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
 			<div>
 				<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Configuración</h1>
 				<p class="text-slate-500 font-medium mt-1">Ajustes generales de la tienda, métodos de pago, envíos y más.</p>
 			</div>
 			<div class="flex items-center gap-2">
-				<button class="px-6 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition-colors shadow-md">Guardar cambios</button>
+				<button type="submit" class="px-6 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition-colors shadow-md">Guardar cambios</button>
 			</div>
 		</header>
+
+		{successMessage && (
+			<div class="bg-emerald-50 border border-emerald-200 text-[#2D5A27] px-4 py-3 rounded-xl text-sm font-semibold mb-6">
+				{successMessage}
+			</div>
+		)}
+		
+		{errorMessage && (
+			<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm font-semibold mb-6">
+				{errorMessage}
+			</div>
+		)}
 
 		<div class="flex flex-col md:flex-row gap-8">
 			
@@ -103,6 +153,25 @@ export const prerender = false;
 								<select class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 appearance-none pr-10 relative bg-no-repeat bg-[right_12px_center] bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2364748b%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]">
 									<option>(GMT-03:00) Buenos Aires</option>
 								</select>
+							</div>
+						</div>
+					</div>
+
+					<div class="mt-8 mb-6 border-b border-slate-100 pb-4">
+						<h2 class="text-xl font-extrabold text-slate-900">Contacto Público</h2>
+						<p class="text-sm text-slate-500">Datos visibles para los clientes en la tienda.</p>
+					</div>
+					
+					<div class="space-y-6">
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">WhatsApp de Contacto</label>
+								<input type="text" name="whatsapp_number" value={settings.whatsapp_number} placeholder="+5491100000000" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow" />
+								<p class="text-xs text-slate-500 mt-1">Incluir código de país (ej. +549)</p>
+							</div>
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Email de Contacto</label>
+								<input type="email" name="contact_email" value={settings.contact_email} placeholder="hola@tu-tienda.com" class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-shadow" />
 							</div>
 						</div>
 					</div>

@@ -1,0 +1,120 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Header from '../../components/Header.astro';
+import { Client, Account, Query } from 'node-appwrite';
+import { createAdminClient } from '../../lib/server/appwrite';
+import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+
+export const prerender = false;
+
+let loginError = '';
+
+if (Astro.request.method === 'POST') {
+	try {
+		const formData = await Astro.request.formData();
+		const email = formData.get('email')?.toString() || '';
+		const password = formData.get('password')?.toString() || '';
+		
+		const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
+		const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
+
+		const authClient = new Client().setEndpoint(endpoint).setProject(projectId);
+		const account = new Account(authClient);
+		const { databases } = createAdminClient();
+
+		const session = await account.createEmailPasswordSession(email, password);
+		
+		Astro.cookies.set('up_session', session.secret, {
+			path: '/',
+			httpOnly: true,
+			secure: false,
+			sameSite: 'lax',
+			maxAge: 60 * 60 * 24 * 30
+		});
+		
+		try {
+			const profiles = await databases.listDocuments('urbanpoint', 'profiles', [
+				Query.equal('user_id', session.userId)
+			]);
+			
+			const role = profiles.documents.length > 0 ? profiles.documents[0].role : 'cliente';
+			
+            if (role === 'canillita' || role === 'admin') {
+                return Astro.redirect('/canillita');
+            } else {
+                loginError = 'Tu cuenta no tiene permisos de Canillita asociados.';
+            }
+		} catch (dbErr) {
+			loginError = 'Error al validar los permisos de la cuenta.';
+		}
+	} catch (e: any) {
+		loginError = e.message || 'Credenciales incorrectas o error al iniciar sesión.';
+	}
+}
+---
+
+<Layout title="Acceso Canillitas | UrbanPoint">
+	<Header />
+
+	<div class="min-h-[85vh] bg-indigo-50 flex items-center justify-center p-6 py-12">
+		<div class="max-w-md w-full">
+			
+			<div class="text-center mb-8">
+				<div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 text-white mb-6 shadow-xl shadow-indigo-600/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+				</div>
+				<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Portal Canillitas</h1>
+				<p class="text-slate-600">Ingresá a tu cuenta para gestionar tus puntos de retiro y ver tus ganancias.</p>
+			</div>
+
+			<div class="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xl">
+				
+				{loginError && (
+					<div class="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3">
+						<svg class="w-5 h-5 text-red-500 shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+						<p class="text-sm font-medium text-red-800">{loginError}</p>
+					</div>
+				)}
+
+                <form method="POST" class="space-y-5">
+                    <div>
+                        <label for="email" class="block text-sm font-bold text-slate-700 mb-1.5">Correo electrónico</label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            required 
+                            class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
+                            placeholder="tu@correo.com"
+                        >
+                    </div>
+                    
+                    <div>
+                        <label for="password" class="block text-sm font-bold text-slate-700 mb-1.5">Contraseña</label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required 
+                            class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
+                            placeholder="••••••••"
+                        >
+                    </div>
+
+                    <button type="submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:-translate-y-0.5 mt-2">
+                        Ingresar al Panel
+                    </button>
+                </form>
+
+			</div>
+
+            <div class="text-center mt-8">
+                <p class="text-slate-500 text-sm">
+                    ¿Todavía no sos Canillita? <br/>
+                    <a href="/sumate-como-canillita" class="text-indigo-600 font-bold hover:underline">Postulá tu local comercial acá</a>
+                </p>
+            </div>
+
+		</div>
+	</div>
+</Layout>
