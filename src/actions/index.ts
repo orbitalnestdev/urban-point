@@ -246,6 +246,7 @@ export const server = {
 
 				// Create the Order in Appwrite
 				const orderPayload: any = {
+					numero: Math.floor(100000 + Math.random() * 900000).toString(),
 					total_centavos: totalCentavos,
 					estado: 'pendiente_pago',
 					pickup_point_id: input.pickupPointId,
