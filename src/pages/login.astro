@@ -11,6 +11,29 @@ export const prerender = false;
 let loginError = '';
 let loginSuccess = false;
 
+if (Astro.request.method === 'GET') {
+	const sessionCookie = Astro.cookies.get('up_session')?.value;
+	if (sessionCookie) {
+		const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || PUBLIC_APPWRITE_ENDPOINT || NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
+		const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || PUBLIC_APPWRITE_PROJECT_ID || NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
+		try {
+			const authClient = new Client().setEndpoint(endpoint).setProject(projectId).setSession(sessionCookie);
+			const account = new Account(authClient);
+			const user = await account.get();
+			const { databases } = createAdminClient();
+			const profiles = await databases.listDocuments('urbanpoint', 'profiles', [
+				Query.equal('user_id', user.$id)
+			]);
+			const role = profiles.documents.length > 0 ? profiles.documents[0].role : 'cliente';
+			if (role === 'admin') return Astro.redirect('/admin');
+			if (role === 'canillita') return Astro.redirect('/canillita');
+			return Astro.redirect('/mi-cuenta');
+		} catch (e) {
+			Astro.cookies.delete('up_session', { path: '/' });
+		}
+	}
+}
+
 if (Astro.request.method === 'POST') {
 	try {
 		const formData = await Astro.request.formData();

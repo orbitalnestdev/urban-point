@@ -136,6 +136,26 @@ try {
 						<span id="full-cart-total" class="text-3xl font-black text-slate-900">$ 0</span>
 					</div>
 
+					<!-- Payment Method Box -->
+					<div>
+						<label htmlFor="payment-method" class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-[#2D5A27]"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+							Método de Pago
+						</label>
+						<div class="relative">
+							<select
+								id="payment-method"
+								class="w-full pl-4 pr-9 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:bg-white focus:outline-none appearance-none font-semibold text-xs text-slate-800 cursor-pointer shadow-xs transition-all"
+							>
+								<option value="mercadopago" selected>Mercado Pago (Tarjetas, Dinero en cuenta)</option>
+								<option value="a_convenir">A convenir (Efectivo/Transferencia al retirar)</option>
+							</select>
+							<div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+							</div>
+						</div>
+					</div>
+
 					<!-- Checkout Button -->
 					<button 
 						id="full-checkout-btn" 
@@ -337,6 +357,7 @@ try {
 	// Checkout Action Handler
 	const checkoutBtn = document.getElementById('full-checkout-btn');
 	const pickupSelect = document.getElementById('full-pickup-point') as HTMLSelectElement;
+	const paymentSelect = document.getElementById('payment-method') as HTMLSelectElement;
 
 	if (checkoutBtn) {
 		checkoutBtn.addEventListener('click', async () => {
@@ -354,10 +375,13 @@ try {
 			try {
 				const payload = items.map(i => ({ productId: i.id, cantidad: i.cantidad }));
 				const refCode = referralCode.get().code;
+				const paymentMethod = paymentSelect ? paymentSelect.value : 'mercadopago';
+				
 				const { data, error } = await actions.createCheckout({ 
 					items: payload, 
 					pickupPointId: pickupSelect.value, 
-					referralCode: refCode 
+					referralCode: refCode,
+					paymentMethod: paymentMethod
 				});
 
 				if (error || !data?.success) {
@@ -367,7 +391,11 @@ try {
 					return;
 				}
 
-				window.location.href = data.init_point!;
+				if (data.init_point === '/checkout/success') {
+					window.location.href = data.init_point;
+				} else {
+					window.location.href = data.init_point!;
+				}
 			} catch (e) {
 				alert('Error de conexión');
 				checkoutBtn.removeAttribute('disabled');

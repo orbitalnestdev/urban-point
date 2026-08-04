@@ -187,7 +187,8 @@ export const server = {
 				cantidad: z.number().min(1)
 			})),
 			pickupPointId: z.string(),
-			referralCode: z.string().optional()
+			referralCode: z.string().optional(),
+			paymentMethod: z.string().optional()
 		}),
 		handler: async (input, ctx) => {
 			try {
@@ -210,14 +211,6 @@ export const server = {
 						referralCodeId = codeRes.documents[0].$id;
 					}
 				}
-
-				if (!MP_ACCESS_TOKEN) {
-					// Fallback to fake checkout if no token
-					return { success: true, init_point: 'https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=TEST-123' };
-				}
-
-				const mp = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
-				const preference = new Preference(mp);
 
 				// Re-fetch all products securely from backend to avoid price manipulation
 				const prefItems = [];
@@ -272,6 +265,18 @@ export const server = {
 						...oi
 					});
 				}
+
+				if (input.paymentMethod === 'a_convenir') {
+					return { success: true, init_point: '/checkout/success' };
+				}
+
+				if (!MP_ACCESS_TOKEN) {
+					// Fallback to fake checkout if no token
+					return { success: true, init_point: 'https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=TEST-123' };
+				}
+
+				const mp = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
+				const preference = new Preference(mp);
 
 				const result = await preference.create({
 					body: {
