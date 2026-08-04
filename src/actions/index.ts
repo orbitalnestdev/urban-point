@@ -247,7 +247,6 @@ export const server = {
 				// Create the Order in Appwrite
 				const orderPayload: any = {
 					numero: Math.floor(100000 + Math.random() * 900000).toString(),
-					total_centavos: totalCentavos,
 					subtotal: totalCentavos,
 					total: totalCentavos,
 					estado: 'pendiente_pago',
@@ -271,7 +270,7 @@ export const server = {
 				}
 
 				if (input.paymentMethod === 'a_convenir') {
-					return { success: true, init_point: '/checkout/success' };
+					return { success: true, init_point: `/checkout/success?order_id=${orderDoc.$id}` };
 				}
 
 				if (!MP_ACCESS_TOKEN) {
