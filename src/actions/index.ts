@@ -248,7 +248,10 @@ export const server = {
 				const orderPayload: any = {
 					numero: Math.floor(100000 + Math.random() * 900000).toString(),
 					total_centavos: totalCentavos,
+					subtotal: totalCentavos,
+					total: totalCentavos,
 					estado: 'pendiente_pago',
+					fulfillment: 'pendiente',
 					pickup_point_id: input.pickupPointId,
 					referral_code_id: referralCodeId,
 					pickup_code_hash: pickupCode
