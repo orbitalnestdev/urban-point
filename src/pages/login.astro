@@ -45,34 +45,48 @@ if (Astro.request.method === 'POST') {
 				telefono: '',
 				saldo_disponible_centavos: 0
 			});
-
-			// 3. Login Automático
-			const session = await account.createEmailPasswordSession(email, password);
-			
-			Astro.cookies.set('up_session', session.secret, {
-				path: '/',
-				httpOnly: true,
-				secure: false,
-				sameSite: 'lax',
-				maxAge: 60 * 60 * 24 * 30
-			});
-
-			return Astro.redirect('/mi-cuenta');
 		}
-		else if (actionType === 'login') {
-			const session = await account.createEmailPasswordSession(email, password);
+
+		if (actionType === 'login' || actionType === 'register') {
+			// Login Manual via Fetch para extraer la cookie de sesión
+			const res = await fetch(`${endpoint}/account/sessions/email`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Appwrite-Project': projectId
+				},
+				body: JSON.stringify({ email, password })
+			});
+
+			if (!res.ok) {
+				const errorData = await res.json().catch(() => ({}));
+				throw new Error(errorData.message || 'Error al iniciar sesión. Verificá tus credenciales.');
+			}
+
+			const fallbackHeader = res.headers.get('x-fallback-cookies');
+			if (!fallbackHeader) {
+				throw new Error('No se pudo obtener la sesión desde el servidor.');
+			}
 			
-			Astro.cookies.set('up_session', session.secret, {
+			const fallbackCookies = JSON.parse(fallbackHeader);
+			const sessionSecret = fallbackCookies[`a_session_${projectId}`] || fallbackCookies[`a_session_${projectId}_legacy`];
+
+			Astro.cookies.set('up_session', sessionSecret, {
 				path: '/',
 				httpOnly: true,
 				secure: false,
 				sameSite: 'lax',
 				maxAge: 60 * 60 * 24 * 30
 			});
+			
+			if (actionType === 'register') {
+				return Astro.redirect('/mi-cuenta');
+			}
 			
 			try {
+				const { userId } = await res.json();
 				const profiles = await databases.listDocuments('urbanpoint', 'profiles', [
-					Query.equal('user_id', session.userId)
+					Query.equal('user_id', userId)
 				]);
 				
 				const role = profiles.documents.length > 0 ? profiles.documents[0].role : 'cliente';
