@@ -141,6 +141,63 @@ const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCod
 				</div>
 			</div>
 
+			{/* Bloque de Pedidos Asignados */}
+			<div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-8 mb-8">
+				<div class="flex items-center justify-between mb-6">
+					<h2 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+						<Package class="w-6 h-6 text-indigo-600" /> Pedidos Listos para Entregar
+					</h2>
+				</div>
+				{ordersRes && ordersRes.documents.length > 0 ? (
+					<div class="overflow-x-auto">
+						<table class="w-full text-left border-collapse">
+							<thead>
+								<tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+									<th class="p-4">PEDIDO</th>
+									<th class="p-4">FECHA</th>
+									<th class="p-4">CLIENTE ID</th>
+									<th class="p-4 text-center">CÓDIGO DE RETIRO</th>
+									<th class="p-4 text-right">ACCIONES</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-slate-100">
+								{ordersRes.documents.map(order => (
+									<tr class="hover:bg-slate-50 transition-colors">
+										<td class="p-4 font-bold text-indigo-700 text-sm">
+											{order.numero || order.$id.substring(0,8).toUpperCase()}
+										</td>
+										<td class="p-4 text-sm text-slate-600">
+											{new Date(order.$createdAt).toLocaleDateString('es-AR')}
+										</td>
+										<td class="p-4 text-sm font-medium text-slate-800">
+											{order.customer_id?.substring(0,8) || 'N/A'}
+										</td>
+										<td class="p-4 text-center">
+											<span class="inline-block px-3 py-1 bg-slate-100 border border-slate-200 text-slate-700 font-mono font-bold tracking-widest rounded-lg">
+												{order.pickup_code_hash || 'PENDIENTE'}
+											</span>
+										</td>
+										<td class="p-4 text-right">
+											<button class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition-colors">
+												Entregar
+											</button>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				) : (
+					<div class="text-center py-8 text-slate-500">
+						<div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
+							<Package class="w-8 h-8 text-slate-400" />
+						</div>
+						<p class="font-bold text-slate-600">No tenés pedidos pendientes de entrega.</p>
+						<p class="text-sm mt-1">Cuando los clientes compren y elijan tu local, aparecerán acá.</p>
+					</div>
+				)}
+			</div>
+
 			{/* Bloque de Referidos para Canillita */}
 			{referralCodeDoc && (
 				<div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-8 mb-8">

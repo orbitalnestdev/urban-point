@@ -19,6 +19,39 @@ try {
 	]);
 	allOrders = res.documents;
 
+	// fetch profiles for all customer_ids
+	const customerIds = [...new Set(allOrders.map(o => o.customer_id).filter(Boolean))];
+	const profiles = {};
+	if (customerIds.length > 0) {
+		const profRes = await databases.listDocuments('urbanpoint', 'profiles', [
+			Query.equal('$id', customerIds),
+			Query.limit(customerIds.length)
+		]);
+		profRes.documents.forEach(p => {
+			profiles[p.$id] = p;
+		});
+	}
+
+	// fetch order items to count articles
+	const orderIds = allOrders.map(o => o.$id);
+	const orderItemsCount = {};
+	if (orderIds.length > 0) {
+		const itemsRes = await databases.listDocuments('urbanpoint', 'order_items', [
+			Query.equal('order_id', orderIds),
+			Query.limit(orderIds.length * 5)
+		]);
+		itemsRes.documents.forEach(item => {
+			if (!orderItemsCount[item.order_id]) orderItemsCount[item.order_id] = 0;
+			orderItemsCount[item.order_id] += item.cantidad || 1;
+		});
+	}
+
+	allOrders = allOrders.map(o => ({
+		...o,
+		customerProfile: o.customer_id ? profiles[o.customer_id] : null,
+		totalItems: orderItemsCount[o.$id] || 0
+	}));
+
 	let filtered = [...allOrders];
 
 	if (estadoFilter && estadoFilter !== 'todos') {
@@ -29,8 +62,8 @@ try {
 		const q = searchQuery.toLowerCase();
 		filtered = filtered.filter(o => 
 			o.numero?.toString().toLowerCase().includes(q) ||
-			o.customer_id?.nombre?.toLowerCase().includes(q) ||
-			o.customer_id?.email?.toLowerCase().includes(q)
+			o.customerProfile?.nombre?.toLowerCase().includes(q) ||
+			o.customerProfile?.email?.toLowerCase().includes(q)
 		);
 	}
 
@@ -279,38 +312,36 @@ const getStatusLabel = (estado) => {
 								<td class="p-4 text-sm">
 									<div class="flex items-center gap-3">
 										<div class="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold text-xs flex items-center justify-center shrink-0">
-											{order.customer_id?.nombre?.substring(0, 1) || 'B'}
+											{order.customerProfile?.nombre?.substring(0, 1).toUpperCase() || 'A'}
 										</div>
 										<div>
 											<p class="font-bold text-slate-900 text-sm flex items-center gap-2">
-												{order.customer_id?.nombre || 'Beyla'} 
-												<span class="bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Potencial</span>
+												{order.customerProfile?.nombre || 'Anónimo'} 
+												<span class="bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">{order.customerProfile?.role || 'Invitado'}</span>
 											</p>
-											<p class="text-xs text-slate-500 flex items-center gap-1 mt-0.5"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg> Sin seguimiento</p>
+											<p class="text-xs text-slate-500 flex items-center gap-1 mt-0.5"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg> {order.fulfillment || 'retiro'}</p>
 										</div>
 									</div>
 								</td>
 								<td class="p-4 text-xs font-medium text-slate-600">
-									{order.customer_id?.email || 'pmamone1@gmail.com'}
+									{order.customerProfile?.email || 'N/A'}
 								</td>
 								<td class="p-4 text-center">
 									<div class="flex flex-col items-center gap-2">
 										<div class="flex items-center gap-2">
-											<span class={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${order.estado === 'enviado' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
-												<span class={`w-1.5 h-1.5 rounded-full ${order.estado === 'enviado' ? 'bg-blue-500' : 'bg-emerald-500'}`}></span> {order.estado === 'enviado' ? 'Enviado' : 'Preparado'}
+											<span class={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${order.estado === 'enviado' || order.estado === 'despachado' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+												<span class={`w-1.5 h-1.5 rounded-full ${order.estado === 'enviado' || order.estado === 'despachado' ? 'bg-blue-500' : 'bg-emerald-500'}`}></span> {getStatusLabel(order.estado)}
 											</span>
-											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-200 bg-amber-50 text-amber-700">
-												Debe {formateador.format((order.total || 0) / 100)}
-											</span>
+											{order.estado === 'pendiente_pago' && (
+												<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-200 bg-amber-50 text-amber-700">
+													Debe {shortTotal}
+												</span>
+											)}
 										</div>
-										<button class="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] rounded flex items-center gap-1 shadow-sm transition-colors" onclick="event.stopPropagation()">
-											<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-											{order.estado === 'enviado' ? 'Marcar entregado' : 'Marcar enviado'}
-										</button>
 									</div>
 								</td>
 								<td class="p-4 text-center font-bold text-slate-700 text-xs">
-									10 <span class="text-slate-400 font-medium">10u</span>
+									{order.totalItems} <span class="text-slate-400 font-medium">{order.totalItems === 1 ? 'unidad' : 'unidades'}</span>
 								</td>
 								<td class="p-4 text-right font-black text-slate-900 text-sm">
 									{shortTotal}
