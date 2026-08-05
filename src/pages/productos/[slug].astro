@@ -200,7 +200,10 @@ const cuotaMonto = Math.round(precioMinorista / 3);
 										<span>{formateador.format(precioTransferencia)} por transferencia bancaria</span>
 									</p>
 									<p class="text-xs font-medium text-slate-600 flex items-center gap-1.5">
-										<span class="text-[#2D5A27] font-bold">💳 3 cuotas sin interés</span>
+										<span class="text-[#2D5A27] font-bold flex items-center gap-1.5">
+											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+											3 cuotas sin interés
+										</span>
 										<span>de {formateador.format(cuotaMonto)}</span>
 									</p>
 								</div>

@@ -250,7 +250,7 @@ export const server = {
 					subtotal: totalCentavos,
 					total: totalCentavos,
 					estado: 'pendiente_pago',
-					fulfillment: 'pendiente',
+					fulfillment: 'retiro',
 					pickup_point_id: input.pickupPointId,
 					referral_code_id: referralCodeId,
 					pickup_code_hash: pickupCode
