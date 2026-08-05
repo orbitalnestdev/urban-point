@@ -256,7 +256,7 @@ export const server = {
 					pickup_code_hash: pickupCode
 				};
 				if (profileId) {
-					orderPayload.profile_id = profileId;
+					orderPayload.customer_id = profileId;
 				}
 
 				const orderDoc = await db.createDocument('urbanpoint', 'orders', ID.unique(), orderPayload);
