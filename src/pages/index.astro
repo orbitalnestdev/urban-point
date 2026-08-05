@@ -505,148 +505,233 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 					</h2>
 				</div>
 
-				<div id="reviews-slider" class="flex overflow-x-auto snap-x snap-mandatory gap-6 pb-8 -mx-6 px-6 sm:mx-0 sm:px-0 hide-scrollbar cursor-grab active:cursor-grabbing" style="scrollbar-width: none; -ms-overflow-style: none;">
-					<style>
-						.hide-scrollbar::-webkit-scrollbar { display: none; }
-					</style>
-					<!-- Review 1 -->
-					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-						<div>
-							<div class="flex text-amber-400 gap-1 mb-4">
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-							</div>
-							<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">
-								“¡Excelente! Pude retirar mi pedido al otro día en el kiosco de mi barrio. Súper cómodo y los precios muy buenos.”
-							</p>
-						</div>
-						<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
-							<img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120" alt="Mariana L." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+				<style>
+					.hide-scrollbar::-webkit-scrollbar { display: none; }
+					@keyframes marquee {
+						0% { transform: translateX(0); }
+						100% { transform: translateX(-50%); }
+					}
+					.animate-marquee {
+						display: flex;
+						width: max-content;
+						animation: marquee 40s linear infinite;
+					}
+					.animate-marquee:hover {
+						animation-play-state: paused;
+					}
+				</style>
+				
+				<!-- Contenedor con overflow hidden para que la marquesina se recorte a los bordes -->
+				<div class="overflow-hidden pb-8 -mx-6 sm:mx-0 w-[100vw] sm:w-auto">
+					<div class="animate-marquee gap-6 px-6 sm:px-0">
+						<!-- PRIMER SET DE REVIEWS -->
+						<!-- Review 1 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
 							<div>
-								<p class="font-bold text-slate-900 text-sm">Mariana L.</p>
-								<p class="text-xs text-slate-500">Caballito, CABA</p>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“¡Excelente! Pude retirar mi pedido al otro día en el kiosco de mi barrio. Súper cómodo y los precios muy buenos.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120" alt="Mariana L." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Mariana L.</p><p class="text-xs text-slate-500">Caballito, CABA</p></div>
 							</div>
 						</div>
-					</div>
+						<!-- Review 2 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“Me encanta poder elegir dónde retirar. Siempre hay un punto UrbanPoint cerca de casa.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120" alt="Lucas G." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Lucas G.</p><p class="text-xs text-slate-500">Villa Devoto, CABA</p></div>
+							</div>
+						</div>
+						<!-- Review 3 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“Los productos son de calidad y el retiro súper ágil. Lo recomiendo 100%.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120" alt="Sofía R." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Sofía R.</p><p class="text-xs text-slate-500">Almagro, CABA</p></div>
+							</div>
+						</div>
+						<!-- Review 4 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“No tuve que hacer largas filas. Pasé por el kiosco a la vuelta de la oficina y retiré en 2 minutos.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=120" alt="Martín D." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Martín D.</p><p class="text-xs text-slate-500">Palermo, CABA</p></div>
+							</div>
+						</div>
+						<!-- Review 5 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“¡Encontré marcas que no veo en el supermercado y a un precio bárbaro!”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=120" alt="Julieta S." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Julieta S.</p><p class="text-xs text-slate-500">Belgrano, CABA</p></div>
+							</div>
+						</div>
+						<!-- Review 6 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“El canillita me avisó por WhatsApp ni bien llegó mi pedido. Mejor imposible.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120" alt="Carolina P." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Carolina P.</p><p class="text-xs text-slate-500">San Isidro, GBA</p></div>
+							</div>
+						</div>
 
-					<!-- Review 2 -->
-					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-						<div>
-							<div class="flex text-amber-400 gap-1 mb-4">
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-							</div>
-							<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">
-								“Me encanta poder elegir dónde retirar. Siempre hay un punto UrbanPoint cerca de casa.”
-							</p>
-						</div>
-						<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
-							<img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120" alt="Lucas G." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+						<!-- SEGUNDO SET DE REVIEWS (Duplicado exacto para el loop infinito) -->
+						<!-- Review 1 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
 							<div>
-								<p class="font-bold text-slate-900 text-sm">Lucas G.</p>
-								<p class="text-xs text-slate-500">Villa Devoto, CABA</p>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“¡Excelente! Pude retirar mi pedido al otro día en el kiosco de mi barrio. Súper cómodo y los precios muy buenos.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120" alt="Mariana L." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Mariana L.</p><p class="text-xs text-slate-500">Caballito, CABA</p></div>
+							</div>
+						</div>
+						<!-- Review 2 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“Me encanta poder elegir dónde retirar. Siempre hay un punto UrbanPoint cerca de casa.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120" alt="Lucas G." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Lucas G.</p><p class="text-xs text-slate-500">Villa Devoto, CABA</p></div>
+							</div>
+						</div>
+						<!-- Review 3 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“Los productos son de calidad y el retiro súper ágil. Lo recomiendo 100%.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120" alt="Sofía R." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Sofía R.</p><p class="text-xs text-slate-500">Almagro, CABA</p></div>
+							</div>
+						</div>
+						<!-- Review 4 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“No tuve que hacer largas filas. Pasé por el kiosco a la vuelta de la oficina y retiré en 2 minutos.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=120" alt="Martín D." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Martín D.</p><p class="text-xs text-slate-500">Palermo, CABA</p></div>
+							</div>
+						</div>
+						<!-- Review 5 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“¡Encontré marcas que no veo en el supermercado y a un precio bárbaro!”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=120" alt="Julieta S." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Julieta S.</p><p class="text-xs text-slate-500">Belgrano, CABA</p></div>
+							</div>
+						</div>
+						<!-- Review 6 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“El canillita me avisó por WhatsApp ni bien llegó mi pedido. Mejor imposible.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120" alt="Carolina P." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Carolina P.</p><p class="text-xs text-slate-500">San Isidro, GBA</p></div>
 							</div>
 						</div>
 					</div>
-
-					<!-- Review 3 -->
-					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-						<div>
-							<div class="flex text-amber-400 gap-1 mb-4">
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-							</div>
-							<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">
-								“Los productos son de calidad y el retiro súper ágil. Lo recomiendo 100%.”
-							</p>
-						</div>
-						<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
-							<img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120" alt="Sofía R." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
-							<div>
-								<p class="font-bold text-slate-900 text-sm">Sofía R.</p>
-								<p class="text-xs text-slate-500">Almagro, CABA</p>
-							</div>
-						</div>
-					</div>
-
-					<!-- Review 4 -->
-					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-						<div>
-							<div class="flex text-amber-400 gap-1 mb-4">
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-							</div>
-							<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">
-								“No tuve que hacer largas filas. Pasé por el kiosco a la vuelta de la oficina y retiré en 2 minutos.”
-							</p>
-						</div>
-						<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
-							<img src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=120" alt="Martín D." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
-							<div>
-								<p class="font-bold text-slate-900 text-sm">Martín D.</p>
-								<p class="text-xs text-slate-500">Palermo, CABA</p>
-							</div>
-						</div>
-					</div>
-
-					<!-- Review 5 -->
-					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-						<div>
-							<div class="flex text-amber-400 gap-1 mb-4">
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-							</div>
-							<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">
-								“¡Encontré marcas que no veo en el supermercado y a un precio bárbaro!”
-							</p>
-						</div>
-						<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
-							<img src="https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=120" alt="Julieta S." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
-							<div>
-								<p class="font-bold text-slate-900 text-sm">Julieta S.</p>
-								<p class="text-xs text-slate-500">Belgrano, CABA</p>
-							</div>
-						</div>
-					</div>
-
-					<!-- Review 6 -->
-					<div class="shrink-0 w-[85vw] sm:w-80 snap-center bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-						<div>
-							<div class="flex text-amber-400 gap-1 mb-4">
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-								<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-							</div>
-							<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">
-								“El canillita me avisó por WhatsApp ni bien llegó mi pedido. Mejor imposible.”
-							</p>
-						</div>
-						<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
-							<img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120" alt="Carolina P." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
-							<div>
-								<p class="font-bold text-slate-900 text-sm">Carolina P.</p>
-								<p class="text-xs text-slate-500">San Isidro, GBA</p>
-							</div>
-						</div>
-					</div>
-				</div>
 			</div>
 		</section>
 
