@@ -813,6 +813,7 @@ export const server = {
 			nombre: z.string().min(2),
 			descripcion: z.string().optional(),
 			precio: z.number().min(0),
+			precio_promocional: z.number().min(0).optional(),
 			costo: z.number().min(0).optional(),
 			stock: z.number().min(0),
 			stock_maximo: z.number().min(0).optional(),
@@ -838,6 +839,7 @@ export const server = {
 					estado: input.estado
 				};
 
+				if (input.precio_promocional !== undefined) updateData.precio_promocional = input.precio_promocional;
 				if (input.marca !== undefined) updateData.marca = input.marca;
 				if (input.costo !== undefined) updateData.costo = input.costo;
 				if (input.stock_maximo !== undefined) updateData.stock_maximo = input.stock_maximo;

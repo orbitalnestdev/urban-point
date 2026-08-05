@@ -89,8 +89,14 @@ try {
 }
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
-const precioMinorista = product.precio / 100;
-const precioLista = Math.round(precioMinorista * 1.25);
+let precioMinorista = product.precio / 100;
+let precioLista = Math.round(precioMinorista * 1.25);
+
+if (product.precio_promocional && product.precio_promocional > 0) {
+	precioLista = precioMinorista;
+	precioMinorista = product.precio_promocional / 100;
+}
+
 const precioTransferencia = Math.round(precioMinorista * 0.80);
 const cuotaMonto = Math.round(precioMinorista / 3);
 ---
@@ -282,8 +288,13 @@ const cuotaMonto = Math.round(precioMinorista / 3);
 					</h2>
 					<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
 						{relatedProducts.map((rel) => {
-							const relPrecio = rel.precio / 100;
-							const relPrecioLista = Math.round(relPrecio * 1.25);
+							let relPrecio = rel.precio / 100;
+							let relPrecioLista = Math.round(relPrecio * 1.25);
+							
+							if (rel.precio_promocional && rel.precio_promocional > 0) {
+								relPrecioLista = relPrecio;
+								relPrecio = rel.precio_promocional / 100;
+							}
 							return (
 								<div class="prod-item group bg-white rounded-3xl border border-slate-200/70 p-5 shadow-sm hover:shadow-2xl hover:border-[#2D5A27]/40 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between relative overflow-hidden">
 									<div>

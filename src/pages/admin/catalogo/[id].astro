@@ -305,18 +305,18 @@ if (product.galeria_urls) {
 					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
 						<div class="flex justify-between items-center mb-4">
 							<div>
-								<h2 class="text-lg font-bold text-slate-900">Tramos por cantidad</h2>
-								<p class="text-sm text-slate-500">Descontá automáticamente cuando alguien compra de más.</p>
+								<h2 class="text-lg font-bold text-slate-900">Precio Promocional (Oferta)</h2>
+								<p class="text-sm text-slate-500">Si estableces un precio aquí, el precio original se mostrará tachado.</p>
 							</div>
-							<span class="px-3 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-full">0 tramos activos</span>
 						</div>
 
-						<div class="border border-dashed border-slate-200 rounded-xl p-8 text-center bg-slate-50/50">
-							<p class="text-sm font-bold text-slate-400 mb-1">Sin tramos por cantidad</p>
-							<p class="text-xs text-slate-400 mb-4">Sin tramos se usa el precio base para todas las cantidades.</p>
-							<button type="button" class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm">
-								+ Agregar primer tramo
-							</button>
+						<div class="w-1/2 min-w-[200px]">
+							<label class="block text-sm font-bold text-slate-900 mb-1">Precio Promocional</label>
+							<div class="relative">
+								<input type="number" id="input-precio-promocional" value={(product.precio_promocional || 0) / 100} class="w-full pl-4 pr-12 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900 text-base" />
+								<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">ARS</span>
+							</div>
+							<p class="text-[11px] text-slate-400 mt-2">Dejar en 0 para no aplicar descuento.</p>
 						</div>
 					</div>
 				</div>
@@ -804,6 +804,7 @@ if (product.galeria_urls) {
 			const marca = (document.getElementById('input-marca') as HTMLInputElement)?.value;
 			const descripcion = (document.getElementById('input-descripcion') as HTMLTextAreaElement)?.value;
 			const precioArs = parseFloat((document.getElementById('input-precio-ars') as HTMLInputElement)?.value || '0');
+			const precioPromocionalArs = parseFloat((document.getElementById('input-precio-promocional') as HTMLInputElement)?.value || '0');
 			const costoArs = parseFloat((document.getElementById('input-costo') as HTMLInputElement)?.value || '0');
 			
 			const stock = parseInt((document.getElementById('input-stock') as HTMLInputElement)?.value || '0', 10);
@@ -867,6 +868,7 @@ if (product.galeria_urls) {
 					marca,
 					descripcion,
 					precio: Math.round(precioArs * 100),
+					precio_promocional: Math.round(precioPromocionalArs * 100),
 					costo: Math.round(costoArs * 100),
 					stock: finalStock,
 					stock_maximo: stockMaximo,

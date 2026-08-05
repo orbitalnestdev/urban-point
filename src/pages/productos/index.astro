@@ -132,10 +132,17 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 			) : (
 				<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" id="products-grid">
 					{products.map((prod) => {
-						const precioMinorista = prod.precio / 100;
-						const precioLista = Math.round(precioMinorista * 1.25);
+						let precioMinorista = prod.precio / 100;
+						let precioLista = Math.round(precioMinorista * 1.25);
 						const precioTransferencia = Math.round(precioMinorista * 0.80);
 						const catId = typeof prod.categoria_id === 'object' ? prod.categoria_id?.$id : prod.categoria_id;
+
+						let hasPromo = false;
+						if (prod.precio_promocional && prod.precio_promocional > 0) {
+							precioLista = precioMinorista;
+							precioMinorista = prod.precio_promocional / 100;
+							hasPromo = true;
+						}
 
 						return (
 							<div 
