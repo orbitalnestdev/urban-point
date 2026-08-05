@@ -1,12 +1,11 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import { getAdminSession } from '../../../lib/server/auth';
 
 export const prerender = false;
 
-// Protección de ruta
-const session = await getAdminSession(Astro.cookies);
-if (!session) {
+// Protección de ruta (el middleware ya protege /admin, pero verificamos locals)
+const user = Astro.locals?.user;
+if (!user || user.role !== 'admin') {
     return Astro.redirect('/login');
 }
 
