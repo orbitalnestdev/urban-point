@@ -41,19 +41,19 @@ const userName = profile.nombre ? profile.nombre.split(' ')[0] : profile.email.s
 	<div class="grid grid-cols-1 md:grid-cols-12 gap-8">
 		
 		<!-- Left Column (Main Actions) -->
-		<div class="md:col-span-8 space-y-8">
+		<div class="md:col-span-8 h-full">
 			
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-6 h-full">
 				<!-- Card: Mis Pedidos -->
-				<a href="/mi-cuenta/pedidos" class="group block bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm hover:shadow-xl hover:border-[#2D5A27]/30 transition-all relative overflow-hidden">
+				<a href="/mi-cuenta/pedidos" class="group flex flex-col bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm hover:shadow-xl hover:border-[#2D5A27]/30 transition-all relative overflow-hidden h-full">
 					<div class="absolute right-0 top-0 w-24 h-24 bg-emerald-50 rounded-bl-full transition-transform group-hover:scale-110"></div>
-					<div class="relative z-10">
-						<div class="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center text-[#2D5A27] mb-5 group-hover:scale-110 transition-transform shadow-sm">
+					<div class="relative z-10 flex-1 flex flex-col">
+						<div class="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center text-[#2D5A27] mb-5 group-hover:scale-110 transition-transform shadow-sm shrink-0">
 							<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
 						</div>
 						<h3 class="text-xl font-bold text-slate-900 mb-1">Mis Pedidos</h3>
-						<p class="text-sm text-slate-500 mb-4">Revisá el estado y el historial de todas tus compras.</p>
-						<span class="text-[#2D5A27] font-bold text-sm inline-flex items-center gap-1 group-hover:underline">
+						<p class="text-sm text-slate-500 mb-4 flex-1">Revisá el estado y el historial de todas tus compras.</p>
+						<span class="text-[#2D5A27] font-bold text-sm inline-flex items-center gap-1 group-hover:underline mt-auto">
 							Ver pedidos
 							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
 						</span>
@@ -61,15 +61,15 @@ const userName = profile.nombre ? profile.nombre.split(' ')[0] : profile.email.s
 				</a>
 
 				<!-- Card: Mi Perfil -->
-				<a href="/mi-cuenta/perfil" class="group block bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm hover:shadow-xl hover:border-blue-500/30 transition-all relative overflow-hidden">
+				<a href="/mi-cuenta/perfil" class="group flex flex-col bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm hover:shadow-xl hover:border-blue-500/30 transition-all relative overflow-hidden h-full">
 					<div class="absolute right-0 top-0 w-24 h-24 bg-blue-50 rounded-bl-full transition-transform group-hover:scale-110"></div>
-					<div class="relative z-10">
-						<div class="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-600 mb-5 group-hover:scale-110 transition-transform shadow-sm">
+					<div class="relative z-10 flex-1 flex flex-col">
+						<div class="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-600 mb-5 group-hover:scale-110 transition-transform shadow-sm shrink-0">
 							<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
 						</div>
 						<h3 class="text-xl font-bold text-slate-900 mb-1">Mis Datos</h3>
-						<p class="text-sm text-slate-500 mb-4 truncate">{profile.email}</p>
-						<span class="text-blue-600 font-bold text-sm inline-flex items-center gap-1 group-hover:underline">
+						<p class="text-sm text-slate-500 mb-4 truncate flex-1">{profile.email}</p>
+						<span class="text-blue-600 font-bold text-sm inline-flex items-center gap-1 group-hover:underline mt-auto">
 							Editar perfil
 							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
 						</span>
@@ -80,7 +80,7 @@ const userName = profile.nombre ? profile.nombre.split(' ')[0] : profile.email.s
 		</div>
 
 		<!-- Right Column (Sidebar) -->
-		<div class="md:col-span-4 space-y-8">
+		<div class="md:col-span-4">
 			<!-- Benefits Box -->
 			<div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm h-full flex flex-col">
 				<h3 class="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">

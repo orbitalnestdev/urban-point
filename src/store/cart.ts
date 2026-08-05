@@ -29,6 +29,16 @@ export const referralCode = persistentMap<Record<string, string>>(
 	}
 );
 
+// Store checkout preferences (pickup point, payment method)
+export const checkoutData = persistentMap<Record<string, string>>(
+	'urbanpoint_checkout:',
+	{ pickupPointId: '', paymentMethod: 'mercadopago' },
+	{
+		encode: JSON.stringify,
+		decode: JSON.parse
+	}
+);
+
 // Helper helper para notificar a componentes no-React (ej: Header.astro)
 function notifyCartUpdate() {
 	if (typeof window !== 'undefined') {
