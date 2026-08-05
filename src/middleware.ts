@@ -5,7 +5,7 @@ import { createAdminClient } from './lib/server/appwrite';
 
 export const onRequest = defineMiddleware(async (context, next) => {
 	const { pathname } = context.url;
-	const isProtectedRoute = pathname.startsWith('/admin') || pathname.startsWith('/canillita');
+	const isProtectedRoute = (pathname.startsWith('/admin') || pathname.startsWith('/canillita')) && !pathname.includes('/login');
 	
 	if (!isProtectedRoute) {
 		return next();

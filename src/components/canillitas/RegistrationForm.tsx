@@ -48,10 +48,38 @@ export default function RegistrationForm() {
         setError('Por favor completá todos los datos personales.');
         return;
       }
+      if (formData.nombre.trim().length < 2 || formData.apellido.trim().length < 2) {
+        setError('El nombre y apellido deben tener al menos 2 letras.');
+        return;
+      }
+      if (formData.dni.trim().length < 7) {
+        setError('El DNI debe tener al menos 7 números.');
+        return;
+      }
+      if (formData.telefono.trim().length < 8) {
+        setError('El teléfono debe tener al menos 8 números.');
+        return;
+      }
+      if (!/^\\S+@\\S+\\.\\S+$/.test(formData.email)) {
+        setError('El email ingresado no es válido.');
+        return;
+      }
     }
     if (step === 2) {
       if (!formData.nombre_comercial || !formData.direccion || !formData.localidad || !formData.provincia) {
         setError('Por favor completá los datos de ubicación del local (nombre, dirección, barrio/localidad y provincia).');
+        return;
+      }
+      if (formData.nombre_comercial.trim().length < 2) {
+        setError('El nombre comercial debe tener al menos 2 caracteres.');
+        return;
+      }
+      if (formData.direccion.trim().length < 5) {
+        setError('La dirección debe ser más específica (mínimo 5 caracteres).');
+        return;
+      }
+      if (formData.horarios.trim().length < 5) {
+        setError('Los horarios deben tener al menos 5 caracteres.');
         return;
       }
     }
@@ -215,9 +243,23 @@ export default function RegistrationForm() {
                   <MapSelector 
                     lat={formData.lat} 
                     lng={formData.lng} 
-                    onChange={(lat, lng) => {
+                    onChange={(lat, lng, info) => {
                       updateForm('lat', lat);
                       updateForm('lng', lng);
+                      if (info) {
+                          if (info.direccion) updateForm('direccion', info.direccion);
+                          if (info.localidad) updateForm('localidad', info.localidad);
+                          if (info.provincia) {
+                              const p = info.provincia.toLowerCase();
+                              if (p.includes('buenos aires') && !p.includes('autónoma')) updateForm('provincia', 'Buenos Aires');
+                              else if (p.includes('autónoma') || p.includes('caba')) updateForm('provincia', 'CABA');
+                              else if (p.includes('santa fe')) updateForm('provincia', 'Santa Fe');
+                              else if (p.includes('córdoba') || p.includes('cordoba')) updateForm('provincia', 'Córdoba');
+                              else if (p.includes('mendoza')) updateForm('provincia', 'Mendoza');
+                              else if (p.includes('entre ríos') || p.includes('entre rios')) updateForm('provincia', 'Entre Ríos');
+                              else if (p.includes('tucumán') || p.includes('tucuman')) updateForm('provincia', 'Tucumán');
+                          }
+                      }
                     }} 
                   />
                 </div>

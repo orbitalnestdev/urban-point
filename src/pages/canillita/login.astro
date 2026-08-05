@@ -12,7 +12,7 @@ let loginError = '';
 if (Astro.request.method === 'POST') {
 	try {
 		const formData = await Astro.request.formData();
-		const email = formData.get('email')?.toString() || '';
+		const email = formData.get('email')?.toString().trim() || '';
 		const password = formData.get('password')?.toString() || '';
 		
 		const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
@@ -37,7 +37,7 @@ if (Astro.request.method === 'POST') {
 				Query.equal('user_id', session.userId)
 			]);
 			
-			const role = profiles.documents.length > 0 ? profiles.documents[0].role : 'cliente';
+			let role = profiles.documents.length > 0 ? profiles.documents[0].role : 'cliente';
 			
             if (role === 'canillita' || role === 'admin') {
                 return Astro.redirect('/canillita');

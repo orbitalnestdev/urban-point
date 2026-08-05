@@ -22,6 +22,7 @@ let point = null;
 let referralCodeDoc = null;
 let pendingOrdersCount = 0;
 let saldoPendienteCentavos = 0;
+let ordersRes = { documents: [] };
 
 try {
   const points = await db.listDocuments('urbanpoint', 'pickup_points', [
@@ -44,10 +45,11 @@ try {
   }
 
   // Pending orders
-  const ordersRes = await db.listDocuments('urbanpoint', 'orders', [
+  const fetchedOrders = await db.listDocuments('urbanpoint', 'orders', [
     Query.equal('pickup_point_id', point.$id),
     Query.equal('estado', 'listo')
   ]);
+  ordersRes = fetchedOrders;
   pendingOrdersCount = ordersRes.documents.length;
 
   // Pending balance
@@ -56,7 +58,6 @@ try {
     Query.equal('estado', 'pendiente')
   ]);
   saldoPendienteCentavos = ledgerRes.documents.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
-
 } catch (e) {
   console.error("Canillita Dashboard Error:", e);
 }

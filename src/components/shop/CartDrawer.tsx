@@ -1,23 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { cartItems, removeCartItem, updateItemQuantity, referralCode } from '../../store/cart';
-import { actions } from 'astro:actions';
+import { cartItems, removeCartItem, updateItemQuantity } from '../../store/cart';
 
-export type PickupPoint = {
-  $id: string;
-  nombre_comercial: string;
-  direccion: string;
-};
-
-type Props = {
-  pickupPoints?: PickupPoint[];
-};
-
-export default function CartDrawer({ pickupPoints: initialPoints = [] }: Props) {
+export default function CartDrawer() {
   const [isOpen, setIsOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedPickup, setSelectedPickup] = useState('');
-  const [points, setPoints] = useState<PickupPoint[]>(initialPoints);
   
   // Suscribirse al store de Nanostores
   const cart = useStore(cartItems);
@@ -25,26 +11,11 @@ export default function CartDrawer({ pickupPoints: initialPoints = [] }: Props) 
   const totalItems = items.reduce((sum, item) => sum + (item.cantidad || 0), 0);
   const totalAmount = items.reduce((sum, item) => sum + ((item.precio || 0) * (item.cantidad || 0)), 0);
 
-  const refStore = useStore(referralCode);
-  const activeReferral = refStore.code;
-
   useEffect(() => {
     // Escuchar eventos para abrir el drawer
     const openDrawer = () => setIsOpen(true);
     window.addEventListener('cart:open', openDrawer);
     document.addEventListener('cart:open', openDrawer);
-
-    // Si no vinieron puntos por props, obtener de la API
-    if (initialPoints.length === 0) {
-      fetch('/api/pickup-points')
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data) && data.length > 0) {
-            setPoints(data);
-          }
-        })
-        .catch(() => {});
-    }
 
     return () => {
       window.removeEventListener('cart:open', openDrawer);
@@ -54,36 +25,6 @@ export default function CartDrawer({ pickupPoints: initialPoints = [] }: Props) 
 
   const formatPrice = (amountInPesos: number) => {
     return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amountInPesos || 0);
-  };
-
-  const handleCheckout = async () => {
-    if (!selectedPickup) {
-      alert('Por favor, seleccioná un punto de retiro (Canillita / Comercio de barrio).');
-      return;
-    }
-    
-    setIsProcessing(true);
-    try {
-      // Llamar al action de checkout
-      const payload = items.map(i => ({ productId: i.id, cantidad: i.cantidad }));
-      const { data, error } = await actions.createCheckout({ 
-        items: payload,
-        pickupPointId: selectedPickup,
-        referralCode: activeReferral // Enviar referido
-      });
-      
-      if (error || !data?.success) {
-        alert(error?.message || data?.error || 'Error al iniciar checkout.');
-        setIsProcessing(false);
-        return;
-      }
-      
-      // Redirigir a Mercado Pago
-      window.location.href = data.init_point!;
-    } catch (e) {
-      alert('Error de conexión');
-      setIsProcessing(false);
-    }
   };
 
   return (
@@ -173,54 +114,6 @@ export default function CartDrawer({ pickupPoints: initialPoints = [] }: Props) 
         {items.length > 0 && (
           <div className="p-5 bg-white border-t border-slate-200/80 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] space-y-4">
             
-            {/* Pickup Point Selector (Optimized SVG Icon UI) */}
-            <div>
-              <label htmlFor="pickupPoint" className="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-2 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-[#2D5A27]"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                  Punto de Retiro (Canillita)
-                </span>
-                <span className="text-[10px] font-bold text-[#2D5A27] bg-[#F2F7F3] px-2 py-0.5 rounded-full border border-[#D4E5D6]">GRATIS</span>
-              </label>
-              
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                </div>
-                <select
-                  id="pickupPoint"
-                  value={selectedPickup}
-                  onChange={(e) => setSelectedPickup(e.target.value)}
-                  className="w-full pl-10 pr-9 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:bg-white focus:outline-none appearance-none font-semibold text-xs text-slate-800 cursor-pointer shadow-xs transition-all"
-                >
-                  <option value="" disabled>📍 Elegí el comercio o Canillita donde retirar</option>
-                  {points.map(pp => (
-                    <option key={pp.$id} value={pp.$id}>
-                      📍 {pp.nombre_comercial} — {pp.direccion}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                </div>
-              </div>
-
-              {/* Selected Point Badge Card */}
-              {selectedPickup && (() => {
-                const point = points.find(p => p.$id === selectedPickup);
-                if (!point) return null;
-                return (
-                  <div className="mt-2.5 p-3 bg-[#F2F7F3] rounded-xl border border-[#D4E5D6] flex items-start gap-2.5 text-xs text-slate-800">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-[#2D5A27] shrink-0 mt-0.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-extrabold text-slate-900 leading-tight">{point.nombre_comercial}</p>
-                      <p className="text-[11px] text-slate-600 font-medium truncate mt-0.5">{point.direccion}</p>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
             {/* Installments & Free Pickup Perks */}
             <div className="py-2.5 px-3.5 bg-[#F2F7F3] rounded-xl border border-[#D4E5D6] space-y-1">
               <div className="text-xs font-extrabold text-[#2D5A27] flex items-center justify-between">
@@ -244,14 +137,13 @@ export default function CartDrawer({ pickupPoints: initialPoints = [] }: Props) 
 
             {/* Action Buttons: Finalizar Compra + Ver Carrito Completo */}
             <div className="space-y-2">
-              <button 
-                onClick={handleCheckout}
-                disabled={isProcessing || !selectedPickup}
-                className="w-full bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold py-3.5 px-6 rounded-xl shadow-lg shadow-[#2D5A27]/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm cursor-pointer"
+              <a 
+                href="/checkout/retiro"
+                className="w-full bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold py-3.5 px-6 rounded-xl shadow-lg shadow-[#2D5A27]/20 transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
               >
-                {isProcessing ? 'Procesando...' : 'Finalizar Compra'}
+                Continuar Compra
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-              </button>
+              </a>
 
               <a 
                 href="/carrito"
