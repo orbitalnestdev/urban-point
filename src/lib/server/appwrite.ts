@@ -6,36 +6,45 @@ const DEFAULT_API_KEY = 'standard_3baf0a2abb3d0fdac2665efd36cc68ddd47ad3ea8517c0
 
 const clean = (val?: string) => (val || '').replace(/^["']|["']$/g, '').trim();
 
-export const createAdminClient = () => {
-    const rawEndpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
-    const rawProjectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
-    const rawApiKey = process.env.APPWRITE_API_KEY || DEFAULT_API_KEY;
+let singletonClient: Client | null = null;
+let singletonDatabases: Databases | null = null;
+let singletonUsers: Users | null = null;
+let singletonStorage: Storage | null = null;
+let singletonAccount: Account | null = null;
 
-    const endpoint = clean(rawEndpoint) || DEFAULT_ENDPOINT;
-    const projectId = clean(rawProjectId) || DEFAULT_PROJECT_ID;
-    const apiKey = clean(rawApiKey) || DEFAULT_API_KEY;
+function getSingletonClient(): Client {
+    if (!singletonClient) {
+        const rawEndpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
+        const rawProjectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
+        const rawApiKey = process.env.APPWRITE_API_KEY || DEFAULT_API_KEY;
 
-    const client = new Client()
-        .setEndpoint(endpoint)
-        .setProject(projectId);
-    
-    if (apiKey) {
-        client.setKey(apiKey);
+        const endpoint = clean(rawEndpoint) || DEFAULT_ENDPOINT;
+        const projectId = clean(rawProjectId) || DEFAULT_PROJECT_ID;
+        const apiKey = clean(rawApiKey) || DEFAULT_API_KEY;
+
+        singletonClient = new Client()
+            .setEndpoint(endpoint)
+            .setProject(projectId);
+        
+        if (apiKey) {
+            singletonClient.setKey(apiKey);
+        }
     }
+    return singletonClient;
+}
+
+export const createAdminClient = () => {
+    const client = getSingletonClient();
+    if (!singletonDatabases) singletonDatabases = new Databases(client);
+    if (!singletonUsers) singletonUsers = new Users(client);
+    if (!singletonStorage) singletonStorage = new Storage(client);
+    if (!singletonAccount) singletonAccount = new Account(client);
 
     return {
         client,
-        get databases() {
-            return new Databases(client);
-        },
-        get users() {
-            return new Users(client);
-        },
-        get storage() {
-            return new Storage(client);
-        },
-        get account() {
-            return new Account(client);
-        }
+        databases: singletonDatabases,
+        users: singletonUsers,
+        storage: singletonStorage,
+        account: singletonAccount
     };
 };

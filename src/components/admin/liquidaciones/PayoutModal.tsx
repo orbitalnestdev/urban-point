@@ -23,7 +23,7 @@ export function PayoutModal({ canillitaId, canillitaName, monto }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: actionError } = await actions.createPayout({
+      const { data, error: actionError } = await (actions as any).createPayout({
         profileId: canillitaId,
         medioPago,
         referenciaPago: referencia

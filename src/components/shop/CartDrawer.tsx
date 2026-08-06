@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { cartItems, removeCartItem, updateItemQuantity } from '../../store/cart';
 
-export default function CartDrawer() {
+export default function CartDrawer(_props?: { pickupPoints?: any[] }) {
   const [isOpen, setIsOpen] = useState(false);
   
   // Suscribirse al store de Nanostores

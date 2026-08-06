@@ -168,7 +168,7 @@ import Logo from '../../components/Logo.astro';
         const isEnvio = currentCheckout.fulfillment === 'envio';
 
         if (isEnvio) {
-            const envioCosto = currentCheckout.costoEnvio || 150000;
+            const envioCosto = Number(currentCheckout.costoEnvio || 150000);
             totalSum += envioCosto;
 
             if (pointDetailsEl) {
@@ -262,26 +262,22 @@ import Logo from '../../components/Logo.astro';
 
                     const { data, error } = await actions.createCheckout({
                         items: payload,
-                        fulfillment: finalCheckout.fulfillment || 'retiro',
+                        fulfillment: (finalCheckout.fulfillment as 'retiro' | 'envio') || 'retiro',
                         pickupPointId: finalCheckout.pickupPointId,
                         direccionEnvio: finalCheckout.direccionEnvio,
-                        costoEnvio: finalCheckout.costoEnvio,
+                        costoEnvio: finalCheckout.costoEnvio ? Number(finalCheckout.costoEnvio) : undefined,
                         referralCode: refCode,
                         paymentMethod: finalCheckout.paymentMethod
                     });
 
-                    if (error || !data?.success) {
+                    if (error || !data?.success || !data?.init_point) {
                         alert(error?.message || data?.error || 'Error procesando checkout');
                         confirmBtn.disabled = false;
                         confirmBtn.innerHTML = 'Finalizar Compra';
                         return;
                     }
 
-                    if (data.init_point.startsWith('/checkout/success')) {
-                        window.location.href = data.init_point;
-                    } else {
-                        window.location.href = data.init_point!;
-                    }
+                    window.location.href = data.init_point;
                 } catch (e) {
                     alert('Error de conexión');
                     confirmBtn.disabled = false;

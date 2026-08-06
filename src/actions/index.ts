@@ -673,12 +673,13 @@ export const server = {
 					return { success: true, init_point: `/checkout/success?order_id=${orderDoc.$id}` };
 				}
 
-				if (!MP_ACCESS_TOKEN) {
+				const mpAccessToken = process.env.MP_ACCESS_TOKEN;
+				if (!mpAccessToken) {
 					// Fallback to fake checkout if no token
 					return { success: true, init_point: 'https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=TEST-123' };
 				}
 
-				const mp = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
+				const mp = new MercadoPagoConfig({ accessToken: mpAccessToken, options: { timeout: 5000 } });
 				const preference = new Preference(mp);
 
 				const result = await preference.create({
@@ -727,9 +728,11 @@ export const server = {
 			
 			try {
 				// Para loguearnos, creamos un cliente sin el API Key, que actúe como cliente web
+				const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
+				const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
 				const authClient = new Client()
-					.setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-					.setProject(PUBLIC_APPWRITE_PROJECT_ID);
+					.setEndpoint(endpoint)
+					.setProject(projectId);
 				
 				const account = new Account(authClient);
 				const session = await account.createEmailPasswordSession(input.email, input.password);
@@ -766,9 +769,11 @@ export const server = {
 			try {
 				const sessionSecret = ctx.cookies.get('up_session')?.value;
 				if (sessionSecret) {
+					const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
+					const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
 					const authClient = new Client()
-						.setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-						.setProject(PUBLIC_APPWRITE_PROJECT_ID)
+						.setEndpoint(endpoint)
+						.setProject(projectId)
 						.setSession(sessionSecret);
 					const account = new Account(authClient);
 					await account.deleteSession('current');

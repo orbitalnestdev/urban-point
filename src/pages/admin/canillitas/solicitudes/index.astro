@@ -8,7 +8,7 @@ const { databases } = createAdminClient();
 
 const estadoParam = Astro.url.searchParams.get('estado') || 'solicitado';
 
-let applications = [];
+let applications: any[] = [];
 try {
 	const queries = [Query.orderDesc('$createdAt')];
 	if (estadoParam !== 'todos') {

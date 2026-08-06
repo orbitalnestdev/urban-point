@@ -146,21 +146,21 @@ export default function ImportCsvModal({}: Props) {
           </div>
 
           {/* Stepper visual */}
-          <div class="flex items-center justify-between text-xs font-bold text-slate-400 px-4">
-            <span class={`flex items-center gap-2 ${step >= 1 ? 'text-slate-900' : ''}`}>
-              <span class={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>1</span> Archivo
+          <div className="flex items-center justify-between text-xs font-bold text-slate-400 px-4">
+            <span className={`flex items-center gap-2 ${step >= 1 ? 'text-slate-900' : ''}`}>
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>1</span> Archivo
             </span>
-            <div class="h-0.5 w-12 bg-slate-200"></div>
-            <span class={`flex items-center gap-2 ${step >= 2 ? 'text-slate-900' : ''}`}>
-              <span class={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>2</span> Columnas
+            <div className="h-0.5 w-12 bg-slate-200"></div>
+            <span className={`flex items-center gap-2 ${step >= 2 ? 'text-slate-900' : ''}`}>
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>2</span> Columnas
             </span>
-            <div class="h-0.5 w-12 bg-slate-200"></div>
-            <span class={`flex items-center gap-2 ${step >= 3 ? 'text-slate-900' : ''}`}>
-              <span class={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>3</span> Vista previa
+            <div className="h-0.5 w-12 bg-slate-200"></div>
+            <span className={`flex items-center gap-2 ${step >= 3 ? 'text-slate-900' : ''}`}>
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>3</span> Vista previa
             </span>
-            <div class="h-0.5 w-12 bg-slate-200"></div>
-            <span class={`flex items-center gap-2 ${step >= 4 ? 'text-slate-900' : ''}`}>
-              <span class={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 4 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>4</span> Importando
+            <div className="h-0.5 w-12 bg-slate-200"></div>
+            <span className={`flex items-center gap-2 ${step >= 4 ? 'text-slate-900' : ''}`}>
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 4 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>4</span> Importando
             </span>
           </div>
         </div>

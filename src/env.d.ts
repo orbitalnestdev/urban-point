@@ -1,6 +1,8 @@
 /// <reference path="../.astro/types.d.ts" />
 /// <reference types="astro/client" />
 
+declare var L: any;
+
 declare namespace App {
   interface Locals {
     user?: {

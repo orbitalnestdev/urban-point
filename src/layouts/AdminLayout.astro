@@ -5,13 +5,15 @@ import Logo from '../components/Logo.astro';
 
 interface Props {
 	title: string;
+	adminName?: string;
 }
 
-const { title } = Astro.props;
+const { title, adminName = Astro.locals?.user?.name ?? 'Admin' } = Astro.props;
 
 // Obtener los datos del usuario inyectados por el middleware
 const userRole = Astro.locals?.user?.role || 'admin';
 const isAdmin = userRole === 'admin';
+const displayAdminName = adminName ?? Astro.locals?.user?.name ?? 'Admin';
 ---
 
 <!doctype html>
@@ -106,10 +108,10 @@ const isAdmin = userRole === 'admin';
 			<div class="p-4 mt-auto">
 				<div class="bg-slate-800 rounded-xl p-4 flex items-center gap-3">
 					<div class="w-10 h-10 rounded-full bg-[#2D5A27] flex items-center justify-center text-white font-bold">
-						{adminName.substring(0,1).toUpperCase()}
+						{(displayAdminName || 'Admin').substring(0,1).toUpperCase()}
 					</div>
 					<div class="flex-1 min-w-0">
-						<p class="text-sm font-bold text-white truncate">{adminName}</p>
+						<p class="text-sm font-bold text-white truncate">{displayAdminName || 'Admin'}</p>
 						<p class="text-xs text-slate-400 font-medium capitalize">{userRole === 'admin' ? 'Administrador' : 'Gestión de Tienda'}</p>
 					</div>
 				</div>

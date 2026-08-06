@@ -30,7 +30,7 @@ export const referralCode = persistentMap<Record<string, string>>(
 );
 
 // Store checkout preferences (pickup point, payment method)
-export const checkoutData = persistentMap<Record<string, string>>(
+export const checkoutData = persistentMap<Record<string, any>>(
 	'urbanpoint_checkout:',
 	{ pickupPointId: '', paymentMethod: 'mercadopago' },
 	{
