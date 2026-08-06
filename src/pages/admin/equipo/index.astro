@@ -2,6 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query, ID } from 'node-appwrite';
+import { CheckCircle, AlertTriangle, Shield, Briefcase } from 'lucide-react';
 
 export const prerender = false;
 
@@ -140,13 +141,15 @@ const totalAdmins = teamMembers.filter(m => m.role === 'admin').length;
 
         {successMessage && (
             <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
-                <span>✅ {successMessage}</span>
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{successMessage}</span>
             </div>
         )}
         
         {errorMessage && (
             <div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
-                <span>⚠️ {errorMessage}</span>
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{errorMessage}</span>
             </div>
         )}
 
@@ -190,12 +193,16 @@ const totalAdmins = teamMembers.filter(m => m.role === 'admin').length;
                                         {member.email}
                                     </td>
                                     <td class="p-4 text-center">
-                                        <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                        <span class={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                                             member.role === 'admin' 
                                                 ? 'bg-purple-50 text-purple-700 border-purple-200' 
                                                 : 'bg-blue-50 text-blue-700 border-blue-200'
                                         }`}>
-                                            {member.role === 'admin' ? '🛡️ Administrador' : '💼 Gestión de Tienda'}
+                                            {member.role === 'admin' ? (
+                                                <><Shield className="w-3 h-3 text-purple-600 shrink-0" /> Administrador</>
+                                            ) : (
+                                                <><Briefcase className="w-3 h-3 text-blue-600 shrink-0" /> Gestión de Tienda</>
+                                            )}
                                         </span>
                                     </td>
                                     <td class="p-4 text-center">

@@ -2,6 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
+import { Store, Truck } from 'lucide-react';
 
 export const prerender = false;
 
@@ -123,7 +124,7 @@ const newCustomers = totalCustomers - recurrentCustomers;
 				<div class="space-y-4">
 					<div>
 						<div class="flex justify-between items-center text-xs font-bold mb-1">
-							<span class="text-purple-700">🏪 Retiro en Punto Canillita ({pctRetiro}%)</span>
+							<span class="text-purple-700 inline-flex items-center gap-1.5"><Store className="w-4 h-4" /> Retiro en Punto Canillita ({pctRetiro}%)</span>
 							<span class="text-slate-900 font-black">{formateador.format(retiroSalesCentavos / 100)}</span>
 						</div>
 						<div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
@@ -134,7 +135,7 @@ const newCustomers = totalCustomers - recurrentCustomers;
 
 					<div>
 						<div class="flex justify-between items-center text-xs font-bold mb-1">
-							<span class="text-blue-700">🚚 Envío a Domicilio ({pctEnvio}%)</span>
+							<span class="text-blue-700 inline-flex items-center gap-1.5"><Truck className="w-4 h-4" /> Envío a Domicilio ({pctEnvio}%)</span>
 							<span class="text-slate-900 font-black">{formateador.format(envioSalesCentavos / 100)}</span>
 						</div>
 						<div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden">

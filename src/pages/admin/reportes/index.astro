@@ -1,5 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { ShoppingCart, Newspaper, CreditCard, Package } from 'lucide-react';
 
 export const prerender = false;
 ---
@@ -24,7 +25,9 @@ export const prerender = false;
 			{/* 1. Reporte de Ventas */}
 			<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
 				<div class="flex items-center gap-3 border-b border-slate-100 pb-3">
-					<div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">🛒</div>
+					<div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+						<ShoppingCart className="w-5 h-5" />
+					</div>
 					<div>
 						<h3 class="font-black text-slate-900 text-sm">Reporte de Ventas</h3>
 						<p class="text-xs text-slate-500">Histórico de pedidos, montos, clientes y modalidad de entrega.</p>
@@ -38,7 +41,9 @@ export const prerender = false;
 			{/* 2. Reporte de Comisiones */}
 			<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
 				<div class="flex items-center gap-3 border-b border-slate-100 pb-3">
-					<div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">📰</div>
+					<div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+						<Newspaper className="w-5 h-5" />
+					</div>
 					<div>
 						<h3 class="font-black text-slate-900 text-sm">Reporte de Comisiones</h3>
 						<p class="text-xs text-slate-500">Devengamientos por canillita, porcentaje aplicado y estado de pago.</p>
@@ -52,7 +57,9 @@ export const prerender = false;
 			{/* 3. Reporte de Liquidaciones */}
 			<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
 				<div class="flex items-center gap-3 border-b border-slate-100 pb-3">
-					<div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">💳</div>
+					<div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+						<CreditCard className="w-5 h-5" />
+					</div>
 					<div>
 						<h3 class="font-black text-slate-900 text-sm">Reporte de Liquidaciones Realizadas</h3>
 						<p class="text-xs text-slate-500">Histórico de transferencias pagadas a canillitas con comprobante.</p>
@@ -66,7 +73,9 @@ export const prerender = false;
 			{/* 4. Reporte de Inventario */}
 			<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
 				<div class="flex items-center gap-3 border-b border-slate-100 pb-3">
-					<div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">📦</div>
+					<div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+						<Package className="w-5 h-5" />
+					</div>
 					<div>
 						<h3 class="font-black text-slate-900 text-sm">Inventario & Valorización de Stock</h3>
 						<p class="text-xs text-slate-500">Detalle de productos, stock disponible y valorización económica.</p>

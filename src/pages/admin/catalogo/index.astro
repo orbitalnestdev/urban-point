@@ -3,6 +3,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 import NewProductModal from '../../../components/admin/NewProductModal.tsx';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
+import { FileEdit, AlertTriangle, Image as ImageIcon, CheckCircle, Package, PauseCircle, DollarSign, ExternalLink, Check } from 'lucide-react';
 
 export const prerender = false;
 
@@ -118,7 +119,7 @@ const now = Date.now();
 				{numBorradores > 0 && (
 					<div class="bg-amber-50/70 border border-amber-200 p-4 rounded-2xl relative cursor-pointer hover:shadow-md transition-all" onclick="window.location.href='/admin/catalogo?borradores=true'">
 						<p class="absolute top-4 right-4 text-3xl font-black text-amber-700">{numBorradores}</p>
-						<div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center mb-2 font-bold">📝</div>
+						<div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center mb-2 font-bold"><FileEdit className="w-4 h-4" /></div>
 						<h3 class="font-extrabold text-slate-900 text-sm">Borradores sin publicar</h3>
 						<p class="text-xs text-slate-500 mt-0.5">Completar ficha y activar &rarr;</p>
 					</div>
@@ -127,7 +128,7 @@ const now = Date.now();
 				{numSinStock > 0 && (
 					<div class="bg-rose-50/70 border border-rose-200 p-4 rounded-2xl relative cursor-pointer hover:shadow-md transition-all" onclick="window.location.href='/admin/catalogo?estado=activo'">
 						<p class="absolute top-4 right-4 text-3xl font-black text-rose-700">{numSinStock}</p>
-						<div class="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mb-2 font-bold">⚠️</div>
+						<div class="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mb-2 font-bold"><AlertTriangle className="w-4 h-4" /></div>
 						<h3 class="font-extrabold text-slate-900 text-sm">Publicados sin stock</h3>
 						<p class="text-xs text-slate-500 mt-0.5">Ingresar reposición &rarr;</p>
 					</div>
@@ -136,7 +137,7 @@ const now = Date.now();
 				{numSinFoto > 0 && (
 					<div class="bg-slate-50/70 border border-slate-200 p-4 rounded-2xl relative cursor-pointer hover:shadow-md transition-all">
 						<p class="absolute top-4 right-4 text-3xl font-black text-slate-900">{numSinFoto}</p>
-						<div class="w-8 h-8 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center mb-2 font-bold">🖼️</div>
+						<div class="w-8 h-8 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center mb-2 font-bold"><ImageIcon className="w-4 h-4" /></div>
 						<h3 class="font-extrabold text-slate-900 text-sm">Sin imagen principal</h3>
 						<p class="text-xs text-slate-500 mt-0.5">Subir portada &rarr;</p>
 					</div>
@@ -144,14 +145,15 @@ const now = Date.now();
 			</div>
 		) : (
 			<div class="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-emerald-800 text-xs font-bold flex items-center gap-2">
-				<span>✅ Catálogo en orden: Todos los productos publicados tienen stock e imagen asignada.</span>
+				<CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+				<span>Catálogo en orden: Todos los productos publicados tienen stock e imagen asignada.</span>
 			</div>
 		)}
 
 		{/* Resumen General Horizontal Vivos */}
 		<div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
 			<div class="flex items-center gap-3 px-2">
-				<div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-bold">📦</div>
+				<div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-bold"><Package className="w-4 h-4" /></div>
 				<div>
 					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Productos</p>
 					<p class="text-xl font-black text-slate-900">{total}</p>
@@ -159,7 +161,7 @@ const now = Date.now();
 			</div>
 
 			<div class="flex items-center gap-3 px-2 border-l border-slate-100 pl-4">
-				<div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">✅</div>
+				<div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold"><CheckCircle className="w-4 h-4" /></div>
 				<div>
 					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Publicados</p>
 					<p class="text-xl font-black text-emerald-600">{activos}</p>
@@ -167,7 +169,7 @@ const now = Date.now();
 			</div>
 
 			<div class="flex items-center gap-3 px-2 border-l border-slate-100 pl-4">
-				<div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">⏸️</div>
+				<div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold"><PauseCircle className="w-4 h-4" /></div>
 				<div>
 					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pausados</p>
 					<p class="text-xl font-black text-amber-600">{pausados}</p>
@@ -175,7 +177,7 @@ const now = Date.now();
 			</div>
 
 			<div class="flex items-center gap-3 px-2 border-l border-slate-100 pl-4">
-				<div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center font-bold">📝</div>
+				<div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center font-bold"><FileEdit className="w-4 h-4" /></div>
 				<div>
 					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Borradores</p>
 					<p class="text-xl font-black text-slate-700">{numBorradores}</p>
@@ -183,7 +185,7 @@ const now = Date.now();
 			</div>
 
 			<div class="flex items-center gap-3 px-2 border-l border-slate-100 pl-4 flex-1">
-				<div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">💰</div>
+				<div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold"><DollarSign className="w-4 h-4" /></div>
 				<div>
 					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Valor del Catálogo Activo</p>
 					<p class="text-lg font-black text-slate-900">{formateador.format(valorTotalCentavos / 100)}</p>
@@ -351,9 +353,9 @@ const now = Date.now();
 											class="select-state-table px-2.5 py-1 rounded-full text-[10px] font-bold border outline-none cursor-pointer transition-colors"
 											value={product.estado}
 										>
-											<option value="activo" selected={product.estado === 'activo'}>🟢 Publicado</option>
-											<option value="pausado" selected={product.estado === 'pausado'}>🟡 Pausado</option>
-											<option value="borrador" selected={product.estado === 'borrador'}>📝 Borrador</option>
+											<option value="activo" selected={product.estado === 'activo'}>Publicado</option>
+											<option value="pausado" selected={product.estado === 'pausado'}>Pausado</option>
+											<option value="borrador" selected={product.estado === 'borrador'}>Borrador</option>
 										</select>
 									</td>
 
@@ -405,10 +407,10 @@ const now = Date.now();
 			{/* Sub-Header con Enlace Secundario al Editor Completo */}
 			<div class="px-6 py-3 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
 				<a href="#" id="qe-link-full" class="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 transition-colors">
-					🔗 Abrir editor completo
+					<ExternalLink className="w-3.5 h-3.5" /> Abrir editor completo
 				</a>
-				<span class="text-[10px] font-bold text-emerald-600 opacity-0 transition-opacity" id="qe-saved-indicator">
-					✓ Guardado
+				<span class="text-[10px] font-bold text-emerald-600 opacity-0 transition-opacity flex items-center gap-1" id="qe-saved-indicator">
+					<Check className="w-3 h-3" /> Guardado
 				</span>
 			</div>
 
@@ -422,19 +424,19 @@ const now = Date.now();
 						<label class="text-center cursor-pointer">
 							<input type="radio" name="qe-estado" value="activo" class="peer sr-only" />
 							<div class="px-2 py-2 rounded-lg text-xs font-bold text-slate-500 peer-checked:bg-emerald-600 peer-checked:text-white transition-all">
-								🟢 Publicado
+								Publicado
 							</div>
 						</label>
 						<label class="text-center cursor-pointer">
 							<input type="radio" name="qe-estado" value="pausado" class="peer sr-only" />
 							<div class="px-2 py-2 rounded-lg text-xs font-bold text-slate-500 peer-checked:bg-amber-500 peer-checked:text-white transition-all">
-								🟡 Pausado
+								Pausado
 							</div>
 						</label>
 						<label class="text-center cursor-pointer">
 							<input type="radio" name="qe-estado" value="borrador" class="peer sr-only" />
 							<div class="px-2 py-2 rounded-lg text-xs font-bold text-slate-500 peer-checked:bg-slate-700 peer-checked:text-white transition-all">
-								📝 Borrador
+								Borrador
 							</div>
 						</label>
 					</div>

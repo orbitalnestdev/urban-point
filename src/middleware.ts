@@ -74,7 +74,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
 						<head><title>Acceso Denegado - UrbanPoint</title><meta charset="utf-8"/><script src="https://cdn.tailwindcss.com"></script></head>
 						<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center p-6">
 							<div class="max-w-md w-full bg-slate-800 border border-slate-700 rounded-3xl p-8 text-center space-y-4 shadow-2xl">
-								<div class="w-16 h-16 bg-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center mx-auto text-3xl font-black">🚫</div>
+								<div class="w-16 h-16 bg-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+									<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+								</div>
 								<h1 class="text-2xl font-black">Acceso Denegado (403)</h1>
 								<p class="text-slate-400 text-xs leading-relaxed">Tu rol de <strong>Gestión de Tienda</strong> no tiene permiso para acceder a esta sección. Contactá a un Administrador.</p>
 								<a href="/admin/pedidos" class="inline-block px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors">Volver al Panel</a>

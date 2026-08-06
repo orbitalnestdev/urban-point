@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { getSiteSettings, saveSiteSetting } from '../../../lib/server/settings';
+import { CheckCircle, AlertTriangle, Store, Phone, MessageSquare, Newspaper, Truck, CreditCard, Bell, Search } from 'lucide-react';
 
 export const prerender = false;
 
@@ -52,13 +53,15 @@ if (Astro.request.method === 'POST') {
 
 			{successMessage && (
 				<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-bold mb-6 flex items-center gap-2">
-					<span>✅ {successMessage}</span>
+					<CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+					<span>{successMessage}</span>
 				</div>
 			)}
 			
 			{errorMessage && (
 				<div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-xs font-bold mb-6 flex items-center gap-2">
-					<span>⚠️ {errorMessage}</span>
+					<AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+					<span>{errorMessage}</span>
 				</div>
 			)}
 
@@ -68,22 +71,26 @@ if (Astro.request.method === 'POST') {
 				<div class="lg:col-span-1 space-y-1">
 					<div class="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm sticky top-24 space-y-1">
 						{[
-							{ id: 'sec-tienda', label: '🏪 Tienda & Identidad' },
-							{ id: 'sec-contacto', label: '📞 Contacto & Redes' },
-							{ id: 'sec-whatsapp', label: '💬 Botón Flotante WhatsApp' },
-							{ id: 'sec-canillitas', label: '📰 Red de Canillitas & Comisiones' },
-							{ id: 'sec-envios', label: '🚚 Envíos & Retiro en Punto' },
-							{ id: 'sec-pagos', label: '💳 Pagos & Mercado Pago' },
-							{ id: 'sec-notificaciones', label: '🔔 Notificaciones & Emails' },
-							{ id: 'sec-seo', label: '🔍 SEO & Legales' }
-						].map(item => (
-							<a 
-								href={`#${item.id}`} 
-								class="block px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-							>
-								{item.label}
-							</a>
-						))}
+							{ id: 'sec-tienda', label: 'Tienda & Identidad', icon: Store },
+							{ id: 'sec-contacto', label: 'Contacto & Redes', icon: Phone },
+							{ id: 'sec-whatsapp', label: 'Botón Flotante WhatsApp', icon: MessageSquare },
+							{ id: 'sec-canillitas', label: 'Red de Canillitas & Comisiones', icon: Newspaper },
+							{ id: 'sec-envios', label: 'Envíos & Retiro en Punto', icon: Truck },
+							{ id: 'sec-pagos', label: 'Pagos & Mercado Pago', icon: CreditCard },
+							{ id: 'sec-notificaciones', label: 'Notificaciones & Emails', icon: Bell },
+							{ id: 'sec-seo', label: 'SEO & Legales', icon: Search }
+						].map(item => {
+							const IconComponent = item.icon;
+							return (
+								<a 
+									href={`#${item.id}`} 
+									class="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+								>
+									<IconComponent className="w-4 h-4 text-slate-500 shrink-0" />
+									{item.label}
+								</a>
+							);
+						})}
 					</div>
 				</div>
 

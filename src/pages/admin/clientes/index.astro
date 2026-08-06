@@ -2,6 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
+import { Users, RefreshCw, CreditCard } from 'lucide-react';
 
 export const prerender = false;
 
@@ -107,7 +108,7 @@ const gastoPromedioCentavos = totalClientesCount > 0 ? Math.round(totalGastadoGe
 					<p class="text-3xl font-black text-slate-900">{totalClientesCount}</p>
 				</div>
 				<div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xl">
-					👥
+					<Users className="w-5 h-5" />
 				</div>
 			</div>
 
@@ -118,7 +119,7 @@ const gastoPromedioCentavos = totalClientesCount > 0 ? Math.round(totalGastadoGe
 					<p class="text-[10px] text-slate-400 mt-0.5">{clientesRecurrentesCount} de {totalClientesCount} realizaron &gt;1 compra</p>
 				</div>
 				<div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xl">
-					🔄
+					<RefreshCw className="w-5 h-5" />
 				</div>
 			</div>
 
@@ -128,7 +129,7 @@ const gastoPromedioCentavos = totalClientesCount > 0 ? Math.round(totalGastadoGe
 					<p class="text-2xl font-black text-slate-900">{formateador.format(gastoPromedioCentavos / 100)}</p>
 				</div>
 				<div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-xl">
-					💳
+					<CreditCard className="w-5 h-5" />
 				</div>
 			</div>
 		</div>
@@ -214,7 +215,7 @@ const gastoPromedioCentavos = totalClientesCount > 0 ? Math.round(totalGastadoGe
 											? 'bg-purple-50 text-purple-700 border-purple-200' 
 											: 'bg-emerald-50 text-emerald-700 border-emerald-200'
 									}`}>
-										{c.role === 'canillita' ? '📰 CANILLITA' : '🛍️ CLIENTE'}
+										{c.role === 'canillita' ? 'CANILLITA' : 'CLIENTE'}
 									</span>
 								</td>
 								<td class="p-4 text-center font-bold text-slate-700">
