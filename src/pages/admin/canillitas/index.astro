@@ -330,7 +330,7 @@ const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
 				if (!id || !confirm('¿Estás seguro de eliminar este punto de retiro?')) return;
 				const { data, error } = await actions.deletePickupPointAdmin({ id });
 				if (error || !data?.success) {
-					alert(error?.message || 'Error al eliminar');
+					alert(error?.message || data?.error || 'Error al eliminar');
 				} else {
 					window.location.reload();
 				}

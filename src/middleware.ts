@@ -5,16 +5,14 @@ import { createAdminClient } from './lib/server/appwrite';
 
 export const onRequest = defineMiddleware(async (context, next) => {
 	const { pathname } = context.url;
-	const isProtectedRoute = (pathname.startsWith('/admin') || pathname.startsWith('/canillita')) && !pathname.includes('/login');
-	
-	if (!isProtectedRoute) {
-		return next();
-	}
-
 	const sessionSecret = context.cookies.get('up_session')?.value;
+	const isProtectedPage = (pathname.startsWith('/admin') || pathname.startsWith('/canillita')) && !pathname.includes('/login');
 	
 	if (!sessionSecret) {
-		return context.redirect('/login');
+		if (isProtectedPage) {
+			return context.redirect('/login');
+		}
+		return next();
 	}
 
 	try {
