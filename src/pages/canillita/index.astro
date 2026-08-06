@@ -307,24 +307,58 @@ const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCod
 				)}
 			</div>
 
-			{/* Sección 3 — Link de Referido */}
+			{/* Sección 3 — Link de Referido, WhatsApp y QR */}
 			{referralCodeDoc && (
-				<div class="bg-white rounded-3xl shadow-xs border border-slate-200 p-8">
-					<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+				<div class="bg-white rounded-3xl shadow-xs border border-slate-200 p-8 space-y-6">
+					<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-slate-100 pb-6">
 						<div>
-							<span class="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 font-bold text-xs rounded-full uppercase tracking-wider mb-2">Código de Referidos</span>
+							<span class="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 font-bold text-xs rounded-full uppercase tracking-wider mb-2">
+								Link Exclusivo de Referido
+							</span>
 							<h3 class="text-2xl font-black text-slate-900">
 								Tu Código: <span class="text-indigo-600 font-mono tracking-wider">{referralCodeDoc.code}</span>
 							</h3>
-							<p class="text-slate-500 text-xs mt-1">Comparte este link con tus clientes para sumar comisiones por ventas referidas.</p>
+							<p class="text-slate-500 text-xs mt-1">Compartí este link con tus clientes para sumar comisiones del {point.comision_pct || 10.0}% en cada venta.</p>
 						</div>
 
 						<div class="flex flex-col sm:flex-row items-center gap-3">
 							<input type="text" readOnly value={shareUrl} class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 w-full sm:w-80 outline-none" />
-							<button id="btn-copiar-link" data-url={shareUrl} class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all shrink-0 cursor-pointer">
+							<button id="btn-copiar-link" data-url={shareUrl} class="px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-all shrink-0 cursor-pointer">
 								Copiar Link
 							</button>
+							<a 
+								href={`https://wa.me/?text=${encodeURIComponent(`¡Hola! Te comparto mi link exclusivo para comprar en UrbanPoint: ${shareUrl}`)}`}
+								target="_blank" 
+								rel="noopener noreferrer"
+								class="px-5 py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 shrink-0"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+								Compartir por WhatsApp
+							</a>
 						</div>
+					</div>
+
+					{/* Código QR para Impresión en Kiosco */}
+					<div class="flex flex-col md:flex-row items-center justify-between gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+						<div class="flex items-center gap-4">
+							<div class="w-24 h-24 bg-white p-2 border border-slate-200 rounded-xl shadow-sm shrink-0 flex items-center justify-center">
+								<img 
+									src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`} 
+									alt="Código QR Referido Canillita" 
+									class="w-full h-full object-contain" 
+								/>
+							</div>
+							<div>
+								<h4 class="font-bold text-slate-900 text-sm">Código QR para tu Local</h4>
+								<p class="text-xs text-slate-500 mt-1 max-w-md">Imprimí este código QR y pegalo en tu Kiosco de Diarios para que tus vecinos escaneen y compren directo desde tu punto.</p>
+							</div>
+						</div>
+						<button 
+							onclick="window.print()" 
+							class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-colors shadow-sm flex items-center gap-2 shrink-0 cursor-pointer"
+						>
+							🬀 Imprimir Cartel con QR
+						</button>
 					</div>
 				</div>
 			)}

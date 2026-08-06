@@ -1,0 +1,194 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { createAdminClient } from '../../lib/server/appwrite';
+import { Query } from 'node-appwrite';
+
+export const prerender = false;
+
+const periodParam = Astro.url.searchParams.get('periodo') || '30';
+
+const { databases } = createAdminClient();
+let orders: any[] = [];
+let pickupPoints: any[] = [];
+let categories: any[] = [];
+
+try {
+	const resOrders = await databases.listDocuments('urbanpoint', 'orders', [
+		Query.orderDesc('$createdAt'),
+		Query.limit(500)
+	]);
+	orders = resOrders.documents.filter(o => o.estado !== 'cancelado');
+
+	const resPoints = await databases.listDocuments('urbanpoint', 'pickup_points');
+	pickupPoints = resPoints.documents;
+
+	const resCats = await databases.listDocuments('urbanpoint', 'categories');
+	categories = resCats.documents;
+} catch (e) {
+	console.error("Analysis Error:", e);
+}
+
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+
+// Period Filter
+const nowMs = Date.now();
+const days = parseInt(periodParam, 10) || 30;
+const cutoffMs = periodParam === 'todo' ? 0 : nowMs - (days * 24 * 60 * 60 * 1000);
+
+const filteredOrders = cutoffMs > 0 
+	? orders.filter(o => new Date(o.$createdAt).getTime() >= cutoffMs) 
+	: orders;
+
+// 1. Delivery vs Pickup Breakdown
+const retiroOrders = filteredOrders.filter(o => o.fulfillment === 'retiro');
+const envioOrders = filteredOrders.filter(o => o.fulfillment !== 'retiro');
+
+const totalSalesCentavos = filteredOrders.reduce((acc, o) => acc + (o.total || 0), 0);
+const retiroSalesCentavos = retiroOrders.reduce((acc, o) => acc + (o.total || 0), 0);
+const envioSalesCentavos = envioOrders.reduce((acc, o) => acc + (o.total || 0), 0);
+
+const pctRetiro = totalSalesCentavos > 0 ? Math.round((retiroSalesCentavos / totalSalesCentavos) * 100) : 0;
+const pctEnvio = totalSalesCentavos > 0 ? Math.round((envioSalesCentavos / totalSalesCentavos) * 100) : 0;
+
+// 2. Ranking de Canillitas / Puntos de Retiro
+const pointSalesMap: Record<string, { nombre: string; ventasCentavos: number; pedidosCount: number }> = {};
+for (const pt of pickupPoints) {
+	pointSalesMap[pt.$id] = { nombre: pt.nombre_comercial, ventasCentavos: 0, pedidosCount: 0 };
+}
+
+for (const o of retiroOrders) {
+	const ptId = typeof o.pickup_point_id === 'string' ? o.pickup_point_id : o.pickup_point_id?.$id;
+	if (ptId && pointSalesMap[ptId]) {
+		pointSalesMap[ptId].ventasCentavos += (o.total || 0);
+		pointSalesMap[ptId].pedidosCount += 1;
+	}
+}
+
+const pointRanking = Object.values(pointSalesMap)
+	.sort((a, b) => b.ventasCentavos - a.ventasCentavos);
+
+// 3. Clientes Nuevos vs Recurrentes
+const customerOrderCounts: Record<string, number> = {};
+for (const o of filteredOrders) {
+	if (o.customer_id) {
+		const cId = typeof o.customer_id === 'string' ? o.customer_id : o.customer_id?.$id;
+		if (cId) customerOrderCounts[cId] = (customerOrderCounts[cId] || 0) + 1;
+	}
+}
+const totalCustomers = Object.keys(customerOrderCounts).length;
+const recurrentCustomers = Object.values(customerOrderCounts).filter(cnt => cnt > 1).length;
+const newCustomers = totalCustomers - recurrentCustomers;
+---
+
+<AdminLayout title="Análisis de Tendencias">
+	<main class="p-8 max-w-[1600px] mx-auto space-y-6">
+		
+		<header class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+			<div>
+				<div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+					<span>Administración</span> &gt; <span class="text-slate-900">Análisis</span>
+				</div>
+				<h1 class="text-2xl font-black text-slate-900 tracking-tight">
+					Análisis & Tendencias de Negocio
+				</h1>
+				<p class="text-xs text-slate-500 font-medium mt-0.5">Respuestas concretas sobre el comportamiento de ventas y rotación.</p>
+			</div>
+
+			{/* Selector de Período */}
+			<div class="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+				{[
+					{ id: '7', label: '7 Días' },
+					{ id: '30', label: '30 Días' },
+					{ id: '90', label: '90 Días' },
+					{ id: 'todo', label: 'Histórico' }
+				].map(p => (
+					<a 
+						href={`/admin/analisis?periodo=${p.id}`}
+						class={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+							periodParam === p.id 
+								? 'bg-slate-900 text-white shadow-sm' 
+								: 'text-slate-600 hover:bg-slate-50'
+						}`}
+					>
+						{p.label}
+					</a>
+				))}
+			</div>
+		</header>
+
+		{/* 1. Modalidad de Entrega: Retiro en Punto vs Envío */}
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+			<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+				<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">Canales de Entrega</h3>
+				<div class="space-y-4">
+					<div>
+						<div class="flex justify-between items-center text-xs font-bold mb-1">
+							<span class="text-purple-700">🏪 Retiro en Punto Canillita ({pctRetiro}%)</span>
+							<span class="text-slate-900 font-black">{formateador.format(retiroSalesCentavos / 100)}</span>
+						</div>
+						<div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+							<div class="bg-purple-600 h-full rounded-full" style={`width: ${pctRetiro}%`}></div>
+						</div>
+						<p class="text-[10px] text-slate-400 mt-1">{retiroOrders.length} pedidos concretados por la red de canillitas</p>
+					</div>
+
+					<div>
+						<div class="flex justify-between items-center text-xs font-bold mb-1">
+							<span class="text-blue-700">🚚 Envío a Domicilio ({pctEnvio}%)</span>
+							<span class="text-slate-900 font-black">{formateador.format(envioSalesCentavos / 100)}</span>
+						</div>
+						<div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+							<div class="bg-blue-600 h-full rounded-full" style={`width: ${pctEnvio}%`}></div>
+						</div>
+						<p class="text-[10px] text-slate-400 mt-1">{envioOrders.length} pedidos enviados a domicilio</p>
+					</div>
+				</div>
+			</div>
+
+			<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+				<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">Compradores Nuevos vs Recurrentes</h3>
+				<div class="grid grid-cols-2 gap-4 pt-2">
+					<div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+						<p class="text-xs font-bold text-slate-400 uppercase">Clientes Recurrentes</p>
+						<p class="text-3xl font-black text-indigo-600 mt-1">{recurrentCustomers}</p>
+						<p class="text-[10px] text-slate-500 mt-1">Realizaron &gt;1 compra</p>
+					</div>
+					<div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+						<p class="text-xs font-bold text-slate-400 uppercase">Clientes Nuevos</p>
+						<p class="text-3xl font-black text-emerald-600 mt-1">{newCustomers}</p>
+						<p class="text-[10px] text-slate-500 mt-1">Primera compra en el período</p>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		{/* 2. Ranking Puntos de Retiro */}
+		<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+			<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">Ranking de Puntos de Retiro Canillita</h3>
+			<div class="overflow-x-auto">
+				<table class="w-full text-left border-collapse text-xs">
+					<thead>
+						<tr class="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+							<th class="p-3">Punto de Retiro</th>
+							<th class="p-3 text-center">Pedidos Atendidos</th>
+							<th class="p-3 text-right">Volumen Total Vendido</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-100">
+						{pointRanking.map((pt, idx) => (
+							<tr class="hover:bg-slate-50">
+								<td class="p-3 font-bold text-slate-900 flex items-center gap-2">
+									<span class="w-5 h-5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-black flex items-center justify-center">{idx + 1}</span>
+									{pt.nombre}
+								</td>
+								<td class="p-3 text-center font-bold text-slate-700">{pt.pedidosCount} pedidos</td>
+								<td class="p-3 text-right font-black text-slate-900">{formateador.format(pt.ventasCentavos / 100)}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</div>
+
+	</main>
+</AdminLayout>

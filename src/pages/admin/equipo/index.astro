@@ -1,130 +1,287 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { createAdminClient } from '../../../lib/server/appwrite';
+import { Query, ID } from 'node-appwrite';
 
 export const prerender = false;
 
-// Protección de ruta (el middleware ya protege /admin, pero verificamos locals)
-const user = Astro.locals?.user;
-if (!user || user.role !== 'admin') {
-    return Astro.redirect('/login');
+const currentUser = Astro.locals?.user;
+if (!currentUser || currentUser.role !== 'admin') {
+    return Astro.redirect('/admin/pedidos');
 }
 
-// Simulamos los miembros del equipo por ahora
-const teamMembers = [
-    { id: '1', nombre: 'Carlos Admin', email: 'carlos@urbanpoint.com.ar', rol: 'Administrador', estado: 'Activo', ultimoAcceso: 'Hace 2 horas' },
-    { id: '2', nombre: 'Laura Soporte', email: 'laura@urbanpoint.com.ar', rol: 'Soporte', estado: 'Activo', ultimoAcceso: 'Ayer' },
-    { id: '3', nombre: 'Martín Cajero', email: 'martin@urbanpoint.com.ar', rol: 'Cajero', estado: 'Inactivo', ultimoAcceso: 'Hace 1 semana' }
-];
+const { databases } = createAdminClient();
 
+let teamMembers: any[] = [];
+let successMessage = '';
+let errorMessage = '';
+
+// Handle POST actions: Invitar, Cambiar Rol, Eliminar
+if (Astro.request.method === 'POST') {
+    try {
+        const formData = await Astro.request.formData();
+        const action = formData.get('action')?.toString();
+
+        if (action === 'invite') {
+            const email = formData.get('email')?.toString().trim();
+            const nombre = formData.get('nombre')?.toString().trim();
+            const role = formData.get('role')?.toString() || 'gestion';
+
+            if (!email || !nombre) {
+                throw new Error("El email y el nombre son obligatorios.");
+            }
+
+            // Check if profile exists
+            const existing = await databases.listDocuments('urbanpoint', 'profiles', [
+                Query.equal('email', email)
+            ]);
+
+            if (existing.documents.length > 0) {
+                await databases.updateDocument('urbanpoint', 'profiles', existing.documents[0].$id, {
+                    role
+                });
+                successMessage = `Se actualizó el rol de ${nombre} a ${role === 'admin' ? 'Administrador' : 'Gestión de Tienda'}.`;
+            } else {
+                await databases.createDocument('urbanpoint', 'profiles', ID.unique(), {
+                    user_id: ID.unique(),
+                    nombre,
+                    email,
+                    role,
+                    estado: 'activo'
+                });
+                successMessage = `Se invitó exitosamente a ${nombre} (${email}) con el rol de ${role === 'admin' ? 'Administrador' : 'Gestión de Tienda'}.`;
+            }
+        } else if (action === 'change_role') {
+            const memberId = formData.get('member_id')?.toString();
+            const newRole = formData.get('new_role')?.toString();
+
+            if (!memberId || !newRole) throw new Error("Parámetros inválidos.");
+
+            const memberDoc = await databases.getDocument('urbanpoint', 'profiles', memberId);
+
+            if (memberDoc.user_id === currentUser.id) {
+                throw new Error("No podés modificar tu propio rol.");
+            }
+
+            // Protect last admin
+            const allAdmins = await databases.listDocuments('urbanpoint', 'profiles', [
+                Query.equal('role', 'admin')
+            ]);
+            if (memberDoc.role === 'admin' && newRole !== 'admin' && allAdmins.documents.length <= 1) {
+                throw new Error("No se puede degradar al único Administrador de la tienda.");
+            }
+
+            await databases.updateDocument('urbanpoint', 'profiles', memberId, {
+                role: newRole
+            });
+            successMessage = "Rol de miembro actualizado correctamente.";
+        } else if (action === 'delete') {
+            const memberId = formData.get('member_id')?.toString();
+            if (!memberId) throw new Error("Parámetros inválidos.");
+
+            const memberDoc = await databases.getDocument('urbanpoint', 'profiles', memberId);
+            if (memberDoc.user_id === currentUser.id) {
+                throw new Error("No podés eliminar tu propia cuenta desde el panel.");
+            }
+
+            const allAdmins = await databases.listDocuments('urbanpoint', 'profiles', [
+                Query.equal('role', 'admin')
+            ]);
+            if (memberDoc.role === 'admin' && allAdmins.documents.length <= 1) {
+                throw new Error("Protección del último administrador: No podés eliminar al único Administrador activo.");
+            }
+
+            await databases.deleteDocument('urbanpoint', 'profiles', memberId);
+            successMessage = "Miembro eliminado del equipo correctamente.";
+        }
+    } catch (e: any) {
+        console.error("Team action error:", e);
+        errorMessage = e.message || "Ocurrió un error al procesar la acción.";
+    }
+}
+
+// Fetch real team members (admin & gestion roles)
+try {
+    const res = await databases.listDocuments('urbanpoint', 'profiles', [
+        Query.orderDesc('$createdAt'),
+        Query.limit(100)
+    ]);
+    // Filter profiles that belong to store staff (admin or gestion)
+    teamMembers = res.documents.filter(p => p.role === 'admin' || p.role === 'gestion');
+} catch (e) {
+    console.error("Error fetching team members:", e);
+}
+
+const totalAdmins = teamMembers.filter(m => m.role === 'admin').length;
 ---
 
 <AdminLayout title="Equipo de Trabajo">
-    <div class="max-w-6xl mx-auto">
+    <main class="p-8 max-w-[1400px] mx-auto space-y-6">
         
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        {/* Header */}
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Equipo de Trabajo</h1>
-                <p class="text-slate-500 mt-1">Gestioná los accesos y roles de los miembros de tu tienda.</p>
+                <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    <span>Administración</span> &gt; <span class="text-slate-900">Equipo</span>
+                </div>
+                <h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                    Equipo de Trabajo
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        {teamMembers.length} miembros
+                    </span>
+                </h1>
             </div>
             
-            <button onclick="document.getElementById('modal-invitar').classList.remove('hidden')" class="px-5 py-2.5 bg-[#2D5A27] hover:bg-[#23471F] text-white font-bold rounded-xl flex items-center gap-2 transition-colors shadow-sm cursor-pointer">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-                Invitar Miembro
+            <button onclick="document.getElementById('modal-invitar').classList.remove('hidden')" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-colors shadow-md cursor-pointer">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+                Invitar Miembro al Equipo
             </button>
-        </div>
+        </header>
 
-        <!-- Tabla de Miembros -->
+        {successMessage && (
+            <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <span>✅ {successMessage}</span>
+            </div>
+        )}
+        
+        {errorMessage && (
+            <div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <span>⚠️ {errorMessage}</span>
+            </div>
+        )}
+
+        {/* Tabla de Miembros Reales */}
         <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
                     <thead>
-                        <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
-                            <th class="p-4 font-bold">Miembro</th>
-                            <th class="p-4 font-bold">Rol</th>
-                            <th class="p-4 font-bold">Estado</th>
-                            <th class="p-4 font-bold">Último Acceso</th>
-                            <th class="p-4 font-bold text-right">Acciones</th>
+                        <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                            <th class="p-4">Miembro</th>
+                            <th class="p-4">Email</th>
+                            <th class="p-4 text-center">Rol Asignado</th>
+                            <th class="p-4 text-center">Cambiar Rol</th>
+                            <th class="p-4 text-center">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100 text-sm">
-                        {teamMembers.map(member => (
-                            <tr class="hover:bg-slate-50/50 transition-colors">
-                                <td class="p-4">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-full bg-[#F2F7F3] text-[#2D5A27] font-bold flex items-center justify-center shrink-0">
-                                            {member.nombre.substring(0, 1).toUpperCase()}
+                    <tbody class="divide-y divide-slate-100 text-xs">
+                        {teamMembers.map(member => {
+                            const isSelf = member.user_id === currentUser.id;
+                            const isOnlyAdmin = member.role === 'admin' && totalAdmins <= 1;
+
+                            return (
+                                <tr class="hover:bg-slate-50/80 transition-colors">
+                                    <td class="p-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-9 h-9 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center shrink-0">
+                                                {member.nombre?.substring(0, 2).toUpperCase() || 'U'}
+                                            </div>
+                                            <div>
+                                                <p class="font-bold text-slate-900 flex items-center gap-2">
+                                                    {member.nombre || 'Sin Nombre'}
+                                                    {isSelf && (
+                                                        <span class="bg-slate-100 text-slate-600 text-[9px] px-1.5 py-0.2 rounded font-mono font-bold">(TÚ)</span>
+                                                    )}
+                                                </p>
+                                                <p class="text-[10px] text-slate-400 font-mono">ID: {member.$id.substring(0, 10)}...</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p class="font-bold text-slate-900">{member.nombre}</p>
-                                            <p class="text-xs text-slate-500">{member.email}</p>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="p-4">
-                                    <span class={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
-                                        member.rol === 'Administrador' ? 'bg-purple-100 text-purple-700' :
-                                        member.rol === 'Soporte' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
-                                    }`}>
-                                        {member.rol}
-                                    </span>
-                                </td>
-                                <td class="p-4">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class={`w-2 h-2 rounded-full ${member.estado === 'Activo' ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
-                                        <span class="font-medium text-slate-700">{member.estado}</span>
-                                    </div>
-                                </td>
-                                <td class="p-4 text-slate-500 font-medium">
-                                    {member.ultimoAcceso}
-                                </td>
-                                <td class="p-4 text-right">
-                                    <button class="text-slate-400 hover:text-[#2D5A27] p-2 transition-colors cursor-pointer" title="Editar">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                                    </button>
+                                    </td>
+                                    <td class="p-4 font-medium text-slate-700">
+                                        {member.email}
+                                    </td>
+                                    <td class="p-4 text-center">
+                                        <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                            member.role === 'admin' 
+                                                ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                                        }`}>
+                                            {member.role === 'admin' ? '🛡️ Administrador' : '💼 Gestión de Tienda'}
+                                        </span>
+                                    </td>
+                                    <td class="p-4 text-center">
+                                        {isSelf ? (
+                                            <span class="text-[10px] text-slate-400 italic">Tu propio perfil</span>
+                                        ) : isOnlyAdmin ? (
+                                            <span class="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-bold" title="No se puede degradar al único Administrador">
+                                                Único Admin
+                                            </span>
+                                        ) : (
+                                            <form method="POST" class="inline-flex items-center gap-1">
+                                                <input type="hidden" name="action" value="change_role" />
+                                                <input type="hidden" name="member_id" value={member.$id} />
+                                                <select 
+                                                    name="new_role" 
+                                                    onchange="this.form.submit()" 
+                                                    class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg px-2 py-1 outline-none cursor-pointer"
+                                                >
+                                                    <option value="admin" selected={member.role === 'admin'}>Administrador</option>
+                                                    <option value="gestion" selected={member.role === 'gestion'}>Gestión de Tienda</option>
+                                                </select>
+                                            </form>
+                                        )}
+                                    </td>
+                                    <td class="p-4 text-center">
+                                        {isSelf ? (
+                                            <span class="text-slate-300">-</span>
+                                        ) : isOnlyAdmin ? (
+                                            <span class="text-[10px] text-slate-400">Protegido</span>
+                                        ) : (
+                                            <form method="POST" onsubmit="return confirm('¿Eliminar a este miembro del equipo?');" class="inline">
+                                                <input type="hidden" name="action" value="delete" />
+                                                <input type="hidden" name="member_id" value={member.$id} />
+                                                <button type="submit" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[10px] rounded-lg transition-colors border border-rose-200 cursor-pointer">
+                                                    Eliminar
+                                                </button>
+                                            </form>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+
+                        {teamMembers.length === 0 && (
+                            <tr>
+                                <td colspan="5" class="p-8 text-center text-slate-500 font-medium">
+                                    No se encontraron miembros registrados en el equipo.
                                 </td>
                             </tr>
-                        ))}
+                        )}
                     </tbody>
                 </table>
             </div>
-            {teamMembers.length === 0 && (
-                <div class="p-8 text-center text-slate-500">
-                    No hay otros miembros en el equipo todavía.
-                </div>
-            )}
         </div>
 
-    </div>
+    </main>
 
-    <!-- Modal para Invitar -->
-    <div id="modal-invitar" class="fixed inset-0 z-50 flex items-center justify-center hidden">
-        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm cursor-pointer" onclick="document.getElementById('modal-invitar').classList.add('hidden')"></div>
-        <div class="bg-white rounded-3xl w-full max-w-md p-6 relative z-10 shadow-2xl m-4">
-            <h3 class="text-xl font-bold text-slate-900 mb-1">Invitar al equipo</h3>
-            <p class="text-sm text-slate-500 mb-6">Enviaremos un correo de invitación con instrucciones para acceder.</p>
-            
-            <form class="space-y-4" onsubmit="event.preventDefault(); alert('Invitación enviada'); document.getElementById('modal-invitar').classList.add('hidden');">
+    <!-- Modal para Invitar Miembro -->
+    <div id="modal-invitar" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs hidden">
+        <div class="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-lg font-black text-slate-900">Invitar Miembro al Equipo</h3>
+                <button onclick="document.getElementById('modal-invitar').classList.add('hidden')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-full">✕</button>
+            </div>
+
+            <form method="POST" class="space-y-4 text-xs">
+                <input type="hidden" name="action" value="invite" />
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Correo Electrónico</label>
-                    <input type="email" placeholder="ejemplo@correo.com" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:outline-none text-sm text-slate-800" required />
+                    <label class="block font-bold text-slate-900 mb-1">Nombre Completo</label>
+                    <input type="text" name="nombre" required placeholder="Ej. Ana Rossi" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
                 </div>
-                
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Rol Asignado</label>
-                    <select class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2D5A27] focus:outline-none text-sm font-medium text-slate-800 appearance-none cursor-pointer">
-                        <option value="Soporte">Soporte (Solo ver pedidos y mensajes)</option>
-                        <option value="Cajero">Cajero (Pedidos y pagos)</option>
-                        <option value="Administrador">Administrador (Acceso total)</option>
+                    <label class="block font-bold text-slate-900 mb-1">Correo Electrónico</label>
+                    <input type="email" name="email" required placeholder="ana@urbanpoint.com.ar" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-900 mb-1">Rol a Asignar</label>
+                    <select name="role" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold bg-slate-50 outline-none">
+                        <option value="gestion">Gestión de Tienda (Productos, Pedidos, Clientes)</option>
+                        <option value="admin">Administrador (Acceso Total + Configuración)</option>
                     </select>
                 </div>
 
-                <div class="pt-4 flex gap-3">
-                    <button type="button" onclick="document.getElementById('modal-invitar').classList.add('hidden')" class="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors cursor-pointer">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="flex-1 px-4 py-2.5 bg-[#2D5A27] text-white font-bold rounded-xl hover:bg-[#23471F] transition-colors cursor-pointer">
-                        Enviar Invitación
-                    </button>
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" onclick="document.getElementById('modal-invitar').classList.add('hidden')" class="px-4 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm">Enviar Invitación</button>
                 </div>
             </form>
         </div>

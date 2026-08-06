@@ -104,9 +104,18 @@ const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
 									</td>
 									<td class="p-4 text-center">
 										{refCode ? (
-											<span class={`inline-block font-mono font-bold text-xs px-2.5 py-1 rounded border ${refCode.activo ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-500 border-slate-200 line-through'}`}>
-												{refCode.code}
-											</span>
+											<div class="flex items-center justify-center gap-1.5">
+												<span class={`inline-block font-mono font-bold text-xs px-2.5 py-1 rounded border ${refCode.activo ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-500 border-slate-200 line-through'}`}>
+													{refCode.code}
+												</span>
+												<button 
+													class="btn-copy-full-link p-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors text-[10px] font-bold cursor-pointer"
+													data-code={refCode.code}
+													title="Copiar Link Completo de Referido"
+												>
+													📋 Link
+												</button>
+											</div>
 										) : (
 											<span class="text-xs text-slate-400 italic">Sin código</span>
 										)}
@@ -374,6 +383,15 @@ const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
 				if (error || !data?.success) alert(error?.message || 'Error al crear');
 				else window.location.reload();
 			}
+		});
+		document.querySelectorAll('.btn-copy-full-link').forEach(btn => {
+			btn.addEventListener('click', (e) => {
+				const code = (e.currentTarget as HTMLElement).dataset.code || '';
+				const fullUrl = `${window.location.origin}/?ref=${code}`;
+				navigator.clipboard.writeText(fullUrl).then(() => {
+					alert(`¡Link copiado al portapapeles!\n${fullUrl}`);
+				});
+			});
 		});
 	</script>
 </AdminLayout>

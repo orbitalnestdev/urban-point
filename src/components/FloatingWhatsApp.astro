@@ -2,16 +2,18 @@
 import { getSiteSettings } from '../lib/server/settings';
 
 const settings = await getSiteSettings();
-// Clean the number so it only contains digits
-const whatsappNumber = settings.whatsapp_number.replace(/\D/g, '');
+const whatsappNumber = (settings.whatsapp_number || '').replace(/\D/g, '');
+const isEnabled = settings.whatsapp_enabled && whatsappNumber.length > 0;
+const posClass = settings.whatsapp_position === 'left' ? 'left-6' : 'right-6';
+const targetUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(settings.whatsapp_message || '¡Hola! Quisiera hacer una consulta.')}`;
 ---
 
-{whatsappNumber && (
+{isEnabled && (
     <a 
-        href={`https://wa.me/${whatsappNumber}`} 
+        href={targetUrl}
         target="_blank" 
         rel="noopener noreferrer" 
-        class="fixed bottom-6 right-6 w-14 h-14 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(37,211,102,0.4)] hover:scale-110 hover:shadow-[0_8px_25px_rgba(37,211,102,0.6)] transition-all z-50 group"
+        class={`fixed bottom-6 ${posClass} w-14 h-14 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(37,211,102,0.4)] hover:scale-110 hover:shadow-[0_8px_25px_rgba(37,211,102,0.6)] transition-all z-50 group`}
         aria-label="Contactanos por WhatsApp"
     >
         <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="currentColor" class="translate-y-[-1px] translate-x-[1px]">
