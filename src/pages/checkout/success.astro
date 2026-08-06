@@ -1,8 +1,7 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { Client, Databases, Query } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { Query } from 'node-appwrite';
+import { createAdminClient } from '../../lib/server/appwrite';
 
 export const prerender = false;
 
@@ -12,11 +11,7 @@ const orderId = Astro.url.searchParams.get('order_id');
 
 let order = null;
 
-const client = new Client()
-	.setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-	.setProject(PUBLIC_APPWRITE_PROJECT_ID)
-	.setKey(APPWRITE_API_KEY);
-const db = new Databases(client);
+const { databases: db } = createAdminClient();
 
 try {
 	if (orderId) {

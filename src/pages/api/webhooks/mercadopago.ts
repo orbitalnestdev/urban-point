@@ -1,18 +1,11 @@
 import type { APIRoute } from 'astro';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
-import { MP_ACCESS_TOKEN, APPWRITE_API_KEY } from 'astro:env/server';
-import { Client, Databases } from 'node-appwrite';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { createAdminClient } from '../../../lib/server/appwrite';
 import { resolverComisiones } from '../../../lib/commissions';
 
 export const prerender = false;
 
-const client = new Client()
-	.setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-	.setProject(PUBLIC_APPWRITE_PROJECT_ID)
-	.setKey(APPWRITE_API_KEY);
-
-const db = new Databases(client);
+const { databases: db } = createAdminClient();
 
 export const POST: APIRoute = async ({ request }) => {
 	try {
@@ -44,7 +37,8 @@ export const POST: APIRoute = async ({ request }) => {
 };
 
 async function handlePayment(paymentId: string) {
-	if (!MP_ACCESS_TOKEN) {
+	const mpToken = process.env.MP_ACCESS_TOKEN || '';
+	if (!mpToken) {
 		console.log(`[Webhook Mock] Simulando pago ${paymentId}`);
 		// Si es un test local simulado, el ID que nos llega puede ser el ID de la orden directamente
 		const orderId = paymentId; 

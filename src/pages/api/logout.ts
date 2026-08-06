@@ -1,14 +1,16 @@
 import type { APIRoute } from 'astro';
 import { Client, Account } from 'node-appwrite';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+
+const DEFAULT_ENDPOINT = 'https://aw.orbitalnest.net/v1';
+const DEFAULT_PROJECT_ID = '6a6a5321001439f06817';
 
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     const sessionSecret = cookies.get('up_session')?.value;
     
     if (sessionSecret) {
         try {
-            const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
-            const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
+            const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
+            const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
 
             const authClient = new Client()
                 .setEndpoint(endpoint)

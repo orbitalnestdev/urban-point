@@ -1,22 +1,14 @@
 ---
 export const prerender = false;
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
-import { Client, Databases } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { createAdminClient } from '../../../../lib/server/appwrite';
 
 const { id } = Astro.params;
-
-const client = new Client()
-	.setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-	.setProject(PUBLIC_APPWRITE_PROJECT_ID)
-	.setKey(APPWRITE_API_KEY);
-
-const db = new Databases(client);
+const { databases } = createAdminClient();
 
 let app = null;
 try {
-	app = await db.getDocument('urbanpoint', 'canillita_applications', id as string);
+	app = await databases.getDocument('urbanpoint', 'canillita_applications', id as string);
 } catch (error) {
 	return Astro.redirect('/admin/canillitas/solicitudes?error=not_found');
 }

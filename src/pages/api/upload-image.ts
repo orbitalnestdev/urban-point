@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { createAdminClient } from '../../lib/server/appwrite';
 import { InputFile } from 'node-appwrite/file';
 import { ID, Permission, Role } from 'node-appwrite';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+
 
 export const prerender = false;
 

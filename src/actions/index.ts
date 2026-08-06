@@ -3,8 +3,7 @@ import { z } from 'astro:schema';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { Client, Databases, ID, Users, Query, Account } from 'node-appwrite';
 import { getClientProfile } from '../lib/server/auth';
-import { APPWRITE_API_KEY, MP_ACCESS_TOKEN } from 'astro:env/server';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+
 
 import { resolverComisiones, cancelarOrdenYRestaurarStock } from '../lib/commissions';
 

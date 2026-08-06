@@ -1,21 +1,15 @@
 ---
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
-import { Client, Databases, Query } from 'node-appwrite';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
-import { APPWRITE_API_KEY } from 'astro:env/server';
+import { Query } from 'node-appwrite';
+import { createAdminClient } from '../../lib/server/appwrite';
 
 const user = Astro.locals.user;
 if (!user || (user.role !== 'canillita' && user.role !== 'admin')) {
   return Astro.redirect('/');
 }
 
-const adminClient = new Client()
-  .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-  .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-  .setKey(APPWRITE_API_KEY);
-
-const db = new Databases(adminClient);
+const { databases: db } = createAdminClient();
 
 let point: any = null;
 let referralCodeDoc: any = null;

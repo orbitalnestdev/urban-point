@@ -2,9 +2,8 @@
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import ActivationForm from '../../components/canillitas/ActivationForm';
-import { Client, Databases, Query } from 'node-appwrite';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
-import { APPWRITE_API_KEY } from 'astro:env/server';
+import { Query } from 'node-appwrite';
+import { createAdminClient } from '../../lib/server/appwrite';
 import { ChevronLeft } from 'lucide-react';
 
 const user = Astro.locals.user;
@@ -12,14 +11,9 @@ if (!user || user.role !== 'canillita') {
   return Astro.redirect('/');
 }
 
-const adminClient = new Client()
-  .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-  .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-  .setKey(APPWRITE_API_KEY);
+const { databases } = createAdminClient();
 
-const db = new Databases(adminClient);
-
-const points = await db.listDocuments('urbanpoint', 'pickup_points', [
+const points = await databases.listDocuments('urbanpoint', 'pickup_points', [
   Query.equal('profile_id', user.profileId)
 ]);
 

@@ -1,13 +1,13 @@
 import { Client, Databases, Query, ID } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { createAdminClient } from './server/appwrite';
 
-const client = new Client()
-	.setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-	.setProject(PUBLIC_APPWRITE_PROJECT_ID)
-	.setKey(APPWRITE_API_KEY);
-
-const db = new Databases(client);
+const db = new Proxy({} as Databases, {
+	get(_target, prop: keyof Databases) {
+		const instance = createAdminClient().databases;
+		const val = instance[prop];
+		return typeof val === 'function' ? val.bind(instance) : val;
+	}
+});
 
 // Función pura extraída para usar en el webhook y en el simulador
 export async function evaluateCommissionRule(dbInstance: Databases, canillitaId: string | null, categoryId: string | null) {

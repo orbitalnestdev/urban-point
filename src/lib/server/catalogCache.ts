@@ -1,5 +1,5 @@
 import { Client, Databases, Query } from 'node-appwrite';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID, NEXT_PUBLIC_APPWRITE_ENDPOINT, NEXT_PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { createAdminClient } from './appwrite';
 
 const globalObj = global as any;
 
@@ -23,14 +23,7 @@ export const getCachedCatalog = async () => {
   }
 
   try {
-    const rawEndpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || PUBLIC_APPWRITE_ENDPOINT || NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
-    const rawProjectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || PUBLIC_APPWRITE_PROJECT_ID || NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
-
-    const client = new Client()
-        .setEndpoint(rawEndpoint)
-        .setProject(rawProjectId);
-        
-    const databases = new Databases(client);
+    const { databases } = createAdminClient();
 
     try {
       const pRes = await databases.listDocuments('urbanpoint', 'products', [Query.limit(100)]);

@@ -1,16 +1,10 @@
 ---
 export const prerender = false;
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
-import { Client, Databases, Query } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { Query } from 'node-appwrite';
+import { createAdminClient } from '../../../../lib/server/appwrite';
 
-const client = new Client()
-	.setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-	.setProject(PUBLIC_APPWRITE_PROJECT_ID)
-	.setKey(APPWRITE_API_KEY);
-
-const db = new Databases(client);
+const { databases } = createAdminClient();
 
 const estadoParam = Astro.url.searchParams.get('estado') || 'solicitado';
 
@@ -20,7 +14,7 @@ try {
 	if (estadoParam !== 'todos') {
 		queries.unshift(Query.equal('estado', estadoParam));
 	}
-	const response = await db.listDocuments('urbanpoint', 'canillita_applications', queries);
+	const response = await databases.listDocuments('urbanpoint', 'canillita_applications', queries);
 	applications = response.documents;
 } catch (error) {
 	console.error(error);

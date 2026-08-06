@@ -2,9 +2,7 @@
 export const prerender = false;
 import Layout from '../../../layouts/Layout.astro';
 import RuleForm from '../../../components/admin/RuleForm';
-import { Client, Databases, Query } from 'node-appwrite';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
-import { APPWRITE_API_KEY } from 'astro:env/server';
+import { createAdminClient } from '../../../lib/server/appwrite';
 import { ChevronLeft } from 'lucide-react';
 
 const user = Astro.locals.user;
@@ -12,18 +10,15 @@ if (!user || user.role !== 'admin') {
   return Astro.redirect('/');
 }
 
-const client = new Client()
-  .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-  .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-  .setKey(APPWRITE_API_KEY);
+const { databases } = createAdminClient();
 
-const db = new Databases(client);
+import { Query } from 'node-appwrite';
 
 // Fetch data for selects
-const categoriasRes = await db.listDocuments('urbanpoint', 'categories', [Query.limit(50)]);
+const categoriasRes = await databases.listDocuments('urbanpoint', 'categories', [Query.limit(50)]);
 const categorias = categoriasRes.documents.map(c => ({ id: c.$id, name: c.nombre }));
 
-const canillitasRes = await db.listDocuments('urbanpoint', 'pickup_points', [
+const canillitasRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
   Query.equal('estado', 'activo'),
   Query.limit(50)
 ]);

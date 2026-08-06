@@ -2,9 +2,8 @@
 export const prerender = false;
 import Layout from '../../../layouts/Layout.astro';
 import CommissionSimulator from '../../../components/admin/CommissionSimulator';
-import { Client, Databases, Query } from 'node-appwrite';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
-import { APPWRITE_API_KEY } from 'astro:env/server';
+import { Query } from 'node-appwrite';
+import { createAdminClient } from '../../../lib/server/appwrite';
 import { Plus, Percent, DollarSign, Settings } from 'lucide-react';
 
 const user = Astro.locals.user;
@@ -12,24 +11,19 @@ if (!user || user.role !== 'admin') {
   return Astro.redirect('/');
 }
 
-const client = new Client()
-  .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-  .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-  .setKey(APPWRITE_API_KEY);
-
-const db = new Databases(client);
+const { databases } = createAdminClient();
 
 // 1. Fetch active rules
-const rules = await db.listDocuments('urbanpoint', 'commission_rules', [
+const rules = await databases.listDocuments('urbanpoint', 'commission_rules', [
   Query.equal('activo', true),
   Query.orderDesc('$createdAt')
 ]);
 
 // 2. Fetch products and canillitas for simulator
-const productsRes = await db.listDocuments('urbanpoint', 'products', [Query.limit(50)]);
+const productsRes = await databases.listDocuments('urbanpoint', 'products', [Query.limit(50)]);
 const products = productsRes.documents.map(p => ({ id: p.$id, name: p.nombre }));
 
-const canillitasRes = await db.listDocuments('urbanpoint', 'pickup_points', [
+const canillitasRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
   Query.equal('estado', 'activo'),
   Query.limit(50)
 ]);

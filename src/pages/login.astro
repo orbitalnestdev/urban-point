@@ -4,7 +4,9 @@ import Header from '../components/Header.astro';
 import Logo from '../components/Logo.astro';
 import { Client, Account, Query, ID } from 'node-appwrite';
 import { createAdminClient } from '../lib/server/appwrite';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID, NEXT_PUBLIC_APPWRITE_ENDPOINT, NEXT_PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+
+const DEFAULT_ENDPOINT = 'https://aw.orbitalnest.net/v1';
+const DEFAULT_PROJECT_ID = '6a6a5321001439f06817';
 
 export const prerender = false;
 
@@ -14,8 +16,8 @@ let loginSuccess = false;
 if (Astro.request.method === 'GET') {
 	const sessionCookie = Astro.cookies.get('up_session')?.value;
 	if (sessionCookie) {
-		const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || PUBLIC_APPWRITE_ENDPOINT || NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
-		const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || PUBLIC_APPWRITE_PROJECT_ID || NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
+		const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
+		const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
 		try {
 			const authClient = new Client().setEndpoint(endpoint).setProject(projectId).setSession(sessionCookie);
 			const account = new Account(authClient);
@@ -41,8 +43,8 @@ if (Astro.request.method === 'POST') {
 		const email = formData.get('email')?.toString() || '';
 		const password = formData.get('password')?.toString() || '';
 		
-		const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || PUBLIC_APPWRITE_ENDPOINT || NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
-		const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || PUBLIC_APPWRITE_PROJECT_ID || NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
+		const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
+		const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
 
 		const authClient = new Client().setEndpoint(endpoint).setProject(projectId);
 		const account = new Account(authClient);
