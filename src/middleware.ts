@@ -1,7 +1,9 @@
 import { defineMiddleware } from 'astro:middleware';
 import { Client, Account, Query } from 'node-appwrite';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID, NEXT_PUBLIC_APPWRITE_ENDPOINT, NEXT_PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
 import { createAdminClient } from './lib/server/appwrite';
+
+const DEFAULT_ENDPOINT = 'https://aw.orbitalnest.net/v1';
+const DEFAULT_PROJECT_ID = '6a6a5321001439f06817';
 
 export const onRequest = defineMiddleware(async (context, next) => {
 	const { pathname } = context.url;
@@ -32,8 +34,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
 		if (import.meta.env.DEV && sessionSecret === 'dev_mock_admin_session') {
 			user = { $id: '6a6b75790014f4940f25', email: 'azcurraely@gmail.com' };
 		} else {
-			const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || PUBLIC_APPWRITE_ENDPOINT || NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
-			const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || PUBLIC_APPWRITE_PROJECT_ID || NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
+			const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
+			const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
 
 			const authClient = new Client()
 				.setEndpoint(endpoint)

@@ -1,6 +1,4 @@
 import { Client, Databases, Users, Storage, Account } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID, NEXT_PUBLIC_APPWRITE_ENDPOINT, NEXT_PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
 
 const DEFAULT_ENDPOINT = 'https://aw.orbitalnest.net/v1';
 const DEFAULT_PROJECT_ID = '6a6a5321001439f06817';
@@ -9,9 +7,9 @@ const DEFAULT_API_KEY = 'standard_3baf0a2abb3d0fdac2665efd36cc68ddd47ad3ea8517c0
 const clean = (val?: string) => (val || '').replace(/^["']|["']$/g, '').trim();
 
 export const createAdminClient = () => {
-    const rawEndpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || PUBLIC_APPWRITE_ENDPOINT || NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
-    const rawProjectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || PUBLIC_APPWRITE_PROJECT_ID || NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
-    const rawApiKey = process.env.APPWRITE_API_KEY || APPWRITE_API_KEY || DEFAULT_API_KEY;
+    const rawEndpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
+    const rawProjectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
+    const rawApiKey = process.env.APPWRITE_API_KEY || DEFAULT_API_KEY;
 
     const endpoint = clean(rawEndpoint) || DEFAULT_ENDPOINT;
     const projectId = clean(rawProjectId) || DEFAULT_PROJECT_ID;
