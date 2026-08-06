@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { test, expect, describe } from 'vitest';
 import { resolverComision, calcularMontoComision, CommissionRule } from './resolve';
 

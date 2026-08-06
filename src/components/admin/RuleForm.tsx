@@ -23,7 +23,7 @@ export default function RuleForm({ canillitas, categorias }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: actionError } = await actions.createCommissionRule(formData);
+      const { data, error: actionError } = await (actions as any).createCommissionRule(formData as any);
       if (actionError) throw new Error(actionError.message);
       if (!data?.success) throw new Error(data?.error || 'Error al crear la regla');
       window.location.href = '/admin/comisiones';

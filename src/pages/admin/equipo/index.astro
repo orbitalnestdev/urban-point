@@ -166,7 +166,7 @@ const totalAdmins = teamMembers.filter(m => m.role === 'admin').length;
                     <tbody class="divide-y divide-slate-100 text-xs">
                         {teamMembers.map(member => {
                             const isSelf = member.user_id === currentUser.id;
-                            const isOnlyAdmin = member.role === 'admin' && totalAdmins <= 1;
+                            const isOnlyAdmin = member.role === 'admin' && !(totalAdmins > 1);
 
                             return (
                                 <tr class="hover:bg-slate-50/80 transition-colors">

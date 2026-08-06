@@ -29,7 +29,9 @@ export const POST: APIRoute = async ({ request }) => {
       [Permission.read(Role.any())]
     );
 
-    const publicUrl = `${PUBLIC_APPWRITE_ENDPOINT}/storage/buckets/products/files/${uploadedFile.$id}/view?project=${PUBLIC_APPWRITE_PROJECT_ID}`;
+    const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1';
+    const project = process.env.PUBLIC_APPWRITE_PROJECT_ID || 'urbanpoint';
+    const publicUrl = `${endpoint}/storage/buckets/products/files/${uploadedFile.$id}/view?project=${project}`;
 
     return new Response(JSON.stringify({ success: true, url: publicUrl, fileId: uploadedFile.$id }), {
       status: 200,

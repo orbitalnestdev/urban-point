@@ -49,7 +49,7 @@ async function handlePayment(paymentId: string) {
 		return new Response('OK Simulado', { status: 200 });
 	}
 
-	const mp = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN });
+	const mp = new MercadoPagoConfig({ accessToken: mpToken });
 	const payment = new Payment(mp);
 	
 	const paymentData = await payment.get({ id: paymentId });

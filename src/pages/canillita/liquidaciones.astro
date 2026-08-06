@@ -36,7 +36,7 @@ const payouts = payoutsRes.documents;
   <nav class="w-full z-50 bg-white border-b border-slate-200">
 		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
 			<a href="/canillita" class="flex items-center gap-2 text-slate-600 hover:text-indigo-600 font-medium transition-colors">
-				<ChevronLeft class="w-5 h-5" />
+				<ChevronLeft className="w-5 h-5" />
 				Volver al Panel
 			</a>
 			<span class="text-xl font-extrabold tracking-tight text-slate-900">Mis Cobros</span>
@@ -51,13 +51,13 @@ const payouts = payoutsRes.documents;
         <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
         <div class="relative z-10">
           <p class="text-indigo-100 font-medium flex items-center gap-2 mb-1">
-            <Clock class="w-4 h-4" />
+            <Clock className="w-4 h-4" />
             Saldo Pendiente de Liquidar
           </p>
           <h2 class="text-5xl font-black">${(saldoPendiente / 100).toFixed(2)}</h2>
         </div>
         <div class="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center relative z-10 backdrop-blur-md">
-          <WalletCards class="w-8 h-8 text-white" />
+          <WalletCards className="w-8 h-8 text-white" />
         </div>
       </div>
 
@@ -76,7 +76,7 @@ const payouts = payoutsRes.documents;
                 <div class="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
                   <div class="flex items-center gap-4">
                     <div class="w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center">
-                      <ArrowDownLeft class="w-6 h-6" />
+                      <ArrowDownLeft className="w-6 h-6" />
                     </div>
                     <div>
                       <p class="font-bold text-slate-900">Liquidación recibida</p>

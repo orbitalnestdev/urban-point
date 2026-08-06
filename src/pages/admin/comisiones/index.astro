@@ -34,7 +34,7 @@ const canillitas = canillitasRes.documents.map(c => ({ id: typeof c.profile_id =
   <nav class="w-full z-50 bg-slate-900 border-b border-slate-800">
 		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
 			<div class="flex items-center gap-2 text-white">
-				<Settings class="w-5 h-5 text-indigo-400" />
+				<Settings className="w-5 h-5 text-indigo-400" />
 				<span class="text-xl font-extrabold tracking-tight">Admin | Comisiones</span>
 			</div>
 			<div class="flex items-center gap-4">
@@ -54,7 +54,7 @@ const canillitas = canillitasRes.documents.map(c => ({ id: typeof c.profile_id =
             <p class="text-slate-500 mt-1">Configuración del motor de comisiones y logística.</p>
           </div>
           <a href="/admin/comisiones/nueva" class="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-all shadow-sm">
-            <Plus class="w-5 h-5" /> Nueva Regla
+            <Plus className="w-5 h-5" /> Nueva Regla
           </a>
         </div>
 
@@ -68,7 +68,7 @@ const canillitas = canillitasRes.documents.map(c => ({ id: typeof c.profile_id =
               <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
                 <div class="flex items-center gap-4">
                   <div class={`w-12 h-12 rounded-xl flex items-center justify-center ${rule.tipo === 'porcentaje' ? 'bg-indigo-50 text-indigo-600' : 'bg-green-50 text-green-600'}`}>
-                    {rule.tipo === 'porcentaje' ? <Percent class="w-6 h-6" /> : <DollarSign class="w-6 h-6" />}
+                    {rule.tipo === 'porcentaje' ? <Percent className="w-6 h-6" /> : <DollarSign className="w-6 h-6" />}
                   </div>
                   <div>
                     <h3 class="font-bold text-slate-900 capitalize text-lg">Alcance: {rule.alcance.replace('_', ' ')}</h3>

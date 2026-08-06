@@ -282,7 +282,7 @@ const now = Date.now();
 					<tbody class="divide-y divide-slate-100 text-xs">
 						{filteredProducts.map((product) => {
 							const createdAtMs = new Date(product.$createdAt).getTime();
-							const isNuevoCalculated = (now - createdAtMs) <= THIRTY_DAYS_MS;
+							const isNuevoCalculated = !(now - createdAtMs > THIRTY_DAYS_MS);
 							const showNuevoBadge = product.es_nuevo_manual !== undefined && product.es_nuevo_manual !== null 
 								? product.es_nuevo_manual 
 								: isNuevoCalculated;
