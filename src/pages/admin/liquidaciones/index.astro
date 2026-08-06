@@ -1,110 +1,376 @@
 ---
 export const prerender = false;
-import Layout from '../../../layouts/Layout.astro';
-import { PayoutModal } from '../../../components/admin/liquidaciones/PayoutModal';
-import { Client, Databases, Query } from 'node-appwrite';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import { ChevronLeft, WalletCards, CheckCircle2 } from 'lucide-react';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { createAdminClient } from '../../../lib/server/appwrite';
+import { Query } from 'node-appwrite';
 
 const user = Astro.locals.user;
 if (!user || user.role !== 'admin') {
   return Astro.redirect('/');
 }
 
-const client = new Client()
-  .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-  .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-  .setKey(APPWRITE_API_KEY);
+const { databases } = createAdminClient();
 
-const db = new Databases(client);
+const tabParam = Astro.url.searchParams.get('tab') || 'pendientes';
+const periodoParam = Astro.url.searchParams.get('periodo') || '';
 
-// Obtener todas las comisiones pendientes
-const ledgerRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
-  Query.equal('estado', 'pendiente'),
-  Query.limit(5000)
-]);
+let pendingBalances: any[] = [];
+let pastPayouts: any[] = [];
+let totalPendienteCentavos = 0;
+let totalLiquidadoCentavos = 0;
 
-// Agrupar por canillita
-const balanceByProfile: Record<string, { id: string, name: string, balance: number }> = {};
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
-for (const item of ledgerRes.documents) {
-  const profileId = typeof item.profile_id === 'string' ? item.profile_id : item.profile_id?.$id;
-  if (!profileId) continue;
-  
-  if (!balanceByProfile[profileId]) {
-    balanceByProfile[profileId] = {
-      id: profileId,
-      name: item.profile_id?.nombre || 'Canillita Desconocido',
-      balance: 0
-    };
+try {
+  // 1. Fetch pending commission ledger entries
+  const ledgerRes = await databases.listDocuments('urbanpoint', 'commission_ledger', [
+    Query.equal('estado', 'pendiente'),
+    Query.limit(5000)
+  ]);
+
+  // Aggregate pending balance by profile
+  const balanceMap: Record<string, { id: string; name: string; email: string; phone: string; code: string; balance: number; count: number }> = {};
+
+  for (const item of ledgerRes.documents) {
+    const profileId = typeof item.profile_id === 'string' ? item.profile_id : item.profile_id?.$id;
+    if (!profileId) continue;
+
+    const monto = item.monto_centavos || 0;
+    totalPendienteCentavos += monto;
+
+    if (!balanceMap[profileId]) {
+      const pName = typeof item.profile_id === 'object' ? item.profile_id?.nombre : 'Canillita';
+      const pEmail = typeof item.profile_id === 'object' ? item.profile_id?.email : '';
+      const pPhone = typeof item.profile_id === 'object' ? item.profile_id?.telefono : '';
+      balanceMap[profileId] = {
+        id: profileId,
+        name: pName || 'Canillita',
+        email: pEmail || '',
+        phone: pPhone || '',
+        code: 'CANI-REF',
+        balance: 0,
+        count: 0
+      };
+    }
+    balanceMap[profileId].balance += monto;
+    balanceMap[profileId].count += 1;
   }
-  
-  balanceByProfile[profileId].balance += item.monto_centavos;
-}
 
-const pendingPayouts = Object.values(balanceByProfile).filter(p => p.balance > 0);
+  // Fetch referral codes for display
+  const profiles = Object.keys(balanceMap);
+  if (profiles.length > 0) {
+    const refCodes = await databases.listDocuments('urbanpoint', 'referral_codes', [
+      Query.equal('owner_id', profiles),
+      Query.limit(500)
+    ]);
+    for (const ref of refCodes.documents) {
+      const oId = typeof ref.owner_id === 'string' ? ref.owner_id : ref.owner_id?.$id;
+      if (oId && balanceMap[oId]) {
+        balanceMap[oId].code = ref.code;
+      }
+    }
+  }
+
+  pendingBalances = Object.values(balanceMap);
+
+  // 2. Fetch past payouts history
+  const payoutQueries = [Query.orderDesc('$createdAt'), Query.limit(100)];
+  if (periodoParam) {
+    payoutQueries.unshift(Query.equal('periodo', periodoParam));
+  }
+  const payoutsRes = await databases.listDocuments('urbanpoint', 'payouts', payoutQueries);
+  pastPayouts = payoutsRes.documents;
+  totalLiquidadoCentavos = pastPayouts.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
+
+} catch (e) {
+  console.error("Error loading liquidaciones:", e);
+}
 ---
 
-<Layout title="Liquidaciones | UrbanPoint Admin">
-  <nav class="w-full z-50 bg-slate-900 border-b border-slate-800">
-		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-			<div class="flex items-center gap-4 text-white">
-        <a href="/admin" class="text-slate-400 hover:text-white transition-colors">
-          <ChevronLeft class="w-5 h-5" />
-        </a>
-				<div class="flex items-center gap-2">
-          <WalletCards class="w-5 h-5 text-indigo-400" />
-          <span class="text-xl font-extrabold tracking-tight">Admin | Liquidaciones</span>
-        </div>
+<AdminLayout title="Liquidación de Comisiones">
+	<main class="p-6 md:p-8 max-w-7xl mx-auto">
+		<!-- Compact Header with Live Statistics -->
+		<header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-200">
+			<div>
+				<h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Liquidación de Comisiones</h1>
+				<p class="text-xs text-slate-500 font-medium mt-0.5">
+					Pendientes: <strong class="text-emerald-700">{formateador.format(totalPendienteCentavos / 100)}</strong> ({pendingBalances.length} canillitas) | Liquidado histórico: <strong class="text-slate-800">{formateador.format(totalLiquidadoCentavos / 100)}</strong>
+				</p>
+			</div>
+
+			<div class="flex items-center gap-3">
+				<button id="btn-export-csv" class="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1.5">
+					<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+					Exportar a CSV
+				</button>
+			</div>
+		</header>
+
+		<!-- Subheader & Tabs -->
+		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+			<div class="flex items-center gap-2 bg-slate-100 p-1 rounded-xl text-xs font-bold w-fit">
+				<a href="?tab=pendientes" class={`px-4 py-2 rounded-lg transition-colors ${tabParam === 'pendientes' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>
+					Pendientes de Pago ({pendingBalances.length})
+				</a>
+				<a href="?tab=historial" class={`px-4 py-2 rounded-lg transition-colors ${tabParam === 'historial' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>
+					Historial de Liquidaciones ({pastPayouts.length})
+				</a>
 			</div>
 		</div>
-	</nav>
 
-  <main class="min-h-[calc(100vh-64px)] bg-slate-50 py-12">
-    <div class="max-w-5xl mx-auto px-6">
-      
-      <div class="mb-8">
-        <h1 class="text-3xl font-bold text-slate-900">Pagos Pendientes</h1>
-        <p class="text-slate-500 mt-1">Saldos devengados que necesitan ser liquidados a los canillitas.</p>
-      </div>
+		{/* Tab 1: Pendientes de Pago */}
+		{tabParam === 'pendientes' && (
+			<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+				{pendingBalances.length === 0 ? (
+					<div class="p-12 text-center text-slate-500">
+						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mx-auto mb-3 text-emerald-500"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+						<p class="text-lg font-bold text-slate-800">¡Todo al día!</p>
+						<p class="text-xs text-slate-500 mt-1">No hay saldo a favor pendiente de pago para liquidar en este momento.</p>
+					</div>
+				) : (
+					<div class="overflow-x-auto">
+						<table class="w-full text-left border-collapse text-xs">
+							<thead>
+								<tr class="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider h-[38px]">
+									<th class="px-4 py-2">Canillita / Titular</th>
+									<th class="px-4 py-2 text-center">Código REF</th>
+									<th class="px-4 py-2 text-center">Contacto</th>
+									<th class="px-4 py-2 text-center">Órdenes</th>
+									<th class="px-4 py-2 text-right">Saldo Pendiente</th>
+									<th class="px-4 py-2 text-right">Acción</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-slate-100">
+								{pendingBalances.map(p => (
+									<tr class="hover:bg-slate-50 transition-colors h-[42px]">
+										<td class="px-4 py-2">
+											<p class="font-bold text-slate-900">{p.name}</p>
+											<p class="text-[11px] text-slate-400 font-mono">{p.id}</p>
+										</td>
+										<td class="px-4 py-2 text-center">
+											<span class="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded text-[11px]">{p.code}</span>
+										</td>
+										<td class="px-4 py-2 text-center text-slate-600">
+											{p.phone || p.email || 'Sin contacto'}
+										</td>
+										<td class="px-4 py-2 text-center font-bold text-slate-800">
+											{p.count}
+										</td>
+										<td class="px-4 py-2 text-right font-black text-emerald-600 text-sm">
+											{formateador.format(p.balance / 100)}
+										</td>
+										<td class="px-4 py-2 text-right">
+											<button 
+												class="btn-liquidar-modal px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-all shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+												data-profile={p.id}
+												data-name={p.name}
+												data-balance={p.balance}
+												disabled={p.balance <= 0}
+											>
+												Liquidar
+											</button>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</div>
+		)}
 
-      {pendingPayouts.length === 0 ? (
-        <div class="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-200">
-          <CheckCircle2 class="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h2 class="text-xl font-bold text-slate-900 mb-2">¡Todo al día!</h2>
-          <p class="text-slate-500">No hay ningún canillita con saldo a favor pendiente de liquidación.</p>
-        </div>
-      ) : (
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <table class="w-full text-left">
-            <thead>
-              <tr class="bg-slate-50 text-slate-500 text-sm border-b border-slate-100">
-                <th class="px-6 py-4 font-semibold">Canillita</th>
-                <th class="px-6 py-4 font-semibold text-right">Saldo Pendiente</th>
-                <th class="px-6 py-4 font-semibold text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              {pendingPayouts.map(p => (
-                <tr class="hover:bg-slate-50/50 transition-colors">
-                  <td class="px-6 py-4">
-                    <p class="font-bold text-slate-900">{p.name}</p>
-                    <p class="text-xs font-mono text-slate-400">{p.id}</p>
-                  </td>
-                  <td class="px-6 py-4 text-right">
-                    <span class="text-xl font-black text-green-600">${(p.balance / 100).toFixed(2)}</span>
-                  </td>
-                  <td class="px-6 py-4 text-right">
-                    <PayoutModal client:load canillitaId={p.id} canillitaName={p.name} monto={p.balance} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+		{/* Tab 2: Historial de Liquidaciones */}
+		{tabParam === 'historial' && (
+			<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+				{pastPayouts.length === 0 ? (
+					<div class="p-12 text-center text-slate-500 text-sm">
+						No hay liquidaciones históricas registradas.
+					</div>
+				) : (
+					<div class="overflow-x-auto">
+						<table class="w-full text-left border-collapse text-xs">
+							<thead>
+								<tr class="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider h-[38px]">
+									<th class="px-4 py-2">Fecha</th>
+									<th class="px-4 py-2">Comprobante #</th>
+									<th class="px-4 py-2 text-center">Período</th>
+									<th class="px-4 py-2 text-center">Método</th>
+									<th class="px-4 py-2 text-right">Monto Liquidado</th>
+									<th class="px-4 py-2 text-center">Estado</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-slate-100">
+								{pastPayouts.map(pay => (
+									<tr class="hover:bg-slate-50 transition-colors h-[42px]">
+										<td class="px-4 py-2 text-slate-700 font-medium">
+											{new Date(pay.$createdAt).toLocaleString('es-AR')}
+										</td>
+										<td class="px-4 py-2 font-mono text-slate-900 font-bold">
+											{pay.comprobante || pay.$id.substring(0,10)}
+										</td>
+										<td class="px-4 py-2 text-center font-bold text-slate-800">
+											{pay.periodo || '2026-08'}
+										</td>
+										<td class="px-4 py-2 text-center text-slate-600 capitalize">
+											{pay.metodo_pago || 'Transferencia'}
+										</td>
+										<td class="px-4 py-2 text-right font-black text-slate-900 text-sm">
+											{formateador.format((pay.monto_centavos || 0) / 100)}
+										</td>
+										<td class="px-4 py-2 text-center">
+											<span class="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-[11px] rounded-full border border-emerald-200">Ejecutado</span>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</div>
+		)}
+	</main>
 
-    </div>
-  </main>
-</Layout>
+	<!-- Modal de Confirmación e Idempotencia de Payout -->
+	<div id="modal-payout" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+		<div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6">
+			<div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200">
+				<h3 class="text-lg font-extrabold text-slate-900">Confirmar Liquidación</h3>
+				<button id="btn-close-payout" class="text-slate-400 hover:text-slate-600 text-2xl font-bold">&times;</button>
+			</div>
+
+			<form id="form-payout" class="space-y-4">
+				<input type="hidden" id="payout-profile-id" />
+				<input type="hidden" id="payout-balance-val" />
+				<input type="hidden" id="payout-idempotency" />
+
+				<div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
+					<p class="text-xs text-slate-500 font-medium">Canillita Beneficiario:</p>
+					<p id="payout-target-name" class="text-base font-bold text-slate-900"></p>
+					
+					<p class="text-xs text-slate-500 font-medium mt-3">Monto Total a Liquidar:</p>
+					<p id="payout-target-monto" class="text-2xl font-black text-emerald-600"></p>
+				</div>
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nº Comprobante / Transacción Banco</label>
+					<input type="text" id="payout-comprobante" required placeholder="Ej: TR-98240192" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono outline-none focus:border-emerald-600" />
+				</div>
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Método de Pago</label>
+					<select id="payout-metodo" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-600 cursor-pointer">
+						<option value="transferencia">Transferencia Bancaria (CBU)</option>
+						<option value="mercadopago">Mercado Pago / CVU</option>
+						<option value="efectivo">Efectivo en Mano</option>
+					</select>
+				</div>
+
+				<div class="flex justify-end gap-3 pt-4 border-t border-slate-200">
+					<button type="button" id="btn-cancel-payout" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200">Cancelar</button>
+					<button type="submit" id="btn-confirm-payout" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md text-xs cursor-pointer">Ejecutar Pago Idempotente</button>
+				</div>
+			</form>
+		</div>
+	</div>
+
+	<script>
+		import { actions } from 'astro:actions';
+
+		const modal = document.getElementById('modal-payout');
+		const formPayout = document.getElementById('form-payout') as HTMLFormElement;
+		const targetName = document.getElementById('payout-target-name')!;
+		const targetMonto = document.getElementById('payout-target-monto')!;
+		const inputProfile = document.getElementById('payout-profile-id') as HTMLInputElement;
+		const inputBalance = document.getElementById('payout-balance-val') as HTMLInputElement;
+		const inputIdempotency = document.getElementById('payout-idempotency') as HTMLInputElement;
+		const inputComprobante = document.getElementById('payout-comprobante') as HTMLInputElement;
+		const inputMetodo = document.getElementById('payout-metodo') as HTMLSelectElement;
+
+		const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+
+		document.querySelectorAll('.btn-liquidar-modal').forEach(btn => {
+			btn.addEventListener('click', (e) => {
+				const el = e.currentTarget as HTMLElement;
+				const profileId = el.dataset.profile || '';
+				const name = el.dataset.name || 'Canillita';
+				const balance = parseInt(el.dataset.balance || '0', 10);
+
+				if (balance <= 0) {
+					alert('No se puede liquidar un saldo en $0.00.');
+					return;
+				}
+
+				inputProfile.value = profileId;
+				inputBalance.value = balance.toString();
+				targetName.textContent = name;
+				targetMonto.textContent = formateador.format(balance / 100);
+				
+				// Generate unique idempotency key
+				inputIdempotency.value = `IDEMP-${profileId}-${balance}-${Date.now()}`;
+				inputComprobante.value = `TR-${Math.floor(100000 + Math.random() * 900000)}`;
+
+				modal?.classList.remove('hidden');
+			});
+		});
+
+		document.getElementById('btn-close-payout')?.addEventListener('click', () => modal?.classList.add('hidden'));
+		document.getElementById('btn-cancel-payout')?.addEventListener('click', () => modal?.classList.add('hidden'));
+
+		formPayout?.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			const profileId = inputProfile.value;
+			const balance = parseInt(inputBalance.value, 10);
+			const idempotencyKey = inputIdempotency.value;
+			const comprobante = inputComprobante.value;
+			const metodo = inputMetodo.value;
+
+			const btnSubmit = document.getElementById('btn-confirm-payout') as HTMLButtonElement;
+			btnSubmit.setAttribute('disabled', 'true');
+			btnSubmit.textContent = 'Procesando Pago...';
+
+			try {
+				const { data, error } = await actions.liquidateCommissions({
+					profileId,
+					montoCentavos: balance,
+					periodo: new Date().toISOString().substring(0, 7),
+					metodoPago: metodo,
+					comprobante,
+					idempotencyKey
+				});
+
+				if (error || !data?.success) {
+					alert(error?.message || 'Error al ejecutar la liquidación.');
+					btnSubmit.removeAttribute('disabled');
+					btnSubmit.textContent = 'Ejecutar Pago Idempotente';
+				} else {
+					alert('¡Liquidación ejecutada con éxito!');
+					window.location.reload();
+				}
+			} catch (err) {
+				alert('Error de conexión');
+				btnSubmit.removeAttribute('disabled');
+				btnSubmit.textContent = 'Ejecutar Pago Idempotente';
+			}
+		});
+
+		// CSV Exporter
+		document.getElementById('btn-export-csv')?.addEventListener('click', () => {
+			const rows = [
+				['Canillita ID', 'Periodo', 'Monto ARS', 'Comprobante', 'Metodo']
+			];
+			document.querySelectorAll('tbody tr').forEach(tr => {
+				const cols = Array.from(tr.querySelectorAll('td')).map(td => td.innerText.replace(/\n/g, ' ').trim());
+				if (cols.length > 0) rows.push(cols);
+			});
+
+			const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+			const encodedUri = encodeURI(csvContent);
+			const link = document.createElement("a");
+			link.setAttribute("href", encodedUri);
+			link.setAttribute("download", `liquidaciones_${new Date().toISOString().substring(0,10)}.csv`);
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+		});
+	</script>
+</AdminLayout>

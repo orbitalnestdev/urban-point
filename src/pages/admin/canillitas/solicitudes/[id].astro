@@ -21,30 +21,51 @@ try {
 	return Astro.redirect('/admin/canillitas/solicitudes?error=not_found');
 }
 
-if (!app || app.estado !== 'solicitado') {
+if (!app) {
 	return Astro.redirect('/admin/canillitas/solicitudes');
 }
+
+const getStatusBadge = (st: string) => {
+	switch (st) {
+		case 'aprobado': return '<span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full border border-emerald-200 uppercase">APROBADO</span>';
+		case 'rechazado': return '<span class="bg-rose-100 text-rose-800 text-xs font-bold px-3 py-1 rounded-full border border-rose-200 uppercase">RECHAZADO</span>';
+		case 'suspendido': return '<span class="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full border border-amber-200 uppercase">SUSPENDIDO</span>';
+		default: return '<span class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full border border-blue-200 uppercase">SOLICITADO / PENDIENTE</span>';
+	}
+};
 ---
 
 <AdminLayout title={`Solicitud: ${app.nombre_comercial}`}>
 	<div class="max-w-4xl mx-auto">
-		<header class="flex items-center justify-between mb-8 border-b border-slate-200 pb-8">
+		<header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 border-b border-slate-200 pb-8">
 			<div>
 				<div class="flex items-center gap-3 mb-2">
 					<h1 class="text-3xl font-extrabold text-slate-900">{app.nombre_comercial}</h1>
-					<span class="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded border border-amber-200">PENDIENTE</span>
+					<Fragment set:html={getStatusBadge(app.estado)} />
 				</div>
 				<p class="text-slate-500">Recibida el {new Date(app.$createdAt).toLocaleString()}</p>
+				{app.motivo_rechazo && (
+					<p class="text-xs text-rose-600 font-bold mt-1">Motivo de rechazo: {app.motivo_rechazo}</p>
+				)}
 			</div>
 			
-			<div class="flex gap-4">
-				<button id="btn-rechazar" class="px-6 py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 font-semibold rounded-xl transition-colors">
-					Rechazar
-				</button>
-				<button id="btn-aprobar" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2">
-					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-					Aprobar y Crear Punto
-				</button>
+			<div class="flex flex-wrap gap-3">
+				{app.estado === 'solicitado' && (
+					<>
+						<button id="btn-rechazar" class="px-5 py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-semibold rounded-xl transition-colors cursor-pointer">
+							Rechazar
+						</button>
+						<button id="btn-aprobar" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer">
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+							Aprobar y Crear Punto
+						</button>
+					</>
+				)}
+				{app.estado === 'aprobado' && (
+					<button id="btn-suspender" class="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-md transition-all cursor-pointer">
+						Suspender Canillita
+					</button>
+				)}
 			</div>
 		</header>
 
@@ -167,6 +188,31 @@ if (!app || app.estado !== 'solicitado') {
 				alert('Ocurrió un error inesperado.');
 				btnRechazar.removeAttribute('disabled');
 				btnRechazar.innerHTML = 'Rechazar';
+			}
+		});
+	}
+
+	const btnSuspender = document.getElementById('btn-suspender');
+	if (btnSuspender) {
+		btnSuspender.addEventListener('click', async () => {
+			if (!confirm('¿Estás seguro de suspender este Canillita? Su punto de retiro quedará inactivo.')) return;
+			btnSuspender.setAttribute('disabled', 'true');
+			btnSuspender.innerHTML = 'Suspendiendo...';
+
+			try {
+				const { data, error } = await actions.suspendCanillita({ applicationId: appId! });
+				if (error || !data?.success) {
+					alert(error?.message || data?.error || 'Error al suspender.');
+					btnSuspender.removeAttribute('disabled');
+					btnSuspender.innerHTML = 'Suspender Canillita';
+					return;
+				}
+				alert('Canillita suspendido.');
+				window.location.href = '/admin/canillitas/solicitudes';
+			} catch (err) {
+				alert('Error de conexión.');
+				btnSuspender.removeAttribute('disabled');
+				btnSuspender.innerHTML = 'Suspender Canillita';
 			}
 		});
 	}

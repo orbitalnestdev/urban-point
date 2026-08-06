@@ -6,106 +6,374 @@ import { Query } from 'node-appwrite';
 export const prerender = false;
 
 const { databases } = createAdminClient();
-let puntos = [];
-let referidos = [];
+let puntos: any[] = [];
+let referidos: any[] = [];
 
 try {
-	const resPuntos = await databases.listDocuments('urbanpoint', 'pickup_points');
+	const resPuntos = await databases.listDocuments('urbanpoint', 'pickup_points', [
+		Query.orderDesc('$createdAt'),
+		Query.limit(100)
+	]);
 	puntos = resPuntos.documents;
 	
-	const resReferidos = await databases.listDocuments('urbanpoint', 'referral_codes');
+	const resReferidos = await databases.listDocuments('urbanpoint', 'referral_codes', [
+		Query.limit(100)
+	]);
 	referidos = resReferidos.documents;
 } catch (e) {
 	console.error(e);
 }
 
-const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+const activeCount = puntos.filter(p => p.estado === 'activo').length;
+const pendingCount = puntos.filter(p => p.estado === 'pendiente').length;
+const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
 ---
 
-<AdminLayout title="Red de Retiro">
-	<main class="p-8">
-		<header class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
+<AdminLayout title="Red de Retiro y Canillitas">
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+	
+	<main class="p-6 md:p-8 max-w-7xl mx-auto">
+		<header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
 			<div>
-				<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Red de Retiro (Canillitas)</h1>
-				<p class="text-slate-500 font-medium mt-1">Gestioná los puntos de entrega asociados y sus comisiones por ventas referidas.</p>
+				<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Red de Retiro & Canillitas</h1>
+				<p class="text-slate-500 font-medium mt-1">Gestión integral de puntos de entrega, estado de canillitas y códigos de referido.</p>
 			</div>
-			<div class="flex items-center gap-2">
-				<button class="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2">
-					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-					Nuevo Punto
+			<div class="flex items-center gap-3">
+				<a href="/admin/canillitas/solicitudes" class="px-4 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors text-sm">
+					Ver Solicitudes
+				</a>
+				<button id="btn-nuevo-punto" class="px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md flex items-center gap-2 cursor-pointer text-sm">
+					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+					Nuevo Punto de Retiro
 				</button>
 			</div>
 		</header>
 
 		{/* Top Metric Cards */}
-		<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+		<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
 			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Puntos Activos</h3>
-				<p class="text-3xl font-black text-slate-900">{puntos.filter(p => p.estado === 'activo').length}</p>
+				<h3 class="font-bold text-slate-400 text-xs uppercase tracking-wider mb-1">Puntos Activos</h3>
+				<p class="text-3xl font-extrabold text-emerald-600">{activeCount}</p>
 			</div>
-			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm opacity-50">
-				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Ventas Red</h3>
-				<p class="text-3xl font-black text-emerald-600">--</p>
+			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+				<h3 class="font-bold text-slate-400 text-xs uppercase tracking-wider mb-1">Pendientes de Activación</h3>
+				<p class="text-3xl font-extrabold text-amber-600">{pendingCount}</p>
 			</div>
-			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm opacity-50">
-				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Comisiones a pagar</h3>
-				<p class="text-3xl font-black text-amber-600">--</p>
+			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+				<h3 class="font-bold text-slate-400 text-xs uppercase tracking-wider mb-1">Suspendidos</h3>
+				<p class="text-3xl font-extrabold text-rose-600">{suspendedCount}</p>
 			</div>
-			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm opacity-50">
-				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Promedio x Punto</h3>
-				<p class="text-3xl font-black text-indigo-600">-- <span class="text-lg font-bold text-slate-500">ventas</span></p>
+			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+				<h3 class="font-bold text-slate-400 text-xs uppercase tracking-wider mb-1">Códigos de Referido</h3>
+				<p class="text-3xl font-extrabold text-indigo-600">{referidos.filter(r => r.activo).length}</p>
 			</div>
 		</div>
 
-		{/* Tabla de Puntos */}
-		<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-			<table class="w-full text-left border-collapse">
-				<thead>
-					<tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
-						<th class="p-4">Punto de Retiro</th>
-						<th class="p-4 text-center">Código REF</th>
-						<th class="p-4 text-center">Ventas (Mes)</th>
-						<th class="p-4 text-right">Comisión a Pagar</th>
-						<th class="p-4 text-center">Estado</th>
-						<th class="p-4 text-center">Acciones</th>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-slate-100">
-					
-					{puntos.map(punto => {
-						const codigoReferido = referidos.find(r => r.owner_id?.$id === punto.profile_id?.$id);
-						
-						return (
-							<tr class="hover:bg-slate-50">
-								<td class="p-4">
-									<p class="font-bold text-slate-900">{punto.nombre_comercial}</p>
-									<p class="text-xs text-slate-500">{punto.direccion}, {punto.localidad}</p>
-								</td>
-								<td class="p-4 text-center font-mono font-bold text-indigo-600 bg-indigo-50/50 rounded">{codigoReferido ? codigoReferido.code : 'N/A'}</td>
-								<td class="p-4 text-center font-bold text-slate-900">--</td>
-								<td class="p-4 text-right font-black text-slate-900">--</td>
-								<td class="p-4 text-center">
-									{punto.estado === 'activo' ? (
-										<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Activo</span>
-									) : (
-										<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 capitalize">{punto.estado}</span>
-									)}
-								</td>
-								<td class="p-4 text-center">
-									<button class="text-slate-400 hover:text-indigo-600 transition-colors font-bold text-sm">Ver Detalle</button>
-								</td>
-							</tr>
-						);
-					})}
-
-					{puntos.length === 0 && (
-						<tr>
-							<td colspan="6" class="p-8 text-center text-slate-500">No hay puntos de retiro registrados.</td>
+		{/* ABM Table for Pickup Points */}
+		<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm mb-12">
+			<div class="p-6 border-b border-slate-200 flex items-center justify-between">
+				<h2 class="text-xl font-bold text-slate-900">Puntos de Retiro Registrados</h2>
+				<span class="text-xs text-slate-500 font-medium">Total: {puntos.length} puntos</span>
+			</div>
+			<div class="overflow-x-auto">
+				<table class="w-full text-left border-collapse">
+					<thead>
+						<tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+							<th class="p-4">Punto / Local</th>
+							<th class="p-4">Ubicación / Coordenadas</th>
+							<th class="p-4 text-center">Código REF</th>
+							<th class="p-4 text-center">Horarios</th>
+							<th class="p-4 text-center">Estado</th>
+							<th class="p-4 text-right">Acciones</th>
 						</tr>
-					)}
+					</thead>
+					<tbody class="divide-y divide-slate-100 text-sm">
+						{puntos.map(punto => {
+							const puntoProfileId = typeof punto.profile_id === 'string' ? punto.profile_id : punto.profile_id?.$id;
+							const refCode = referidos.find(r => (typeof r.owner_id === 'string' ? r.owner_id : r.owner_id?.$id) === puntoProfileId);
 
-				</tbody>
-			</table>
+							return (
+								<tr class="hover:bg-slate-50 transition-colors">
+									<td class="p-4">
+										<p class="font-bold text-slate-900">{punto.nombre_comercial}</p>
+										<p class="text-xs text-slate-500">{punto.direccion}</p>
+									</td>
+									<td class="p-4">
+										<p class="font-medium text-slate-700">{punto.localidad}, {punto.provincia}</p>
+										<p class="text-xs font-mono text-slate-400">Lat: {punto.lat}, Lng: {punto.lng}</p>
+									</td>
+									<td class="p-4 text-center">
+										{refCode ? (
+											<span class={`inline-block font-mono font-bold text-xs px-2.5 py-1 rounded border ${refCode.activo ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-500 border-slate-200 line-through'}`}>
+												{refCode.code}
+											</span>
+										) : (
+											<span class="text-xs text-slate-400 italic">Sin código</span>
+										)}
+									</td>
+									<td class="p-4 text-center text-xs text-slate-600 font-medium">
+										{punto.horarios || 'No especificado'}
+									</td>
+									<td class="p-4 text-center">
+										{punto.estado === 'activo' && (
+											<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">Activo</span>
+										)}
+										{punto.estado === 'pendiente' && (
+											<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">Pendiente</span>
+										)}
+										{punto.estado === 'suspendido' && (
+											<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">Suspendido</span>
+										)}
+										{punto.estado === 'baja' && (
+											<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">Baja</span>
+										)}
+									</td>
+									<td class="p-4 text-right space-x-2 whitespace-nowrap">
+										<button 
+											class="btn-editar-punto text-indigo-600 hover:text-indigo-800 font-bold text-xs cursor-pointer"
+											data-punto={JSON.stringify(punto)}
+										>
+											Editar
+										</button>
+										{refCode && (
+											<button 
+												class="btn-regenerar-code text-amber-600 hover:text-amber-800 font-bold text-xs cursor-pointer"
+												data-profile={puntoProfileId}
+											>
+												Regenerar REF
+											</button>
+										)}
+										<button 
+											class="btn-eliminar-punto text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
+											data-id={punto.$id}
+										>
+											Eliminar
+										</button>
+									</td>
+								</tr>
+							);
+						})}
+
+						{puntos.length === 0 && (
+							<tr>
+								<td colspan="6" class="p-8 text-center text-slate-500">No hay puntos de retiro registrados.</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
 		</div>
 	</main>
+
+	<!-- Modal ABM Punto de Retiro con Selector de Mapa -->
+	<div id="modal-punto" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+		<div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+			<div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
+				<h3 id="modal-title" class="text-xl font-bold text-slate-900">Punto de Retiro</h3>
+				<button id="btn-close-modal" class="text-slate-400 hover:text-slate-600 text-2xl font-bold">&times;</button>
+			</div>
+
+			<form id="form-punto" class="space-y-4">
+				<input type="hidden" id="punto-id" />
+				
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div>
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre Comercial</label>
+						<input type="text" id="punto-nombre" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+					</div>
+					<div>
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Estado</label>
+						<select id="punto-estado" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600 cursor-pointer">
+							<option value="activo">Activo</option>
+							<option value="pendiente">Pendiente</option>
+							<option value="suspendido">Suspendido</option>
+							<option value="baja">Baja</option>
+						</select>
+					</div>
+				</div>
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Dirección Completa</label>
+					<input type="text" id="punto-direccion" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+				</div>
+
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div>
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Localidad / Barrio</label>
+						<input type="text" id="punto-localidad" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+					</div>
+					<div>
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Provincia</label>
+						<input type="text" id="punto-provincia" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+					</div>
+				</div>
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Horarios de Atención</label>
+					<input type="text" id="punto-horarios" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+				</div>
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Ubicación Geográfica (Arrastrá el marcador para cambiar lat/lng)</label>
+					<div id="modal-map" class="w-full h-56 rounded-2xl border border-slate-200 overflow-hidden mb-2"></div>
+					<div class="grid grid-cols-2 gap-4 text-xs font-mono text-slate-600">
+						<div>Lat: <span id="span-lat">-34.6037</span></div>
+						<div>Lng: <span id="span-lng">-58.3816</span></div>
+					</div>
+				</div>
+
+				<div class="flex justify-end gap-3 pt-4 border-t border-slate-200">
+					<button type="button" id="btn-cancel-modal" class="px-5 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 text-sm">Cancelar</button>
+					<button type="submit" id="btn-save-punto" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md text-sm cursor-pointer">Guardar Punto</button>
+				</div>
+			</form>
+		</div>
+	</div>
+
+	<script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+	<script>
+		import { actions } from 'astro:actions';
+
+		const modal = document.getElementById('modal-punto');
+		const modalTitle = document.getElementById('modal-title');
+		const formPunto = document.getElementById('form-punto') as HTMLFormElement;
+		const btnNuevo = document.getElementById('btn-nuevo-punto');
+		const btnClose = document.getElementById('btn-close-modal');
+		const btnCancel = document.getElementById('btn-cancel-modal');
+
+		const inputId = document.getElementById('punto-id') as HTMLInputElement;
+		const inputNombre = document.getElementById('punto-nombre') as HTMLInputElement;
+		const inputEstado = document.getElementById('punto-estado') as HTMLSelectElement;
+		const inputDireccion = document.getElementById('punto-direccion') as HTMLInputElement;
+		const inputLocalidad = document.getElementById('punto-localidad') as HTMLInputElement;
+		const inputProvincia = document.getElementById('punto-provincia') as HTMLInputElement;
+		const inputHorarios = document.getElementById('punto-horarios') as HTMLInputElement;
+		const spanLat = document.getElementById('span-lat')!;
+		const spanLng = document.getElementById('span-lng')!;
+
+		let currentLat = -34.6037;
+		let currentLng = -58.3816;
+		let map: any = null;
+		let marker: any = null;
+
+		function initModalMap(lat: number, lng: number) {
+			currentLat = lat;
+			currentLng = lng;
+			spanLat.textContent = lat.toFixed(6);
+			spanLng.textContent = lng.toFixed(6);
+
+			if (!map && typeof (window as any).L !== 'undefined') {
+				const L = (window as any).L;
+				map = L.map('modal-map').setView([lat, lng], 14);
+				L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+				marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+				marker.on('dragend', () => {
+					const pos = marker.getLatLng();
+					currentLat = pos.lat;
+					currentLng = pos.lng;
+					spanLat.textContent = pos.lat.toFixed(6);
+					spanLng.textContent = pos.lng.toFixed(6);
+				});
+			} else if (map && marker) {
+				map.setView([lat, lng], 14);
+				marker.setLatLng([lat, lng]);
+			}
+			setTimeout(() => {
+				if (map) map.invalidateSize();
+			}, 200);
+		}
+
+		function openModal(data: any = null) {
+			if (data) {
+				modalTitle!.textContent = 'Editar Punto de Retiro';
+				inputId.value = data.$id;
+				inputNombre.value = data.nombre_comercial || '';
+				inputEstado.value = data.estado || 'activo';
+				inputDireccion.value = data.direccion || '';
+				inputLocalidad.value = data.localidad || 'CABA';
+				inputProvincia.value = data.provincia || 'CABA';
+				inputHorarios.value = data.horarios || 'Lunes a Viernes 9 a 18hs';
+				initModalMap(data.lat || -34.6037, data.lng || -58.3816);
+			} else {
+				modalTitle!.textContent = 'Nuevo Punto de Retiro';
+				inputId.value = '';
+				inputNombre.value = '';
+				inputEstado.value = 'activo';
+				inputDireccion.value = '';
+				inputLocalidad.value = 'CABA';
+				inputProvincia.value = 'CABA';
+				inputHorarios.value = 'Lunes a Viernes 9 a 18hs';
+				initModalMap(-34.6037, -58.3816);
+			}
+			modal!.classList.remove('hidden');
+		}
+
+		function closeModal() {
+			modal!.classList.add('hidden');
+		}
+
+		btnNuevo?.addEventListener('click', () => openModal());
+		btnClose?.addEventListener('click', closeModal);
+		btnCancel?.addEventListener('click', closeModal);
+
+		document.querySelectorAll('.btn-editar-punto').forEach(btn => {
+			btn.addEventListener('click', (e) => {
+				const data = JSON.parse((e.currentTarget as HTMLElement).dataset.punto || '{}');
+				openModal(data);
+			});
+		});
+
+		document.querySelectorAll('.btn-eliminar-punto').forEach(btn => {
+			btn.addEventListener('click', async (e) => {
+				const id = (e.currentTarget as HTMLElement).dataset.id;
+				if (!id || !confirm('¿Estás seguro de eliminar este punto de retiro?')) return;
+				const { data, error } = await actions.deletePickupPointAdmin({ id });
+				if (error || !data?.success) {
+					alert(error?.message || 'Error al eliminar');
+				} else {
+					window.location.reload();
+				}
+			});
+		});
+
+		document.querySelectorAll('.btn-regenerar-code').forEach(btn => {
+			btn.addEventListener('click', async (e) => {
+				const profileId = (e.currentTarget as HTMLElement).dataset.profile;
+				if (!profileId || !confirm('¿Regenerar el código de referido para este canillita?')) return;
+				const { data, error } = await actions.regenerateReferralCode({ profileId });
+				if (error || !data?.success) {
+					alert(error?.message || 'Error al regenerar código');
+				} else {
+					alert(`Nuevo código generado: ${data.code}`);
+					window.location.reload();
+				}
+			});
+		});
+
+		formPunto?.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			const id = inputId.value;
+			const payload = {
+				nombre_comercial: inputNombre.value,
+				direccion: inputDireccion.value,
+				localidad: inputLocalidad.value,
+				provincia: inputProvincia.value,
+				horarios: inputHorarios.value,
+				estado: inputEstado.value as any,
+				lat: currentLat,
+				lng: currentLng
+			};
+
+			if (id) {
+				const { data, error } = await actions.updatePickupPointAdmin({ id, ...payload });
+				if (error || !data?.success) alert(error?.message || 'Error al actualizar');
+				else window.location.reload();
+			} else {
+				const { data, error } = await actions.createPickupPointAdmin(payload);
+				if (error || !data?.success) alert(error?.message || 'Error al crear');
+				else window.location.reload();
+			}
+		});
+	</script>
 </AdminLayout>

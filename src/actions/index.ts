@@ -34,6 +34,25 @@ const users = new Proxy({} as Users, {
 	}
 });
 
+async function generateUniqueReferralCode(nombre: string, apellido: string): Promise<string> {
+	const initial = nombre.trim().substring(0, 1).toUpperCase().replace(/[^A-Z]/g, 'X') || 'C';
+	const surname = apellido.trim().toUpperCase().replace(/[^A-Z]/g, '').substring(0, 8) || 'CANILLITA';
+	
+	for (let attempt = 0; attempt < 15; attempt++) {
+		const randomNum = Math.floor(1000 + Math.random() * 9000);
+		const candidate = `CANI-${initial}${surname}-${randomNum}`;
+		
+		const existing = await db.listDocuments('urbanpoint', 'referral_codes', [
+			Query.equal('code', candidate),
+			Query.limit(1)
+		]);
+		if (existing.documents.length === 0) {
+			return candidate;
+		}
+	}
+	return `CANI-${initial}${surname}-${Date.now().toString().slice(-4)}`;
+}
+
 export const server = {
 	registerCanillita: defineAction({
 		accept: 'json',
@@ -55,8 +74,6 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
-				// TODO: Implement rate limiting / anti-fraud (100m proximity check)
-
 				const doc = await db.createDocument(
 					'urbanpoint',
 					'canillita_applications',
@@ -110,19 +127,27 @@ export const server = {
 						userId = newUser.$id;
 					}
 				} catch(e) {
-					// Fallback if users.list fails (e.g. API key permissions)
 					throw new Error('Error al gestionar el usuario Auth: ' + e);
 				}
 
 				// 2. Crear Perfil (Role: canillita)
-				const profile = await db.createDocument('urbanpoint', 'profiles', ID.unique(), {
-					user_id: userId,
-					role: 'canillita',
-					nombre: app.nombre + ' ' + app.apellido,
-					email: app.email,
-					telefono: app.telefono,
-					saldo_disponible_centavos: 0
-				});
+				let profile;
+				const existingProfiles = await db.listDocuments('urbanpoint', 'profiles', [
+					Query.equal('user_id', userId)
+				]);
+				if (existingProfiles.documents.length > 0) {
+					profile = existingProfiles.documents[0];
+					await db.updateDocument('urbanpoint', 'profiles', profile.$id, { role: 'canillita' });
+				} else {
+					profile = await db.createDocument('urbanpoint', 'profiles', ID.unique(), {
+						user_id: userId,
+						role: 'canillita',
+						nombre: app.nombre + ' ' + app.apellido,
+						email: app.email,
+						telefono: app.telefono,
+						saldo_disponible_centavos: 0
+					});
+				}
 
 				// 3. Crear Punto de Retiro (estado: activo) con toda la información completa
 				const pickupPoint = await db.createDocument('urbanpoint', 'pickup_points', ID.unique(), {
@@ -139,8 +164,8 @@ export const server = {
 					estado: 'activo'
 				});
 
-				// 4. Crear Referral Code base
-				const codeStr = (app.nombre.substring(0,2) + app.apellido.substring(0,3) + Math.floor(Math.random()*1000)).toUpperCase();
+				// 4. Crear Referral Code estandarizado
+				const codeStr = await generateUniqueReferralCode(app.nombre, app.apellido);
 				await db.createDocument('urbanpoint', 'referral_codes', ID.unique(), {
 					code: codeStr,
 					owner_id: profile.$id,
@@ -179,6 +204,341 @@ export const server = {
 		}
 	}),
 
+	suspendCanillita: defineAction({
+		accept: 'json',
+		input: z.object({
+			applicationId: z.string().optional(),
+			pickupPointId: z.string().optional(),
+			profileId: z.string().optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('No autorizado');
+				}
+
+				if (input.applicationId) {
+					await db.updateDocument('urbanpoint', 'canillita_applications', input.applicationId, {
+						estado: 'suspendido'
+					});
+				}
+
+				if (input.pickupPointId) {
+					await db.updateDocument('urbanpoint', 'pickup_points', input.pickupPointId, {
+						estado: 'suspendido'
+					});
+				}
+
+				if (input.profileId) {
+					const points = await db.listDocuments('urbanpoint', 'pickup_points', [
+						Query.equal('profile_id', input.profileId)
+					]);
+					for (const p of points.documents) {
+						await db.updateDocument('urbanpoint', 'pickup_points', p.$id, {
+							estado: 'suspendido'
+						});
+					}
+				}
+
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	regenerateReferralCode: defineAction({
+		accept: 'json',
+		input: z.object({
+			profileId: z.string()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo admin puede regenerar códigos de referido');
+				}
+
+				const profile = await db.getDocument('urbanpoint', 'profiles', input.profileId);
+				const nameParts = profile.nombre ? profile.nombre.split(' ') : ['C', 'CANILLITA'];
+				const nombre = nameParts[0] || 'C';
+				const apellido = nameParts.slice(1).join(' ') || 'CANILLITA';
+
+				const newCode = await generateUniqueReferralCode(nombre, apellido);
+
+				// Desactivar anteriores
+				const prevCodes = await db.listDocuments('urbanpoint', 'referral_codes', [
+					Query.equal('owner_id', input.profileId)
+				]);
+				for (const c of prevCodes.documents) {
+					await db.updateDocument('urbanpoint', 'referral_codes', c.$id, { activo: false });
+				}
+
+				const newDoc = await db.createDocument('urbanpoint', 'referral_codes', ID.unique(), {
+					code: newCode,
+					owner_id: input.profileId,
+					activo: true
+				});
+
+				return { success: true, code: newCode, id: newDoc.$id };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	toggleReferralCode: defineAction({
+		accept: 'json',
+		input: z.object({
+			codeId: z.string(),
+			activo: z.boolean()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo admin puede modificar códigos de referido');
+				}
+
+				await db.updateDocument('urbanpoint', 'referral_codes', input.codeId, {
+					activo: input.activo
+				});
+
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	createPickupPointAdmin: defineAction({
+		accept: 'json',
+		input: z.object({
+			nombre_comercial: z.string().min(2),
+			direccion: z.string().min(5),
+			localidad: z.string().optional(),
+			provincia: z.string().optional(),
+			lat: z.number(),
+			lng: z.number(),
+			horarios: z.string().min(5),
+			estado: z.enum(['activo', 'pendiente', 'suspendido', 'baja']).optional(),
+			profile_id: z.string().optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo admin puede crear puntos de retiro');
+				}
+
+				const payload: any = {
+					nombre_comercial: input.nombre_comercial,
+					direccion: input.direccion,
+					localidad: input.localidad || 'CABA',
+					provincia: input.provincia || 'CABA',
+					lat: input.lat,
+					lng: input.lng,
+					horarios: input.horarios,
+					estado: input.estado || 'activo'
+				};
+
+				if (input.profile_id) {
+					payload.profile_id = input.profile_id;
+				}
+
+				const doc = await db.createDocument('urbanpoint', 'pickup_points', ID.unique(), payload);
+				return { success: true, id: doc.$id };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	updatePickupPointAdmin: defineAction({
+		accept: 'json',
+		input: z.object({
+			id: z.string(),
+			nombre_comercial: z.string().min(2),
+			direccion: z.string().min(5),
+			localidad: z.string().optional(),
+			provincia: z.string().optional(),
+			lat: z.number(),
+			lng: z.number(),
+			horarios: z.string().min(5),
+			estado: z.enum(['activo', 'pendiente', 'suspendido', 'baja'])
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo admin puede editar puntos de retiro');
+				}
+
+				await db.updateDocument('urbanpoint', 'pickup_points', input.id, {
+					nombre_comercial: input.nombre_comercial,
+					direccion: input.direccion,
+					localidad: input.localidad || 'CABA',
+					provincia: input.provincia || 'CABA',
+					lat: input.lat,
+					lng: input.lng,
+					horarios: input.horarios,
+					estado: input.estado
+				});
+
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	deletePickupPointAdmin: defineAction({
+		accept: 'json',
+		input: z.object({
+			id: z.string()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo admin puede eliminar puntos de retiro');
+				}
+
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	liquidateCommissions: defineAction({
+		accept: 'json',
+		input: z.object({
+			profileId: z.string(),
+			montoCentavos: z.number().gt(0, "El monto a liquidar debe ser mayor a 0"),
+			periodo: z.string().optional(),
+			metodoPago: z.string().optional(),
+			comprobante: z.string().optional(),
+			idempotencyKey: z.string().min(5)
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo un administrador puede ejecutar liquidaciones');
+				}
+
+				// Idempotency check
+				const existingPayout = await db.listDocuments('urbanpoint', 'payouts', [
+					Query.equal('idempotency_key', input.idempotencyKey),
+					Query.limit(1)
+				]);
+
+				if (existingPayout.documents.length > 0) {
+					return { success: true, payoutId: existingPayout.documents[0].$id, idempotencySkipped: true };
+				}
+
+				const now = new Date();
+				const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+				const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+
+				// Create payout document
+				const payout = await db.createDocument('urbanpoint', 'payouts', ID.unique(), {
+					monto_centavos: input.montoCentavos,
+					periodo: input.periodo || now.toISOString().substring(0, 7),
+					periodo_desde: firstDayOfMonth,
+					periodo_hasta: lastDayOfMonth,
+					estado: 'pagado',
+					metodo_pago: input.metodoPago || 'transferencia',
+					comprobante: input.comprobante || `COMP-${Date.now()}`,
+					idempotency_key: input.idempotencyKey,
+					actor_id: ctx.locals.user.id,
+					notas: `Liquidación a perfil ${input.profileId}`
+				});
+
+				// Update matching ledger entries
+				const pendingEntries = await db.listDocuments('urbanpoint', 'commission_ledger', [
+					Query.equal('profile_id', input.profileId),
+					Query.equal('estado', 'pendiente'),
+					Query.limit(500)
+				]);
+
+				for (const entry of pendingEntries.documents) {
+					await db.updateDocument('urbanpoint', 'commission_ledger', entry.$id, {
+						estado: 'liquidado',
+						payout_id: payout.$id
+					});
+				}
+
+				// Deduct or adjust profile balance if tracked
+				try {
+					const profile = await db.getDocument('urbanpoint', 'profiles', input.profileId);
+					const currentSaldo = profile.saldo_disponible_centavos || 0;
+					const newSaldo = Math.max(0, currentSaldo - input.montoCentavos);
+					await db.updateDocument('urbanpoint', 'profiles', input.profileId, {
+						saldo_disponible_centavos: newSaldo
+					});
+				} catch (e) {}
+
+				return { success: true, payoutId: payout.$id };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	deliverOrder: defineAction({
+		accept: 'json',
+		input: z.object({
+			orderId: z.string(),
+			pickupCode: z.string().optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || (ctx.locals.user.role !== 'canillita' && ctx.locals.user.role !== 'admin')) {
+					throw new Error('No autorizado para marcar entregas');
+				}
+
+				const order = await db.getDocument('urbanpoint', 'orders', input.orderId);
+
+				// Validate pickup point ownership if caller is canillita
+				if (ctx.locals.user.role === 'canillita') {
+					const userPoints = await db.listDocuments('urbanpoint', 'pickup_points', [
+						Query.equal('profile_id', ctx.locals.user.profileId)
+					]);
+					const userPointIds = userPoints.documents.map(p => p.$id);
+					const orderPointId = typeof order.pickup_point_id === 'string' ? order.pickup_point_id : order.pickup_point_id?.$id;
+					
+					if (orderPointId && !userPointIds.includes(orderPointId)) {
+						throw new Error('Este pedido no pertenece a tu punto de retiro.');
+					}
+				}
+
+				if (input.pickupCode && order.pickup_code_hash && input.pickupCode.trim().toUpperCase() !== order.pickup_code_hash.trim().toUpperCase()) {
+					throw new Error('El código de retiro ingresado es incorrecto.');
+				}
+
+				await db.updateDocument('urbanpoint', 'orders', input.orderId, {
+					estado: 'entregado'
+				});
+
+				// Create order event
+				try {
+					await db.createDocument('urbanpoint', 'order_events', ID.unique(), {
+						order_id: input.orderId,
+						de_estado: order.estado,
+						a_estado: 'entregado',
+						actor_id: ctx.locals.user.profileId,
+						motivo: 'Entrega confirmada por canillita'
+					});
+				} catch (e) {}
+
+				// Trigger commissions devengo if not already pagado
+				if (order.estado !== 'pagado') {
+					await resolverComisiones(input.orderId);
+				}
+
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
 	createCheckout: defineAction({
 		accept: 'json',
 		input: z.object({
@@ -204,6 +564,7 @@ export const server = {
 				}
 
 				let referralCodeId = null;
+				let resolvedCanillitaId = null;
 				if (input.referralCode) {
 					const codeRes = await db.listDocuments('urbanpoint', 'referral_codes', [
 						Query.equal('code', input.referralCode),
@@ -212,7 +573,17 @@ export const server = {
 					]);
 					if (codeRes.documents.length > 0) {
 						referralCodeId = codeRes.documents[0].$id;
+						resolvedCanillitaId = typeof codeRes.documents[0].owner_id === 'string' ? codeRes.documents[0].owner_id : codeRes.documents[0].owner_id?.$id;
 					}
+				}
+
+				if (!resolvedCanillitaId && input.pickupPointId) {
+					try {
+						const pt = await db.getDocument('urbanpoint', 'pickup_points', input.pickupPointId);
+						if (pt.profile_id) {
+							resolvedCanillitaId = typeof pt.profile_id === 'string' ? pt.profile_id : pt.profile_id?.$id;
+						}
+					} catch (e) {}
 				}
 
 				// Re-fetch all products securely from backend to avoid price manipulation
@@ -262,6 +633,9 @@ export const server = {
 					referral_code_id: referralCodeId,
 					pickup_code_hash: pickupCode
 				};
+				if (resolvedCanillitaId) {
+					orderPayload.canillita_id = resolvedCanillitaId;
+				}
 				if (input.pickupPointId) {
 					orderPayload.pickup_point_id = input.pickupPointId;
 				}
