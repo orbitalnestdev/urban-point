@@ -8,12 +8,10 @@ export const prerender = false;
 
 const searchQuery = Astro.url.searchParams.get('q') || '';
 const estadoFilter = Astro.url.searchParams.get('estado') || '';
-const tipoFilter = Astro.url.searchParams.get('tipo') || '';
 const categoriaFilter = Astro.url.searchParams.get('categoria') || '';
 const minPrice = Astro.url.searchParams.get('precioMin') || '';
 const maxPrice = Astro.url.searchParams.get('precioMax') || '';
 const soloBorradores = Astro.url.searchParams.get('borradores') === 'true';
-const soloDestacados = Astro.url.searchParams.get('destacados') === 'true';
 
 const { databases } = createAdminClient();
 let products = [];
@@ -33,7 +31,7 @@ try {
 		categoryObj: typeof p.categoria_id === 'string' ? categoryMap[p.categoria_id] : p.categoria_id
 	}));
 } catch (e) {
-	console.error(e);
+	console.error("Error loading products page:", e);
 }
 
 const numBorradores = products.filter(p => p.estado === 'borrador').length;
@@ -41,8 +39,8 @@ const numSinStock = products.filter(p => p.stock === 0 && p.estado !== 'borrador
 const numSinFoto = products.filter(p => !p.portada_url).length;
 const total = products.length;
 const activos = products.filter(p => p.estado === 'activo').length;
+const pausados = products.filter(p => p.estado === 'pausado').length;
 
-// Valor del catálogo (sumatoria de precio * stock de productos activos)
 const valorTotalCentavos = products.filter(p => p.estado === 'activo').reduce((acc, p) => acc + ((p.precio || 0) * (p.stock || 0)), 0);
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
@@ -59,10 +57,6 @@ if (searchQuery.trim()) {
 
 if (estadoFilter && estadoFilter !== 'todos') {
 	filteredProducts = filteredProducts.filter(p => p.estado === estadoFilter);
-}
-
-if (tipoFilter && tipoFilter !== 'todos') {
-	filteredProducts = filteredProducts.filter(p => p.tipo === tipoFilter);
 }
 
 if (categoriaFilter && categoriaFilter !== 'todos') {
@@ -83,524 +77,613 @@ if (soloBorradores) {
 	filteredProducts = filteredProducts.filter(p => p.estado === 'borrador');
 }
 
-if (soloDestacados) {
-	filteredProducts = filteredProducts.filter(p => p.destacado === true);
-}
+// 30 days window in ms for derived "Nuevo" flag
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+const now = Date.now();
 ---
 
 <AdminLayout title="Catálogo de Productos">
-	<main class="p-8 max-w-7xl mx-auto">
+	<main class="p-8 max-w-[1600px] mx-auto space-y-6">
+		
 		{/* Top Header */}
-		<header class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
+		<header class="flex flex-col md:flex-row md:items-start justify-between gap-4">
 			<div>
 				<div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-					<span>Catálogo</span> <span class="text-slate-300">/</span> <span class="text-slate-900 font-medium">Productos</span>
+					<span>Administración</span> &gt; <span class="text-slate-900 font-medium">Catálogo</span>
 				</div>
-				<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Productos</h1>
-				<p class="text-slate-500 font-medium text-sm mt-1">Mirá, filtrá y editá todo tu catálogo. Operá en lote cuando son muchos.</p>
+				<h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+					Gestión de Productos
+					<span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+						{total} en catálogo
+					</span>
+				</h1>
 			</div>
 			
-			<div class="flex items-center gap-2 flex-wrap justify-end">
-
-				<button id="btn-export-csv" class="px-3 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-					Exportar productos
-				</button>
-				<button id="btn-export-erp" class="px-3 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
-					Exportar para ERP
+			<div class="flex items-center gap-3">
+				<button id="btn-export-csv" class="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+					Exportar CSV
 				</button>
 
-				<button id="btn-nuevo-producto" onclick="document.dispatchEvent(new CustomEvent('modal:new-product'))" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-colors shadow-md flex items-center gap-2">
-					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+				<button id="btn-nuevo-producto" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors shadow-md flex items-center gap-2 cursor-pointer">
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
 					Nuevo producto
 				</button>
 			</div>
 		</header>
 
-		{/* Top Metric Cards */}
-		<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-			{/* Borradores sin publicar */}
-			<div class="bg-amber-50/70 border border-amber-200 p-6 rounded-3xl relative cursor-pointer hover:shadow-lg transition-all" onclick="window.location.href='/admin/catalogo?borradores=true'">
-				<p class="absolute top-6 right-6 text-4xl font-black text-amber-700">{numBorradores}</p>
-				<div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mb-4">
-					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-				</div>
-				<h3 class="font-extrabold text-slate-900 text-base mb-0.5">Borradores sin publicar</h3>
-				<p class="text-xs text-slate-500 mb-3">hace 7+ días en borrador</p>
-				<div class="text-amber-700 font-extrabold text-xs flex items-center gap-1">Terminar &rarr;</div>
-			</div>
+		{/* Top Metric Cards - Solo se muestran las alertas si son > 0 */}
+		{(numBorradores > 0 || numSinStock > 0 || numSinFoto > 0) ? (
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+				{numBorradores > 0 && (
+					<div class="bg-amber-50/70 border border-amber-200 p-4 rounded-2xl relative cursor-pointer hover:shadow-md transition-all" onclick="window.location.href='/admin/catalogo?borradores=true'">
+						<p class="absolute top-4 right-4 text-3xl font-black text-amber-700">{numBorradores}</p>
+						<div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center mb-2 font-bold">📝</div>
+						<h3 class="font-extrabold text-slate-900 text-sm">Borradores sin publicar</h3>
+						<p class="text-xs text-slate-500 mt-0.5">Completar ficha y activar &rarr;</p>
+					</div>
+				)}
 
-			{/* Publicados sin stock */}
-			<div class="bg-rose-50/70 border border-rose-200 p-6 rounded-3xl relative cursor-pointer hover:shadow-lg transition-all" onclick="window.location.href='/admin/inventario?tab=reposicion'">
-				<p class="absolute top-6 right-6 text-4xl font-black text-rose-700">{numSinStock}</p>
-				<div class="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
-					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-				</div>
-				<h3 class="font-extrabold text-slate-900 text-base mb-0.5">Publicados sin stock</h3>
-				<p class="text-xs text-slate-500 mb-3">invisibles para el cliente</p>
-				<div class="text-rose-700 font-extrabold text-xs flex items-center gap-1">Reponer &rarr;</div>
-			</div>
+				{numSinStock > 0 && (
+					<div class="bg-rose-50/70 border border-rose-200 p-4 rounded-2xl relative cursor-pointer hover:shadow-md transition-all" onclick="window.location.href='/admin/catalogo?estado=activo'">
+						<p class="absolute top-4 right-4 text-3xl font-black text-rose-700">{numSinStock}</p>
+						<div class="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mb-2 font-bold">⚠️</div>
+						<h3 class="font-extrabold text-slate-900 text-sm">Publicados sin stock</h3>
+						<p class="text-xs text-slate-500 mt-0.5">Ingresar reposición &rarr;</p>
+					</div>
+				)}
 
-			{/* Sin foto */}
-			<div class="bg-slate-50/70 border border-slate-200 p-6 rounded-3xl relative cursor-pointer hover:shadow-lg transition-all">
-				<p class="absolute top-6 right-6 text-4xl font-black text-slate-900">{numSinFoto}</p>
-				<div class="w-10 h-10 rounded-2xl bg-slate-200 text-slate-600 flex items-center justify-center mb-4">
-					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline><line x1="3" y1="3" x2="21" y2="21"></line></svg>
-				</div>
-				<h3 class="font-extrabold text-slate-900 text-base mb-0.5">Sin foto</h3>
-				<p class="text-xs text-slate-500 mb-3">en uno o más productos</p>
-				<div class="text-slate-700 font-extrabold text-xs flex items-center gap-1">Subir foto &rarr;</div>
+				{numSinFoto > 0 && (
+					<div class="bg-slate-50/70 border border-slate-200 p-4 rounded-2xl relative cursor-pointer hover:shadow-md transition-all">
+						<p class="absolute top-4 right-4 text-3xl font-black text-slate-900">{numSinFoto}</p>
+						<div class="w-8 h-8 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center mb-2 font-bold">🖼️</div>
+						<h3 class="font-extrabold text-slate-900 text-sm">Sin imagen principal</h3>
+						<p class="text-xs text-slate-500 mt-0.5">Subir portada &rarr;</p>
+					</div>
+				)}
 			</div>
-		</div>
+		) : (
+			<div class="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-emerald-800 text-xs font-bold flex items-center gap-2">
+				<span>✅ Catálogo en orden: Todos los productos publicados tienen stock e imagen asignada.</span>
+			</div>
+		)}
 
-		{/* Resumen General Horizontal */}
-		<div class="bg-white border border-slate-200 rounded-2xl p-4 mb-6 flex flex-wrap items-center justify-between gap-6 shadow-sm">
-			<div class="flex items-center gap-3 px-3">
-				<div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-				</div>
+		{/* Resumen General Horizontal Vivos */}
+		<div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+			<div class="flex items-center gap-3 px-2">
+				<div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-bold">📦</div>
 				<div>
-					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">TOTAL</p>
-					<p class="text-base font-black text-slate-900">{total}</p>
-					<p class="text-[10px] text-slate-400">{total} simples &bull; 0 con variantes &bull; 0 combos</p>
+					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Productos</p>
+					<p class="text-xl font-black text-slate-900">{total}</p>
 				</div>
 			</div>
 
-			<div class="flex items-center gap-3 px-3 border-l border-slate-100 pl-6">
-				<div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-				</div>
+			<div class="flex items-center gap-3 px-2 border-l border-slate-100 pl-4">
+				<div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">✅</div>
 				<div>
-					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ACTIVOS</p>
-					<p class="text-base font-black text-slate-900">{activos}</p>
-					<p class="text-[10px] text-slate-400">0 pausados</p>
+					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Publicados</p>
+					<p class="text-xl font-black text-emerald-600">{activos}</p>
 				</div>
 			</div>
 
-			<div class="flex items-center gap-3 px-3 border-l border-slate-100 pl-6">
-				<div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-				</div>
+			<div class="flex items-center gap-3 px-2 border-l border-slate-100 pl-4">
+				<div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">⏸️</div>
 				<div>
-					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">BORRADORES</p>
-					<p class="text-base font-black text-slate-900">{numBorradores}</p>
-					<p class="text-[10px] text-slate-400">A terminar y publicar</p>
+					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pausados</p>
+					<p class="text-xl font-black text-amber-600">{pausados}</p>
 				</div>
 			</div>
 
-			<div class="flex items-center gap-3 px-3 border-l border-slate-100 pl-6">
-				<div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-				</div>
+			<div class="flex items-center gap-3 px-2 border-l border-slate-100 pl-4">
+				<div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center font-bold">📝</div>
 				<div>
-					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">DESTACADOS</p>
-					<p class="text-base font-black text-slate-900">1</p>
-					<p class="text-[10px] text-slate-400">Visibles en portada</p>
+					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Borradores</p>
+					<p class="text-xl font-black text-slate-700">{numBorradores}</p>
 				</div>
 			</div>
 
-			<div class="flex items-center gap-3 px-3 border-l border-slate-100 pl-6 flex-1">
-				<div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-				</div>
+			<div class="flex items-center gap-3 px-2 border-l border-slate-100 pl-4 flex-1">
+				<div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">💰</div>
 				<div>
-					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">VALOR DEL CATÁLOGO</p>
-					<p class="text-base font-black text-slate-900">{formateador.format(valorTotalCentavos / 100)}</p>
-					<p class="text-[10px] text-slate-400">Precio x stock de activos</p>
+					<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Valor del Catálogo Activo</p>
+					<p class="text-lg font-black text-slate-900">{formateador.format(valorTotalCentavos / 100)}</p>
 				</div>
 			</div>
 		</div>
 
-		{/* Barra Completa de Filtros */}
-		<form method="GET" class="space-y-3 mb-6">
-			<div class="flex flex-wrap items-center gap-3">
-				{/* Buscador */}
-				<div class="relative flex-1 min-w-[280px]">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-					<input 
-						type="text" 
-						name="q"
-						value={searchQuery}
-						placeholder="Buscar por nombre, SKU o descripción" 
-						class="w-full pl-11 pr-4 py-2 border border-slate-200 rounded-full text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white" 
-					/>
-				</div>
-
-				{/* Rango de Precios */}
-				<div class="flex items-center gap-1.5 bg-white border border-slate-200 rounded-full px-3 py-1 text-sm font-bold text-slate-700">
-					<input type="number" name="precioMin" value={minPrice} placeholder="Precio min" class="w-24 px-2 py-1 text-center bg-transparent focus:outline-none" />
-					<span class="text-slate-300">-</span>
-					<input type="number" name="precioMax" value={maxPrice} placeholder="Precio max" class="w-24 px-2 py-1 text-center bg-transparent focus:outline-none" />
-				</div>
-
-				{/* Tipo */}
-				<select name="tipo" onchange="this.form.submit()" class="px-4 py-2 border border-slate-200 rounded-full text-sm font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-slate-900">
-					<option value="todos" selected={!tipoFilter || tipoFilter === 'todos'}>Tipo: Todos</option>
-					<option value="simple" selected={tipoFilter === 'simple'}>Producto simple</option>
-					<option value="variantes" selected={tipoFilter === 'variantes'}>Con variantes</option>
-					<option value="combo" selected={tipoFilter === 'combo'}>Combo</option>
-				</select>
-
-				{/* Estado */}
-				<select name="estado" onchange="this.form.submit()" class="px-4 py-2 border border-slate-200 rounded-full text-sm font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-slate-900">
-					<option value="todos" selected={!estadoFilter || estadoFilter === 'todos'}>Estado: Todos</option>
-					<option value="activo" selected={estadoFilter === 'activo'}>Activo</option>
-					<option value="borrador" selected={estadoFilter === 'borrador'}>Borrador</option>
-					<option value="inactivo" selected={estadoFilter === 'inactivo'}>Inactivo</option>
-				</select>
-
-				{/* Categoría */}
-				<select name="categoria" onchange="this.form.submit()" class="px-4 py-2 border border-slate-200 rounded-full text-sm font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-slate-900">
-					<option value="todos" selected={!categoriaFilter || categoriaFilter === 'todos'}>Categoría: Todos</option>
-					{categories.map((c: any) => (
-						<option value={c.$id} selected={categoriaFilter === c.$id}>{c.nombre}</option>
-					))}
-				</select>
-
-				{/* Toggles */}
-				<a href={`/admin/catalogo?destacados=${!soloDestacados}`} class={`px-4 py-2 border rounded-full text-sm font-bold flex items-center gap-1.5 transition-colors ${soloDestacados ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={soloDestacados ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-					Destacados <span class="text-xs opacity-75">1</span>
-				</a>
-
-				<a href={`/admin/catalogo?borradores=${!soloBorradores}`} class={`px-4 py-2 border rounded-full text-sm font-bold flex items-center gap-1.5 transition-colors ${soloBorradores ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-					Borradores <span class="text-xs opacity-75">{numBorradores}</span>
-				</a>
-			</div>
-
-			<div class="flex items-center gap-2">
-				<span class="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-extrabold rounded-full flex items-center gap-1">
-					<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-					Por urgencia
-				</span>
-			</div>
-		</form>
-
-		{/* Tabla de Productos Exacta */}
-		<div class="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-			<table class="w-full text-left border-collapse">
-				<thead>
-					<tr class="bg-slate-50/80 border-b border-slate-200 text-xs font-extrabold text-slate-500 uppercase tracking-wider">
-						<th class="p-4 w-12 text-center"><input type="checkbox" class="rounded border-slate-300" /></th>
-						<th class="p-4 cursor-pointer hover:text-slate-900">
-							<div class="flex items-center gap-1">
-								Producto
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 15l5 5 5-5"></path><path d="M7 9l5-5 5 5"></path></svg>
-							</div>
-						</th>
-						<th class="p-4 text-center cursor-pointer hover:text-slate-900">
-							<div class="flex items-center justify-center gap-1">
-								Categoría
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 15l5 5 5-5"></path><path d="M7 9l5-5 5 5"></path></svg>
-							</div>
-						</th>
-						<th class="p-4 text-center cursor-pointer hover:text-slate-900">
-							<div class="flex items-center justify-center gap-1">
-								Precio
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 15l5 5 5-5"></path><path d="M7 9l5-5 5 5"></path></svg>
-							</div>
-						</th>
-						<th class="p-4 text-center cursor-pointer hover:text-slate-900">
-							<div class="flex items-center justify-center gap-1">
-								Stock
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 15l5 5 5-5"></path><path d="M7 9l5-5 5 5"></path></svg>
-							</div>
-						</th>
-						<th class="p-4 text-center cursor-pointer hover:text-slate-900">
-							<div class="flex items-center justify-center gap-1">
-								Estado
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 15l5 5 5-5"></path><path d="M7 9l5-5 5 5"></path></svg>
-							</div>
-						</th>
-						<th class="p-4 w-12"></th>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-slate-100">
-					
-					{filteredProducts.map((product) => (
-						<tr 
-							class="hover:bg-slate-50/80 group cursor-pointer transition-colors tr-product"
-							data-id={product.$id}
-							data-nombre={product.nombre}
-							data-sku={product.sku || 'SKU N/A'}
-							data-portada={product.portada_url || ''}
-							data-estado={product.estado}
-							data-precio={product.precio}
-							data-stock={product.stock}
-							data-destacado={product.destacado ? 'true' : 'false'}
+		{/* Barra de Búsqueda y Filtros */}
+		<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
+			<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+				
+				{/* Pestañas de Estado */}
+				<div class="flex items-center gap-1 overflow-x-auto pb-1">
+					{[
+						{ id: 'todos', label: 'Todos', count: total },
+						{ id: 'activo', label: 'Publicados', count: activos },
+						{ id: 'pausado', label: 'Pausados', count: pausados },
+						{ id: 'borrador', label: 'Borradores', count: numBorradores }
+					].map(tab => (
+						<a 
+							href={`/admin/catalogo?estado=${tab.id}${searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ''}`}
+							class={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+								estadoFilter === tab.id 
+									? 'bg-slate-900 text-white shadow-sm' 
+									: 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+							}`}
 						>
-							<td class="p-4 text-center" onclick="event.stopPropagation()"><input type="checkbox" class="rounded border-slate-300" /></td>
-							<td class="p-4">
-								<div class="flex items-center gap-4">
-									<div class="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0">
-										<img src={product.portada_url || ''} alt={product.nombre} class="w-full h-full object-cover" onerror="this.src='data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23cbd5e1%22%20stroke-width%3D%221%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%20ry%3D%222%22%3E%3C%2Frect%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%3E%3C%2Fcircle%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E'; this.className='w-full h-full object-center p-3 opacity-50';" />
-									</div>
-									<div>
-										<div class="flex items-center gap-2">
-											<span class="font-extrabold text-slate-900 group-hover:text-orange-600 transition-colors text-sm">{product.nombre}</span>
-											{product.estado === 'borrador' && (
-												<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
-													Borrador +17d
-												</span>
-											)}
-										</div>
-										<p class="text-xs text-slate-400 font-mono mt-0.5">{product.sku || 'SKU N/A'}</p>
-									</div>
-								</div>
-							</td>
-							<td class="p-4 text-center text-sm font-bold text-slate-600">{product.categoryObj?.nombre || product.categoria_id?.nombre || 'Sin categoría'}</td>
-							<td class="p-4 text-center">
-								<p class="font-black text-slate-900 text-base">{formateador.format(product.precio / 100)}</p>
-							</td>
-							<td class="p-4 text-center">
-								{product.stock === 0 ? (
-									<div class="inline-flex flex-col items-center">
-										<span class="text-[10px] font-extrabold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full uppercase tracking-wider mb-0.5">SIN STOCK</span>
-										<span class="text-base font-black text-rose-600">0</span>
-									</div>
-								) : (
-									<span class="text-base font-black text-slate-900">{product.stock}</span>
-								)}
-							</td>
-							<td class="p-4 text-center" onclick="event.stopPropagation()">
-								<button 
-									data-product-id={product.$id} 
-									data-current-state={product.estado}
+							{tab.label}
+							<span class={`px-1.5 py-0.2 rounded-full text-[10px] ${estadoFilter === tab.id ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+								{tab.count}
+							</span>
+						</a>
+					))}
+				</div>
+
+				{/* Buscador */}
+				<form method="GET" action="/admin/catalogo" class="flex items-center gap-2 w-full md:w-80">
+					<input type="hidden" name="estado" value={estadoFilter} />
+					<div class="relative w-full">
+						<input 
+							type="text" 
+							name="q" 
+							value={searchQuery} 
+							placeholder="Buscar por nombre o SKU..." 
+							class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-emerald-600 focus:bg-white transition-colors"
+						/>
+						<svg class="w-4 h-4 absolute left-3 top-2.5 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+					</div>
+				</form>
+			</div>
+
+			{/* Barra Flotante de Acciones en Lote */}
+			<div id="bulk-actions-bar" class="hidden bg-slate-900 text-white p-3 rounded-xl flex items-center justify-between gap-4 shadow-lg animate-in fade-in duration-150">
+				<div class="flex items-center gap-2 text-xs font-bold">
+					<span id="bulk-count" class="bg-emerald-600 text-white px-2 py-0.5 rounded-md font-mono">0</span>
+					<span>productos seleccionados</span>
+				</div>
+				<div class="flex items-center gap-2 flex-wrap">
+					{/* Cambiar Categoría en Lote */}
+					<select id="bulk-categoria-select" class="bg-slate-800 border border-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg outline-none cursor-pointer">
+						<option value="">-- Cambiar Categoría --</option>
+						{categories.map(c => (
+							<option value={c.$id}>{c.nombre}</option>
+						))}
+					</select>
+
+					{/* Cambiar Estado en Lote */}
+					<button id="btn-bulk-activar" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer">
+						Publicar
+					</button>
+					<button id="btn-bulk-pausar" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer">
+						Pausar
+					</button>
+					<button id="btn-bulk-eliminar" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer">
+						Eliminar
+					</button>
+				</div>
+			</div>
+
+			{/* Tabla de Productos con Selector de 3 Estados */}
+			<div class="overflow-x-auto rounded-xl border border-slate-200">
+				<table class="w-full text-left border-collapse">
+					<thead>
+						<tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+							<th class="p-3.5 w-10 text-center">
+								<input type="checkbox" id="select-all-products" class="rounded border-slate-300 cursor-pointer" />
+							</th>
+							<th class="p-3.5">Producto</th>
+							<th class="p-3.5 text-center">Categoría</th>
+							<th class="p-3.5 text-right">Precio ARS</th>
+							<th class="p-3.5 text-center">Stock</th>
+							<th class="p-3.5 text-center">Estado (3 Valores)</th>
+							<th class="p-3.5 text-center">Editar</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-100 text-xs">
+						{filteredProducts.map((product) => {
+							const createdAtMs = new Date(product.$createdAt).getTime();
+							const isNuevoCalculated = (now - createdAtMs) <= THIRTY_DAYS_MS;
+							const showNuevoBadge = product.es_nuevo_manual !== undefined && product.es_nuevo_manual !== null 
+								? product.es_nuevo_manual 
+								: isNuevoCalculated;
+
+							return (
+								<tr 
+									class="hover:bg-slate-50/80 group cursor-pointer transition-colors tr-product"
+									data-id={product.$id}
 									data-nombre={product.nombre}
+									data-sku={product.sku || 'SKU N/A'}
+									data-portada={product.portada_url || ''}
+									data-estado={product.estado}
 									data-precio={product.precio}
 									data-stock={product.stock}
-									data-descripcion={product.descripcion || ''}
-									class="btn-toggle-estado inline-flex items-center gap-2 px-2.5 py-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+									data-categoria={product.categoria_id?.$id || product.categoria_id || ''}
+									data-destacado={product.destacado ? 'true' : 'false'}
+									data-nuevo={showNuevoBadge ? 'true' : 'false'}
 								>
-									<div class={`w-8 h-4.5 rounded-full relative transition-colors ${product.estado === 'activo' ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-										<div class={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 shadow transition-all ${product.estado === 'activo' ? 'right-0.5' : 'left-0.5'}`}></div>
-									</div>
-									<span class="text-xs font-bold text-slate-700 capitalize">{product.estado}</span>
-								</button>
-							</td>
-							<td class="p-4 text-right">
-								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-300 group-hover:text-slate-600 transition-colors"><polyline points="9 18 15 12 9 6"></polyline></svg>
-							</td>
-						</tr>
-					))}
-					
-					{filteredProducts.length === 0 && (
-						<tr>
-							<td colspan="7" class="p-12 text-center text-slate-400 font-bold">No se encontraron productos con los filtros seleccionados.</td>
-						</tr>
-					)}
-				</tbody>
-			</table>
+									<td class="p-3.5 text-center" onclick="event.stopPropagation()">
+										<input type="checkbox" class="chk-product rounded border-slate-300 cursor-pointer" data-id={product.$id} />
+									</td>
+
+									<td class="p-3.5">
+										<div class="flex items-center gap-3">
+											<div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
+												<img src={product.portada_url || ''} alt={product.nombre} class="w-full h-full object-cover" onerror="this.src='data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23cbd5e1%22%20stroke-width%3D%221%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%20ry%3D%222%22%3E%3C%2Frect%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%3E%3C%2Fcircle%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E'; this.className='w-full h-full object-center p-2 opacity-40';" />
+											</div>
+											<div class="min-w-0 flex-1">
+												<div class="flex items-center gap-2">
+													<span class="font-bold text-slate-900 group-hover:text-emerald-600 transition-colors truncate max-w-[280px] block" title={product.nombre}>
+														{product.nombre}
+													</span>
+													{showNuevoBadge && (
+														<span class="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
+															NUEVO
+														</span>
+													)}
+												</div>
+												<p class="text-[10px] text-slate-400 font-mono mt-0.5">{product.sku || 'SKU N/A'}</p>
+											</div>
+										</div>
+									</td>
+
+									<td class="p-3.5 text-center text-xs font-bold text-slate-600">
+										{product.categoryObj?.nombre || 'Sin categoría'}
+									</td>
+
+									<td class="p-3.5 text-right font-black text-slate-900 text-sm">
+										{formateador.format((product.precio || 0) / 100)}
+									</td>
+
+									<td class="p-3.5 text-center font-bold text-slate-700">
+										{product.stock === 0 ? (
+											<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full text-[10px] font-extrabold border border-rose-200">
+												0 unidades
+											</span>
+										) : (
+											<span>{product.stock} unidades</span>
+										)}
+									</td>
+
+									{/* Selector de 3 Estados Unificado */}
+									<td class="p-3.5 text-center" onclick="event.stopPropagation()">
+										<select 
+											data-id={product.$id} 
+											class="select-state-table px-2.5 py-1 rounded-full text-[10px] font-bold border outline-none cursor-pointer transition-colors"
+											value={product.estado}
+										>
+											<option value="activo" selected={product.estado === 'activo'}>🟢 Publicado</option>
+											<option value="pausado" selected={product.estado === 'pausado'}>🟡 Pausado</option>
+											<option value="borrador" selected={product.estado === 'borrador'}>📝 Borrador</option>
+										</select>
+									</td>
+
+									<td class="p-3.5 text-center" onclick="event.stopPropagation()">
+										<button class="btn-open-drawer px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition-colors">
+											Editar
+										</button>
+									</td>
+								</tr>
+							);
+						})}
+
+						{filteredProducts.length === 0 && (
+							<tr>
+								<td colspan="7" class="p-8 text-center text-slate-500 font-medium">
+									No se encontraron productos en el catálogo.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
 		</div>
-		<!-- Sidepanel Edición Rápida -->
-		<div id="quick-edit-backdrop" class="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm hidden transition-opacity opacity-0"></div>
-		<div id="quick-edit-panel" class="fixed top-0 right-0 bottom-0 w-full max-w-md bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-100">
-			<div class="p-6 border-b border-slate-100 flex items-start justify-between shrink-0 bg-slate-50/50">
-				<div class="flex gap-4 items-center">
+
+		{/* Quick Edit Drawer Ampliado y Mejorado */}
+		<div id="quick-edit-backdrop" class="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-xs hidden transition-opacity opacity-0"></div>
+		
+		<div id="quick-edit-panel" class="fixed top-0 right-0 bottom-0 w-full max-w-lg bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-200">
+			
+			{/* Drawer Header */}
+			<div class="p-6 border-b border-slate-100 flex items-start justify-between bg-slate-50/50 shrink-0">
+				<div class="flex gap-4 items-center min-w-0 pr-4">
 					<div class="w-14 h-14 rounded-2xl border border-slate-200 overflow-hidden bg-white shrink-0">
 						<img id="qe-img" src="" class="w-full h-full object-cover" onerror="this.src='data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23cbd5e1%22%20stroke-width%3D%221%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%20ry%3D%222%22%3E%3C%2Frect%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%3E%3C%2Fcircle%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E';" />
 					</div>
-					<div>
-						<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-slate-200 text-[10px] font-extrabold text-slate-500 mb-1">
-							<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-							Simple
+					<div class="min-w-0">
+						<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-200 text-[10px] font-bold text-slate-600 mb-1">
+							Edición Rápida
 						</span>
-						<h3 id="qe-nombre" class="text-lg font-extrabold text-slate-900 leading-tight line-clamp-1">Producto</h3>
+						<h3 id="qe-nombre" class="text-lg font-black text-slate-900 leading-tight truncate" title="Producto">Producto</h3>
 						<p id="qe-sku" class="text-[10px] font-mono text-slate-400 mt-0.5">SKU</p>
 					</div>
 				</div>
-				<button id="qe-close" class="p-2 -mr-2 -mt-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-colors cursor-pointer">
-					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+				<button id="qe-close" class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-colors cursor-pointer shrink-0">
+					✕
 				</button>
 			</div>
 
-			<div class="px-6 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
-				<a href="#" id="qe-link-full" class="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1.5 transition-colors">
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-					Abrir editor completo
+			{/* Sub-Header con Enlace Secundario al Editor Completo */}
+			<div class="px-6 py-3 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+				<a href="#" id="qe-link-full" class="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 transition-colors">
+					🔗 Abrir editor completo
 				</a>
-				<span class="text-[10px] font-bold text-emerald-600 flex items-center gap-1 opacity-0 transition-opacity" id="qe-saved-indicator">
-					<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-					Guardado
+				<span class="text-[10px] font-bold text-emerald-600 opacity-0 transition-opacity" id="qe-saved-indicator">
+					✓ Guardado
 				</span>
 			</div>
 
-			<div class="p-6 overflow-y-auto flex-1 space-y-8">
-				{/* Estado */}
+			{/* Formulario en 2 Columnas */}
+			<div class="p-6 overflow-y-auto flex-1 space-y-6">
+				
+				{/* 1. Selector de Estado (3 Estados Unificados) */}
 				<div>
-					<label class="block text-xs font-bold text-slate-900 mb-2">Estado</label>
-					<div class="flex p-1 bg-slate-100 rounded-xl border border-slate-200">
-						<label class="flex-1 text-center cursor-pointer">
-							<input type="radio" name="qe-estado" value="borrador" class="peer sr-only" />
-							<div class="px-3 py-2 rounded-lg text-xs font-bold text-slate-500 peer-checked:bg-white peer-checked:text-slate-900 peer-checked:shadow-sm transition-all flex items-center justify-center gap-2">
-								<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Borrador
-							</div>
-						</label>
-						<label class="flex-1 text-center cursor-pointer">
+					<label class="block text-xs font-bold text-slate-900 mb-2">Estado del producto</label>
+					<div class="grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
+						<label class="text-center cursor-pointer">
 							<input type="radio" name="qe-estado" value="activo" class="peer sr-only" />
-							<div class="px-3 py-2 rounded-lg text-xs font-bold text-slate-500 peer-checked:bg-white peer-checked:text-slate-900 peer-checked:shadow-sm transition-all flex items-center justify-center gap-2">
-								<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="text-emerald-500"><polyline points="20 6 9 17 4 12"></polyline></svg> Publicado
+							<div class="px-2 py-2 rounded-lg text-xs font-bold text-slate-500 peer-checked:bg-emerald-600 peer-checked:text-white transition-all">
+								🟢 Publicado
 							</div>
 						</label>
-						<label class="flex-1 text-center cursor-pointer">
-							<input type="radio" name="qe-estado" value="inactivo" class="peer sr-only" />
-							<div class="px-3 py-2 rounded-lg text-xs font-bold text-slate-500 peer-checked:bg-white peer-checked:text-slate-900 peer-checked:shadow-sm transition-all flex items-center justify-center gap-2">
-								<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="text-slate-400"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg> Pausado
+						<label class="text-center cursor-pointer">
+							<input type="radio" name="qe-estado" value="pausado" class="peer sr-only" />
+							<div class="px-2 py-2 rounded-lg text-xs font-bold text-slate-500 peer-checked:bg-amber-500 peer-checked:text-white transition-all">
+								🟡 Pausado
+							</div>
+						</label>
+						<label class="text-center cursor-pointer">
+							<input type="radio" name="qe-estado" value="borrador" class="peer sr-only" />
+							<div class="px-2 py-2 rounded-lg text-xs font-bold text-slate-500 peer-checked:bg-slate-700 peer-checked:text-white transition-all">
+								📝 Borrador
 							</div>
 						</label>
 					</div>
 				</div>
 
-				{/* Toggles */}
-				<div class="space-y-4">
-					<div class="flex items-center justify-between">
-						<div>
-							<p class="text-sm font-bold text-slate-900">Destacado</p>
-							<p class="text-xs text-slate-500">Aparece en la portada del catálogo.</p>
-						</div>
-						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" id="qe-destacado" class="sr-only peer">
-							<div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-						</label>
-					</div>
-					<div class="flex items-center justify-between">
-						<div>
-							<p class="text-sm font-bold text-slate-900">Nuevo</p>
-							<p class="text-xs text-slate-500">Marca el producto como recién agregado.</p>
-						</div>
-						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" id="qe-nuevo" class="sr-only peer" checked>
-							<div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-						</label>
-					</div>
+				{/* 2. Selector de Categoría (Agregado al Editor Rápido) */}
+				<div>
+					<label class="block text-xs font-bold text-slate-900 mb-1">Categoría del producto</label>
+					<select id="qe-categoria" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 bg-slate-50 focus:bg-white focus:border-emerald-600 outline-none">
+						<option value="">-- Sin Categoría --</option>
+						{categories.map(c => (
+							<option value={c.$id}>{c.nombre}</option>
+						))}
+					</select>
 				</div>
 
-				{/* Inputs */}
-				<div class="space-y-4">
+				{/* 3. Inputs de Precio y Stock (2 Columnas con Formato) */}
+				<div class="grid grid-cols-2 gap-4">
 					<div>
-						<label class="block text-xs font-bold text-slate-900 mb-1">Precio base</label>
-						<div class="relative">
-							<input type="number" id="qe-precio" class="w-full pl-4 pr-12 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-bold text-slate-900" />
-							<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">ARS</span>
-						</div>
+						<label class="block text-xs font-bold text-slate-900 mb-1">Precio base (ARS)</label>
+						<input 
+							type="text" 
+							id="qe-precio" 
+							placeholder="$ 0,00"
+							class="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-bold text-slate-900 text-xs focus:border-emerald-600 outline-none" 
+						/>
 					</div>
 					<div>
-						<label class="block text-xs font-bold text-slate-900 mb-1">Stock</label>
+						<label class="block text-xs font-bold text-slate-900 mb-1">Stock disponible</label>
 						<div class="relative">
-							<input type="number" id="qe-stock" class="w-full pl-4 pr-12 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-bold text-slate-900" />
-							<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">u</span>
+							<input 
+								type="number" 
+								id="qe-stock" 
+								min="0"
+								class="w-full pl-3 pr-16 py-2.5 border border-slate-200 rounded-xl font-bold text-slate-900 text-xs focus:border-emerald-600 outline-none" 
+							/>
+							<span class="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400">unidades</span>
 						</div>
 					</div>
 				</div>
 
-				{/* Foto */}
+				{/* 4. Toggles Destacado y Nuevo */}
+				<div class="space-y-3 border-t border-b border-slate-100 py-4">
+					<div class="flex items-center justify-between">
+						<div>
+							<p class="text-xs font-bold text-slate-900">Destacado en Portada</p>
+							<p class="text-[10px] text-slate-400">Aparece en el carrusel principal.</p>
+						</div>
+						<input type="checkbox" id="qe-destacado" class="w-4 h-4 text-emerald-600 rounded border-slate-300 cursor-pointer" />
+					</div>
+					<div class="flex items-center justify-between">
+						<div>
+							<p class="text-xs font-bold text-slate-900">Distintivo "Nuevo"</p>
+							<p class="text-[10px] text-slate-400">Derivado automático (&lt;30 días) u override manual.</p>
+						</div>
+						<input type="checkbox" id="qe-nuevo" class="w-4 h-4 text-emerald-600 rounded border-slate-300 cursor-pointer" />
+					</div>
+				</div>
+
+				{/* 5. Foto Principal Thumbnail */}
 				<div>
 					<label class="block text-xs font-bold text-slate-900 mb-2">Foto principal</label>
 					<div class="flex items-center gap-4">
-						<div class="w-16 h-16 rounded-xl border border-slate-200 overflow-hidden shrink-0">
+						<div class="w-14 h-14 rounded-xl border border-slate-200 overflow-hidden shrink-0 bg-slate-50">
 							<img id="qe-img-thumb" src="" class="w-full h-full object-cover" onerror="this.src='data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23cbd5e1%22%20stroke-width%3D%221%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%20ry%3D%222%22%3E%3C%2Frect%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%3E%3C%2Fcircle%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E';" />
 						</div>
-						<a href="#" id="qe-link-gallery" class="flex-1 flex justify-between items-center px-4 py-3 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
-							<span class="text-sm font-bold text-slate-700">Gestionar galería</span>
-							<span class="text-xs font-bold text-orange-600 flex items-center gap-1">1 foto &rarr;</span>
+						<a href="#" id="qe-link-gallery" class="text-xs font-bold text-emerald-600 hover:underline">
+							Cambiar imagen en editor completo &rarr;
 						</a>
 					</div>
 				</div>
 			</div>
 
+			{/* Drawer Footer */}
 			<div class="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
-				<button id="qe-cancel" class="text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors px-4 py-2 cursor-pointer">Cancelar</button>
-				<button id="qe-save" class="px-6 py-2.5 bg-white border border-slate-200 hover:border-emerald-500 text-slate-700 font-bold text-sm rounded-xl transition-colors shadow-sm focus:ring-2 focus:ring-emerald-500 cursor-pointer">Guardar</button>
+				<button id="qe-cancel" class="text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors px-4 py-2 cursor-pointer">
+					Cancelar
+				</button>
+				<button id="qe-save" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-md cursor-pointer">
+					Guardar Cambios
+				</button>
 			</div>
 		</div>
+
 	</main>
 </AdminLayout>
 
 <script>
-	import { exportProductsCsv, exportErpCsv } from '../../../lib/exports';
+	import { exportProductsCsv } from '../../../lib/exports';
 	import { actions } from 'astro:actions';
 
-	const modalNative = document.getElementById('modal-nuevo-producto-native');
-	const btnNuevo = document.getElementById('btn-nuevo-producto');
-	const btnClose = document.getElementById('close-modal-nuevo-producto');
-	const btnCancel = document.getElementById('cancel-modal-nuevo-producto');
-	const errorDiv = document.getElementById('nuevo-producto-error');
-
-	// --- Quick Edit Panel Logic ---
 	const backdrop = document.getElementById('quick-edit-backdrop');
 	const panel = document.getElementById('quick-edit-panel');
 	const btnCloseQe = document.getElementById('qe-close');
 	const btnCancelQe = document.getElementById('qe-cancel');
 	const btnSaveQe = document.getElementById('qe-save') as HTMLButtonElement;
+	
 	let currentProductId = '';
+	let isDirty = false;
+	let initialValues: any = {};
+
+	const markDirty = () => {
+		isDirty = true;
+	};
+
+	// Attach dirty check listeners
+	['qe-precio', 'qe-stock', 'qe-categoria', 'qe-destacado', 'qe-nuevo'].forEach(id => {
+		const el = document.getElementById(id);
+		el?.addEventListener('change', markDirty);
+		el?.addEventListener('input', markDirty);
+	});
+	document.querySelectorAll('input[name="qe-estado"]').forEach(r => {
+		r.addEventListener('change', markDirty);
+	});
 
 	const openPanel = (data: any) => {
 		currentProductId = data.id;
+		isDirty = false;
+
 		const nombreEl = document.getElementById('qe-nombre');
-		if(nombreEl) nombreEl.innerText = data.nombre;
+		if (nombreEl) {
+			nombreEl.innerText = data.nombre;
+			nombreEl.title = data.nombre;
+		}
 		const skuEl = document.getElementById('qe-sku');
-		if(skuEl) skuEl.innerText = data.sku;
+		if (skuEl) skuEl.innerText = data.sku;
+
 		const imgEl = document.getElementById('qe-img') as HTMLImageElement;
-		if(imgEl) imgEl.src = data.portada || '';
+		if (imgEl) imgEl.src = data.portada || '';
 		const imgThumbEl = document.getElementById('qe-img-thumb') as HTMLImageElement;
-		if(imgThumbEl) imgThumbEl.src = data.portada || '';
-		
+		if (imgThumbEl) imgThumbEl.src = data.portada || '';
+
+		const valPriceCents = parseInt(data.precio || '0', 10);
+		const valPriceStr = (valPriceCents / 100).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 		const precioEl = document.getElementById('qe-precio') as HTMLInputElement;
-		if(precioEl) precioEl.value = (parseInt(data.precio, 10) / 100).toString();
+		if (precioEl) precioEl.value = valPriceStr;
+
 		const stockEl = document.getElementById('qe-stock') as HTMLInputElement;
-		if(stockEl) stockEl.value = data.stock.toString();
-		
+		if (stockEl) stockEl.value = data.stock.toString();
+
+		const catEl = document.getElementById('qe-categoria') as HTMLSelectElement;
+		if (catEl) catEl.value = data.categoria || '';
+
 		const destacadoEl = document.getElementById('qe-destacado') as HTMLInputElement;
-		if(destacadoEl) destacadoEl.checked = data.destacado === 'true';
-		
-		const stateRadio = document.querySelector(`input[name="qe-estado"][value="${data.estado === 'activo' ? 'activo' : data.estado}"]`) as HTMLInputElement;
+		if (destacadoEl) destacadoEl.checked = data.destacado === 'true';
+
+		const nuevoEl = document.getElementById('qe-nuevo') as HTMLInputElement;
+		if (nuevoEl) nuevoEl.checked = data.nuevo === 'true';
+
+		const stateRadio = document.querySelector(`input[name="qe-estado"][value="${data.estado}"]`) as HTMLInputElement;
 		if (stateRadio) stateRadio.checked = true;
 
 		const fullLink = document.getElementById('qe-link-full') as HTMLAnchorElement;
-		if(fullLink) fullLink.href = `/admin/catalogo/${data.id}`;
+		if (fullLink) fullLink.href = `/admin/catalogo/${data.id}`;
 		const galLink = document.getElementById('qe-link-gallery') as HTMLAnchorElement;
-		if(galLink) galLink.href = `/admin/catalogo/${data.id}#identidad`;
+		if (galLink) galLink.href = `/admin/catalogo/${data.id}#identidad`;
+
+		// Scroll Lock
+		document.body.classList.add('overflow-hidden');
 
 		backdrop?.classList.remove('hidden');
 		setTimeout(() => backdrop?.classList.remove('opacity-0'), 10);
 		panel?.classList.remove('translate-x-full');
+
+		// Auto Focus
+		setTimeout(() => precioEl?.focus(), 150);
 	};
 
-	const closePanel = () => {
+	const safeClosePanel = () => {
+		if (isDirty) {
+			const confirmed = confirm('Tenés cambios sin guardar. ¿Deseás cerrar de todos modos?');
+			if (!confirmed) return;
+		}
+		forceClosePanel();
+	};
+
+	const forceClosePanel = () => {
+		document.body.classList.remove('overflow-hidden');
 		panel?.classList.add('translate-x-full');
 		backdrop?.classList.add('opacity-0');
 		setTimeout(() => backdrop?.classList.add('hidden'), 300);
+		isDirty = false;
 	};
 
 	document.querySelectorAll('.tr-product').forEach(tr => {
 		tr.addEventListener('click', (e) => {
-			if ((e.target as HTMLElement).closest('button, input, a')) return;
+			if ((e.target as HTMLElement).closest('button, input, select, a')) return;
 			const data = (e.currentTarget as HTMLElement).dataset;
 			openPanel(data);
 		});
 	});
 
-	btnCloseQe?.addEventListener('click', closePanel);
-	btnCancelQe?.addEventListener('click', closePanel);
-	backdrop?.addEventListener('click', closePanel);
+	document.querySelectorAll('.btn-open-drawer').forEach(btn => {
+		btn.addEventListener('click', (e) => {
+			e.stopPropagation();
+			const tr = (e.currentTarget as HTMLElement).closest('.tr-product') as HTMLElement;
+			if (tr) openPanel(tr.dataset);
+		});
+	});
 
+	btnCloseQe?.addEventListener('click', safeClosePanel);
+	btnCancelQe?.addEventListener('click', safeClosePanel);
+	backdrop?.addEventListener('click', safeClosePanel);
+
+	// Escape key shortcut
+	document.addEventListener('keydown', (e) => {
+		if (e.key === 'Escape' && !panel?.classList.contains('translate-x-full')) {
+			safeClosePanel();
+		}
+	});
+
+	// Quick Save Action
 	btnSaveQe?.addEventListener('click', async () => {
 		if (!currentProductId) return;
+
+		const precioRaw = (document.getElementById('qe-precio') as HTMLInputElement).value
+			.replace(/\./g, '')
+			.replace(',', '.');
+		const precioVal = parseFloat(precioRaw);
+		if (isNaN(precioVal) || precioVal <= 0) {
+			alert('El precio debe ser mayor a cero.');
+			return;
+		}
+		const precioCents = Math.round(precioVal * 100);
+
+		const stockVal = parseInt((document.getElementById('qe-stock') as HTMLInputElement).value, 10);
+		if (isNaN(stockVal) || stockVal < 0) {
+			alert('El stock no puede ser negativo.');
+			return;
+		}
+
+		const estado = (document.querySelector('input[name="qe-estado"]:checked') as HTMLInputElement)?.value || 'borrador';
+		const categoria_id = (document.getElementById('qe-categoria') as HTMLSelectElement)?.value || null;
+		const destacado = (document.getElementById('qe-destacado') as HTMLInputElement)?.checked || false;
+		const nuevoManual = (document.getElementById('qe-nuevo') as HTMLInputElement)?.checked || false;
+
 		const originalText = btnSaveQe.innerText;
 		btnSaveQe.disabled = true;
 		btnSaveQe.innerText = 'Guardando...';
 
-		const precio = Math.round(parseFloat((document.getElementById('qe-precio') as HTMLInputElement).value) * 100);
-		const stock = parseInt((document.getElementById('qe-stock') as HTMLInputElement).value, 10);
-		const estado = (document.querySelector('input[name="qe-estado"]:checked') as HTMLInputElement)?.value || 'borrador';
-
 		const { data, error } = await actions.updateProduct({
 			id: currentProductId,
 			nombre: document.getElementById('qe-nombre')?.innerText || 'Producto',
-			precio,
-			stock,
-			estado: estado as any
+			precio: precioCents,
+			stock: stockVal,
+			estado: estado as any,
+			categoria_id,
+			destacado,
+			es_nuevo_manual: nuevoManual
 		});
 
 		if (error || !data?.success) {
@@ -610,134 +693,128 @@ if (soloDestacados) {
 			return;
 		}
 
-		const indicator = document.getElementById('qe-saved-indicator');
-		if (indicator) {
-			indicator.classList.remove('opacity-0');
-			setTimeout(() => {
-				window.location.reload();
-			}, 600);
-		}
+		isDirty = false;
+		window.location.reload();
 	});
-	// --- End Quick Edit Panel Logic ---
 
-	const openModal = () => {
-		if (modalNative) {
-			modalNative.classList.remove('hidden');
-			modalNative.classList.add('flex');
-		}
-	};
+	// Table 3-State Dropdown Event Listener
+	document.querySelectorAll('.select-state-table').forEach(select => {
+		select.addEventListener('change', async (e) => {
+			const target = e.currentTarget as HTMLSelectElement;
+			const id = target.dataset.id;
+			const newEstado = target.value;
 
-	const closeModal = () => {
-		if (modalNative) {
-			modalNative.classList.add('hidden');
-			modalNative.classList.remove('flex');
-		}
-	};
-
-	btnNuevo?.addEventListener('click', (e) => {
-		e.preventDefault();
-		openModal();
-	});
-	btnClose?.addEventListener('click', closeModal);
-	btnCancel?.addEventListener('click', closeModal);
-
-	document.querySelectorAll('.btn-create-type-opt').forEach(btn => {
-		btn.addEventListener('click', async (e) => {
-			const target = e.currentTarget as HTMLButtonElement;
-			const tipo = target.dataset.createType || 'simple';
-
+			if (!id) return;
 			target.disabled = true;
-			if (errorDiv) {
-				errorDiv.classList.add('hidden');
-				errorDiv.innerText = '';
+
+			const { data, error } = await actions.updateProduct({
+				id,
+				nombre: 'Producto',
+				precio: 100,
+				stock: 0,
+				estado: newEstado as any
+			});
+
+			if (error || !data?.success) {
+				alert('Error al cambiar el estado: ' + (error?.message || data?.error));
+				window.location.reload();
+				return;
 			}
-
-			const defaultNames: Record<string, string> = {
-				simple: 'Nuevo Producto Simple',
-				variantes: 'Nuevo Producto con Variantes',
-				combo: 'Nuevo Combo'
-			};
-
-			try {
-				const { data, error } = await actions.createProduct({
-					nombre: defaultNames[tipo] || 'Nuevo Producto',
-					tipo: tipo
-				});
-
-				if (error || !data?.success) {
-					if (errorDiv) {
-						errorDiv.innerText = error?.message || data?.error || 'Error al crear producto';
-						errorDiv.classList.remove('hidden');
-					}
-					target.disabled = false;
-					return;
-				}
-
-				window.location.href = `/admin/catalogo/${data.id}?tipo=${tipo}`;
-			} catch (err: any) {
-				if (errorDiv) {
-					errorDiv.innerText = err.message || 'Error de conexión';
-					errorDiv.classList.remove('hidden');
-				}
-				target.disabled = false;
-			}
+			window.location.reload();
 		});
 	});
 
+	// Bulk Selection Logic
+	const selectAllChk = document.getElementById('select-all-products') as HTMLInputElement;
+	const bulkBar = document.getElementById('bulk-actions-bar');
+	const bulkCount = document.getElementById('bulk-count');
 
+	const updateBulkBar = () => {
+		const selectedChks = document.querySelectorAll('.chk-product:checked');
+		const count = selectedChks.length;
+		if (count > 0) {
+			if (bulkCount) bulkCount.innerText = count.toString();
+			bulkBar?.classList.remove('hidden');
+		} else {
+			bulkBar?.classList.add('hidden');
+		}
+	};
 
+	selectAllChk?.addEventListener('change', (e) => {
+		const isChecked = (e.currentTarget as HTMLInputElement).checked;
+		document.querySelectorAll('.chk-product').forEach(chk => {
+			(chk as HTMLInputElement).checked = isChecked;
+		});
+		updateBulkBar();
+	});
+
+	document.querySelectorAll('.chk-product').forEach(chk => {
+		chk.addEventListener('change', updateBulkBar);
+	});
+
+	const getSelectedIds = (): string[] => {
+		const ids: string[] = [];
+		document.querySelectorAll('.chk-product:checked').forEach(chk => {
+			const id = (chk as HTMLElement).dataset.id;
+			if (id) ids.push(id);
+		});
+		return ids;
+	};
+
+	// Bulk Actions Handlers
+	document.getElementById('btn-bulk-activar')?.addEventListener('click', async () => {
+		const ids = getSelectedIds();
+		if (ids.length === 0) return;
+		await actions.bulkUpdateProducts({ ids, accion: 'activar' });
+		window.location.reload();
+	});
+
+	document.getElementById('btn-bulk-pausar')?.addEventListener('click', async () => {
+		const ids = getSelectedIds();
+		if (ids.length === 0) return;
+		await actions.bulkUpdateProducts({ ids, accion: 'pausar' });
+		window.location.reload();
+	});
+
+	document.getElementById('btn-bulk-eliminar')?.addEventListener('click', async () => {
+		const ids = getSelectedIds();
+		if (ids.length === 0) return;
+		if (!confirm(`¿Estás seguro de eliminar ${ids.length} productos seleccionados?`)) return;
+		await actions.bulkUpdateProducts({ ids, accion: 'eliminar' });
+		window.location.reload();
+	});
+
+	document.getElementById('bulk-categoria-select')?.addEventListener('change', async (e) => {
+		const target = e.currentTarget as HTMLSelectElement;
+		const catId = target.value;
+		const ids = getSelectedIds();
+		if (!catId || ids.length === 0) return;
+		await actions.bulkUpdateProducts({ ids, categoria_id: catId });
+		window.location.reload();
+	});
+
+	// Single Export CSV Action
 	document.getElementById('btn-export-csv')?.addEventListener('click', async () => {
 		const res = await fetch('/api/products-raw.json');
 		if (res.ok) {
 			const data = await res.json();
 			exportProductsCsv(data);
 		} else {
-			alert('Preparando exportación...');
+			alert('Exportando productos...');
 			window.location.reload();
 		}
 	});
 
-	document.querySelectorAll('.btn-toggle-estado').forEach(btn => {
-		btn.addEventListener('click', async (e) => {
-			e.stopPropagation();
-			const target = e.currentTarget as HTMLButtonElement;
-			const id = target.dataset.productId;
-			const currentState = target.dataset.currentState || 'borrador';
-			const nombre = target.dataset.nombre || 'Producto';
-			const precio = parseInt(target.dataset.precio || '0', 10);
-			const stock = parseInt(target.dataset.stock || '0', 10);
-			const descripcion = target.dataset.descripcion || '';
-
-			if (!id) return;
-			const nextState = currentState === 'activo' ? 'inactivo' : 'activo';
-
-			target.disabled = true;
-			const { data, error } = await actions.updateProduct({
-				id,
-				nombre,
-				descripcion,
-				precio,
-				stock,
-				estado: nextState
-			});
-
-			if (error || !data?.success) {
-				alert('Error al cambiar estado: ' + (error?.message || data?.error));
-				target.disabled = false;
-				return;
-			}
-
-			window.location.reload();
+	// New Product Action
+	document.getElementById('btn-nuevo-producto')?.addEventListener('click', async () => {
+		const { data, error } = await actions.createProduct({
+			nombre: 'Nuevo Producto ' + Math.floor(100 + Math.random()*900),
+			tipo: 'simple'
 		});
-	});
-
-	document.getElementById('btn-export-erp')?.addEventListener('click', async () => {
-		const res = await fetch('/api/products-raw.json');
-		if (res.ok) {
-			const data = await res.json();
-			exportErpCsv(data);
-		} else {
-			alert('Preparando exportación ERP...');
+		if (error || !data?.success) {
+			alert('Error al crear producto: ' + (error?.message || data?.error));
+			return;
 		}
+		window.location.href = `/admin/catalogo?estado=borrador`;
 	});
 </script>

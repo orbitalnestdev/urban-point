@@ -1224,18 +1224,21 @@ export const server = {
 			tramos_cantidad: z.string().optional(),
 			galeria_urls: z.string().optional(),
 			portada_url: z.string().optional(),
-			estado: z.enum(['activo', 'borrador', 'inactivo']),
-			categoria_id: z.string().optional(),
+			estado: z.enum(['activo', 'borrador', 'pausado', 'inactivo']),
+			categoria_id: z.string().optional().nullable(),
+			destacado: z.boolean().optional(),
+			es_nuevo_manual: z.boolean().optional().nullable(),
 			marca: z.string().optional()
 		}),
 		handler: async (input, ctx) => {
 			try {
+				const finalState = input.estado === 'inactivo' ? 'pausado' : input.estado;
 				const updateData: any = {
 					nombre: input.nombre,
 					descripcion: input.descripcion || '',
 					precio: input.precio,
 					stock: input.stock,
-					estado: input.estado
+					estado: finalState
 				};
 
 				if (input.precio_promocional !== undefined) updateData.precio_promocional = input.precio_promocional;
@@ -1250,13 +1253,46 @@ export const server = {
 				if (input.tramos_cantidad !== undefined) updateData.tramos_cantidad = input.tramos_cantidad;
 				if (input.galeria_urls !== undefined) updateData.galeria_urls = input.galeria_urls;
 				if (input.portada_url !== undefined) updateData.portada_url = input.portada_url;
+				if (input.destacado !== undefined) updateData.destacado = input.destacado;
 
-				if (input.categoria_id) {
-					updateData.categoria_id = input.categoria_id;
+				if (input.categoria_id !== undefined) {
+					updateData.categoria_id = input.categoria_id || null;
 				}
 
 				await db.updateDocument('urbanpoint', 'products', input.id, updateData);
 
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	bulkUpdateProducts: defineAction({
+		accept: 'json',
+		input: z.object({
+			ids: z.array(z.string()),
+			estado: z.enum(['activo', 'borrador', 'pausado']).optional(),
+			categoria_id: z.string().optional(),
+			accion: z.enum(['eliminar', 'activar', 'pausar']).optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				for (const id of input.ids) {
+					if (input.accion === 'eliminar') {
+						await db.deleteDocument('urbanpoint', 'products', id);
+					} else {
+						const updatePayload: any = {};
+						if (input.accion === 'activar') updatePayload.estado = 'activo';
+						if (input.accion === 'pausar') updatePayload.estado = 'pausado';
+						if (input.estado) updatePayload.estado = input.estado;
+						if (input.categoria_id !== undefined) updatePayload.categoria_id = input.categoria_id || null;
+
+						if (Object.keys(updatePayload).length > 0) {
+							await db.updateDocument('urbanpoint', 'products', id, updatePayload);
+						}
+					}
+				}
 				return { success: true };
 			} catch (error: any) {
 				return { success: false, error: error.message };
