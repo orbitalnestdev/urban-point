@@ -399,6 +399,20 @@ export const server = {
 					throw new Error('Solo admin puede eliminar puntos de retiro');
 				}
 
+				try {
+					await db.deleteDocument('urbanpoint', 'pickup_points', input.id);
+				} catch (e1) {
+					try {
+						await db.updateDocument('urbanpoint', 'pickup_points', input.id, { estado: 'baja' });
+					} catch (e2) {
+						try {
+							await db.deleteDocument('urbanpoint', 'canillita_applications', input.id);
+						} catch (e3) {
+							await db.deleteDocument('urbanpoint', 'profiles', input.id);
+						}
+					}
+				}
+
 				return { success: true };
 			} catch (error: any) {
 				return { success: false, error: error.message };
@@ -1131,9 +1145,7 @@ export const server = {
 						product_id: newItem.product_id,
 						cantidad: newItem.cantidad,
 						precio_unitario: newItem.precio_unitario_centavos,
-						precio_unitario_centavos: newItem.precio_unitario_centavos,
 						subtotal: subtotal_centavos,
-						subtotal_centavos: subtotal_centavos,
 						nombre_snapshot: prodSnapshot.nombre,
 						sku_snapshot: prodSnapshot.sku
 					});
