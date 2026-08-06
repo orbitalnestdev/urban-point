@@ -6,7 +6,7 @@ import { Query } from 'node-appwrite';
 export const prerender = false;
 
 const searchQuery = Astro.url.searchParams.get('q') || '';
-const estadoFilter = Astro.url.searchParams.get('estado') || '';
+const estadoFilter = Astro.url.searchParams.get('estado') || 'todos';
 
 const { databases } = createAdminClient();
 let orders = [];
@@ -17,59 +17,61 @@ try {
 		Query.orderDesc('$createdAt'),
 		Query.limit(200)
 	]);
-	allOrders = res.documents;
+	const rawOrders = res.documents;
 
-	// fetch profiles for all customer_ids
-	const customerIds = [...new Set(allOrders.map(o => {
-		if (!o.customer_id) return null;
-		return typeof o.customer_id === 'string' ? o.customer_id : o.customer_id.$id;
-	}).filter(Boolean))];
-	
-	const profiles = {};
-	if (customerIds.length > 0) {
-		try {
-			const profRes = await databases.listDocuments('urbanpoint', 'profiles', [
-				Query.equal('$id', customerIds),
-				Query.limit(customerIds.length)
-			]);
-			profRes.documents.forEach(p => {
-				profiles[p.$id] = p;
-			});
-		} catch (err) {
-			console.error('Error fetching customer profiles:', err);
+	// Populate profiles, pickup points, item counts and commissions
+	allOrders = await Promise.all(rawOrders.map(async (o) => {
+		let customerProfile = null;
+		const custId = typeof o.customer_id === 'string' ? o.customer_id : o.customer_id?.$id;
+		if (custId) {
+			try {
+				customerProfile = await databases.getDocument('urbanpoint', 'profiles', custId);
+			} catch (e) {}
 		}
-	}
 
-	// fetch order items to count articles
-	const orderIds = allOrders.map(o => o.$id);
-	const orderItemsCount = {};
-	if (orderIds.length > 0) {
+		let pickupPoint = null;
+		const ptId = typeof o.pickup_point_id === 'string' ? o.pickup_point_id : o.pickup_point_id?.$id;
+		if (ptId) {
+			try {
+				pickupPoint = await databases.getDocument('urbanpoint', 'pickup_points', ptId);
+			} catch (e) {}
+		}
+
+		let canillitaProfile = null;
+		const canId = o.canillita_id || (pickupPoint ? (typeof pickupPoint.profile_id === 'string' ? pickupPoint.profile_id : pickupPoint.profile_id?.$id) : null);
+		if (canId) {
+			try {
+				canillitaProfile = await databases.getDocument('urbanpoint', 'profiles', canId);
+			} catch (e) {}
+		}
+
+		let totalItemsCount = 0;
 		try {
 			const itemsRes = await databases.listDocuments('urbanpoint', 'order_items', [
-				Query.equal('order_id', orderIds),
-				Query.limit(orderIds.length * 5)
+				Query.equal('order_id', o.$id),
+				Query.limit(100)
 			]);
-			itemsRes.documents.forEach(item => {
-				const itemOrderId = typeof item.order_id === 'string' ? item.order_id : item.order_id?.$id;
-				if (itemOrderId) {
-					if (!orderItemsCount[itemOrderId]) orderItemsCount[itemOrderId] = 0;
-					orderItemsCount[itemOrderId] += item.cantidad || 1;
-				}
-			});
-		} catch (err) {
-			console.error('Error fetching order items:', err);
-		}
-	}
+			totalItemsCount = itemsRes.documents.reduce((acc, curr) => acc + (curr.cantidad || 1), 0);
+		} catch (e) {}
 
-	allOrders = allOrders.map(o => {
-		const custId = typeof o.customer_id === 'string' ? o.customer_id : o.customer_id?.$id;
-		const profile = custId ? profiles[custId] : (typeof o.customer_id === 'object' ? o.customer_id : null);
+		let comisionCentavos = 0;
+		try {
+			const ledgersRes = await databases.listDocuments('urbanpoint', 'commission_ledger', [
+				Query.equal('order_id', o.$id),
+				Query.limit(10)
+			]);
+			comisionCentavos = ledgersRes.documents.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
+		} catch (e) {}
+
 		return {
 			...o,
-			customerProfile: profile,
-			totalItems: orderItemsCount[o.$id] || 0
+			customerProfile,
+			pickupPoint,
+			canillitaProfile,
+			totalItems: totalItemsCount,
+			comisionCentavos
 		};
-	});
+	}));
 
 	let filtered = [...allOrders];
 
@@ -82,567 +84,286 @@ try {
 		filtered = filtered.filter(o => 
 			o.numero?.toString().toLowerCase().includes(q) ||
 			o.customerProfile?.nombre?.toLowerCase().includes(q) ||
-			o.customerProfile?.email?.toLowerCase().includes(q)
+			o.customerProfile?.email?.toLowerCase().includes(q) ||
+			o.pickupPoint?.nombre_comercial?.toLowerCase().includes(q) ||
+			o.canillitaProfile?.nombre?.toLowerCase().includes(q)
 		);
 	}
 
 	orders = filtered;
 
 } catch (e) {
-	console.error(e);
+	console.error("Error loading orders page:", e);
 }
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
-const getStatusColor = (estado) => {
-	switch(estado) {
-		case 'pendiente': return 'bg-slate-100 text-slate-700';
-		case 'pagado': return 'bg-amber-100 text-amber-700';
-		case 'preparando': return 'bg-blue-100 text-blue-700';
-		case 'listo': return 'bg-indigo-100 text-indigo-700';
-		case 'en_camino': return 'bg-purple-100 text-purple-700';
-		case 'entregado': return 'bg-emerald-100 text-emerald-700';
-		case 'cancelado': return 'bg-rose-100 text-rose-700';
-		default: return 'bg-slate-100 text-slate-700';
-	}
+const counts = {
+	todos: allOrders.length,
+	pendiente_pago: allOrders.filter(o => o.estado === 'pendiente_pago' || o.estado === 'pendiente').length,
+	pagado: allOrders.filter(o => o.estado === 'pagado').length,
+	preparando: allOrders.filter(o => o.estado === 'preparando' || o.estado === 'preparado').length,
+	despachado: allOrders.filter(o => o.estado === 'despachado' || o.estado === 'en_camino').length,
+	entregado: allOrders.filter(o => o.estado === 'entregado').length,
+	cancelado: allOrders.filter(o => o.estado === 'cancelado').length
 };
 
-const getStatusDot = (estado) => {
+const getStatusLabel = (estado: string) => {
 	switch(estado) {
-		case 'pendiente': return 'bg-slate-500';
-		case 'pagado': return 'bg-amber-500';
-		case 'preparando': return 'bg-blue-500';
-		case 'listo': return 'bg-indigo-500';
-		case 'en_camino': return 'bg-purple-500';
-		case 'entregado': return 'bg-emerald-500';
-		case 'cancelado': return 'bg-rose-500';
-		default: return 'bg-slate-500';
-	}
-};
-
-const getStatusLabel = (estado) => {
-	switch(estado) {
-		case 'pendiente': return 'Pago Pendiente';
+		case 'pendiente':
+		case 'pendiente_pago': return 'Pago Pendiente';
 		case 'pagado': return 'A Preparar';
-		case 'preparando': return 'Preparando';
-		case 'listo': return 'Listo para Envío';
-		case 'en_camino': return 'En Camino';
+		case 'preparando':
+		case 'preparado': return 'En Preparación';
+		case 'despachado':
+		case 'en_camino': return 'Despachado / Listo';
 		case 'entregado': return 'Entregado';
 		case 'cancelado': return 'Cancelado';
 		default: return estado;
 	}
 };
+
+const getStatusClass = (estado: string) => {
+	switch(estado) {
+		case 'pendiente':
+		case 'pendiente_pago': return 'bg-amber-50 text-amber-700 border-amber-200';
+		case 'pagado': return 'bg-blue-50 text-blue-700 border-blue-200';
+		case 'preparando':
+		case 'preparado': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+		case 'despachado':
+		case 'en_camino': return 'bg-purple-50 text-purple-700 border-purple-200';
+		case 'entregado': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+		case 'cancelado': return 'bg-rose-50 text-rose-700 border-rose-200';
+		default: return 'bg-slate-50 text-slate-700 border-slate-200';
+	}
+};
 ---
 
-<AdminLayout title="Pedidos">
-	<main class="p-8 max-w-[1600px] mx-auto">
-		<header class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
+<AdminLayout title="Gestión de Pedidos">
+	<main class="p-8 max-w-[1600px] mx-auto space-y-6">
+		
+		{/* Header Compacto de Página */}
+		<header class="flex flex-col md:flex-row md:items-center justify-between gap-4">
 			<div>
-				<div class="flex items-center gap-2 text-sm text-slate-500 mb-1">
-					<span class="text-slate-900 font-medium">Pedidos</span>
+				<div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+					<span>Administración</span> &gt; <span class="text-slate-900">Pedidos</span>
 				</div>
-				<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Gestión de pedidos</h1>
-				<p class="text-slate-500 font-medium mt-1">Confirmá, armá y despachá los pedidos de tus clientes.</p>
+				<h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+					Gestión de Pedidos
+					<span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+						{allOrders.length} totales
+					</span>
+				</h1>
 			</div>
 			<div class="flex items-center gap-3">
-				<button id="btn-importar-pedidos" class="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
-					Importar pedidos
+				<button onclick="window.location.reload()" class="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+					Actualizar
 				</button>
-				<button class="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-					Exportar CSV
-				</button>
-				<div class="flex bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-					<button id="btn-vista-tabla" class="px-3 py-2 bg-slate-100 text-slate-900 font-bold text-sm flex items-center gap-2 border-r border-slate-200">
-						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
-						Tabla
-					</button>
-					<button id="btn-vista-flujo" class="px-3 py-2 text-slate-500 hover:bg-slate-50 font-bold text-sm flex items-center gap-2">
-						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="18" rx="2" ry="2"></rect><rect x="15" y="3" width="6" height="18" rx="2" ry="2"></rect></svg>
-						Flujo
-					</button>
-				</div>
 			</div>
 		</header>
 
-		{/* Top Metric Cards (Big Dual) */}
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-			<div class="bg-amber-50/50 border border-amber-200 p-5 rounded-2xl shadow-sm flex flex-col justify-between cursor-pointer hover:bg-amber-50 transition-colors">
-				<div class="flex justify-between items-start mb-2">
-					<div class="w-8 h-8 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center">
-						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-					</div>
-					<span class="text-3xl font-black text-amber-700">9</span>
-				</div>
+		{/* Cards Métricas Vivas */}
+		<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+			<div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center justify-between">
 				<div>
-					<h3 class="font-bold text-slate-900 text-sm">Nuevos sin confirmar</h3>
-					<p class="text-xs text-slate-500 mt-0.5">esperando que los confirmes</p>
-					<div class="text-amber-600 text-xs font-bold mt-3 flex items-center gap-1">Confirmar <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+					<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Pedidos</p>
+					<p class="text-2xl font-black text-slate-900">{counts.todos}</p>
+				</div>
+				<div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
+					🛒
 				</div>
 			</div>
 
-			<div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col justify-between cursor-pointer hover:bg-slate-50 transition-colors">
-				<div class="flex justify-between items-start mb-2">
-					<div class="w-8 h-8 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center">
-						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
-					</div>
-					<span class="text-3xl font-black text-slate-900">4</span>
-				</div>
+			<div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center justify-between">
 				<div>
-					<h3 class="font-bold text-slate-900 text-sm">Esperando seguimiento</h3>
-					<p class="text-xs text-slate-500 mt-0.5">enviados sin novedades</p>
-					<div class="text-slate-600 text-xs font-bold mt-3 flex items-center gap-1">Ver envíos <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+					<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pendientes de Pago</p>
+					<p class="text-2xl font-black text-amber-600">{counts.pendiente_pago}</p>
+				</div>
+				<div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+					⏳
+				</div>
+			</div>
+
+			<div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center justify-between">
+				<div>
+					<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">En Preparación / Despacho</p>
+					<p class="text-2xl font-black text-indigo-600">{counts.pagado + counts.preparando + counts.despachado}</p>
+				</div>
+				<div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+					📦
+				</div>
+			</div>
+
+			<div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center justify-between">
+				<div>
+					<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Entregados</p>
+					<p class="text-2xl font-black text-emerald-600">{counts.entregado}</p>
+				</div>
+				<div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+					✅
 				</div>
 			</div>
 		</div>
 
-		{/* Barra de Totales */}
-		<div class="bg-white border border-slate-200 rounded-xl px-6 py-4 flex items-center justify-between shadow-sm mb-6 overflow-x-auto text-sm">
-			<div class="flex items-center gap-2 pr-6 border-r border-slate-100 min-w-fit">
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
-				<span class="text-slate-500 font-bold text-[11px] uppercase tracking-wider">Total</span>
-				<span class="font-black text-slate-900 text-lg">13</span>
-			</div>
-			<div class="flex items-center gap-2 px-6 border-r border-slate-100 min-w-fit">
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-				<span class="text-slate-500 font-bold text-[11px] uppercase tracking-wider">Pendientes</span>
-				<span class="font-black text-slate-900 text-lg">9</span>
-			</div>
-			<div class="flex items-center gap-2 px-6 border-r border-slate-100 min-w-fit">
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-				<span class="text-slate-500 font-bold text-[11px] uppercase tracking-wider">En proceso</span>
-				<span class="font-black text-slate-900 text-lg">4</span>
-			</div>
-			<div class="flex items-center gap-2 px-6 border-r border-slate-100 min-w-fit">
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-				<span class="text-slate-500 font-bold text-[11px] uppercase tracking-wider">Entregados</span>
-				<span class="font-black text-slate-900 text-lg">0</span>
-			</div>
-			<div class="flex items-center gap-2 pl-6 min-w-fit">
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-				<span class="text-slate-500 font-bold text-[11px] uppercase tracking-wider">Ingresos</span>
-				<span class="font-black text-slate-900 text-lg">$25,6M</span>
-			</div>
-		</div>
+		{/* Pestañas y Buscador */}
+		<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
+			<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+				{/* Pestañas de Estado */}
+				<div class="flex items-center gap-1 overflow-x-auto pb-1 max-w-full">
+					{[
+						{ id: 'todos', label: 'Todos', count: counts.todos },
+						{ id: 'pendiente_pago', label: 'Nuevos', count: counts.pendiente_pago },
+						{ id: 'pagado', label: 'A preparar', count: counts.pagado },
+						{ id: 'preparando', label: 'En preparación', count: counts.preparando },
+						{ id: 'despachado', label: 'Despachados / Listos', count: counts.despachado },
+						{ id: 'entregado', label: 'Entregados', count: counts.entregado },
+						{ id: 'cancelado', label: 'Cancelados', count: counts.cancelado }
+					].map(tab => (
+						<a 
+							href={`/admin/pedidos?estado=${tab.id}${searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ''}`}
+							class={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+								estadoFilter === tab.id 
+									? 'bg-slate-900 text-white shadow-sm' 
+									: 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+							}`}
+						>
+							{tab.label}
+							<span class={`px-1.5 py-0.2 rounded-full text-[10px] ${estadoFilter === tab.id ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+								{tab.count}
+							</span>
+						</a>
+					))}
+				</div>
 
-		{/* Tabs */}
-		<div class="flex space-x-6 border-b border-slate-200 mb-6 overflow-x-auto hide-scrollbar">
-			<a href="#" class="border-b-2 border-slate-900 pb-2 text-sm font-bold text-slate-900 whitespace-nowrap flex items-center gap-2">Todos <span class="bg-slate-900 text-white text-[10px] px-2 py-0.5 rounded-full">13</span></a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap flex items-center gap-2">Nuevos <span class="text-slate-400 text-[10px]">9</span></a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap">Pend. aprobación</a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap">Cotizaciones</a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap">Confirmados</a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap flex items-center gap-2">Preparados <span class="text-slate-400 text-[10px]">3</span></a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap flex items-center gap-2">Enviados <span class="text-slate-400 text-[10px]">1</span></a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap">Entregados</a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap">Cancelados</a>
-		</div>
-
-		{/* Filtros */}
-		<form method="GET" class="flex flex-wrap gap-2 mb-6 text-xs">
-			<div class="relative flex-1 min-w-[280px]">
-				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-				<input 
-					type="text" 
-					name="q"
-					value={searchQuery}
-					placeholder="Buscar por # de pedido, cliente o email..." 
-					class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-700 font-medium" 
-				/>
-			</div>
-			
-			<div class="flex bg-white border border-slate-200 rounded-lg px-3 py-2 items-center gap-2 text-slate-600 font-bold cursor-pointer hover:bg-slate-50">
-				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-				Fecha: Cualquiera <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-			</div>
-			
-			<div class="flex bg-white border border-slate-200 rounded-lg px-3 py-2 items-center gap-2 text-slate-600 font-bold cursor-pointer hover:bg-slate-50">
-				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-				Despachado: Cualquiera <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-			</div>
-			
-			<div class="flex bg-white border border-slate-200 rounded-lg px-3 py-2 items-center gap-2 text-slate-600 font-bold cursor-pointer hover:bg-slate-50">
-				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-				Total: - <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+				{/* Buscador */}
+				<form method="GET" action="/admin/pedidos" class="flex items-center gap-2 w-full md:w-80">
+					<input type="hidden" name="estado" value={estadoFilter} />
+					<div class="relative w-full">
+						<input 
+							type="text" 
+							name="q" 
+							value={searchQuery} 
+							placeholder="Buscar por #, cliente o punto..." 
+							class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-emerald-600 focus:bg-white transition-colors"
+						/>
+						<svg class="w-4 h-4 absolute left-3 top-2.5 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+					</div>
+					{searchQuery && (
+						<a href={`/admin/pedidos?estado=${estadoFilter}`} class="px-3 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200">
+							Limpiar
+						</a>
+					)}
+				</form>
 			</div>
 
-			<div class="flex bg-white border border-slate-200 rounded-lg px-3 py-2 items-center gap-2 text-slate-600 font-bold cursor-pointer hover:bg-slate-50">
-				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
-				Entrega: Todas <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-			</div>
+			{/* Tabla de Pedidos B2C */}
+			<div class="overflow-x-auto rounded-xl border border-slate-200">
+				<table class="w-full text-left border-collapse">
+					<thead>
+						<tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+							<th class="p-3.5">Pedido / Fecha</th>
+							<th class="p-3.5">Cliente</th>
+							<th class="p-3.5">Tipo de Entrega</th>
+							<th class="p-3.5">Punto de Retiro / Canillita</th>
+							<th class="p-3.5 text-center">Ítems</th>
+							<th class="p-3.5 text-right">Total Pedido</th>
+							<th class="p-3.5 text-right">Comisión</th>
+							<th class="p-3.5 text-center">Estado</th>
+							<th class="p-3.5 text-center">Acción</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-100 text-xs">
+						{orders.map(o => {
+							const dateStr = new Date(o.$createdAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+							const isRetiro = o.fulfillment === 'retiro';
+							return (
+								<tr class="hover:bg-slate-50/80 transition-colors">
+									<td class="p-3.5 font-mono">
+										<a href={`/admin/pedidos/${o.$id}`} class="font-bold text-emerald-700 hover:underline">
+											ORD-{o.numero || o.$id.substring(0, 6)}
+										</a>
+										<p class="text-[10px] text-slate-400 mt-0.5">{dateStr}</p>
+									</td>
 
-			<div class="flex bg-white border border-slate-200 rounded-lg px-3 py-2 items-center gap-2 text-slate-600 font-bold cursor-pointer hover:bg-slate-50">
-				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-				Cliente: Todos <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-			</div>
+									<td class="p-3.5">
+										{o.customerProfile ? (
+											<div>
+												<p class="font-bold text-slate-900">{o.customerProfile.nombre}</p>
+												<p class="text-[10px] text-slate-400">{o.customerProfile.email}</p>
+											</div>
+										) : (
+											<span class="text-slate-400 italic">Cliente no registrado</span>
+										)}
+									</td>
 
-			<div class="flex bg-white border border-slate-200 rounded-lg px-3 py-2 items-center gap-2 text-slate-600 font-bold cursor-pointer hover:bg-slate-50">
-				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
-				Vendedor: Todos <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-			</div>
-			
-			<div class="flex bg-white border border-slate-200 rounded-lg px-3 py-2 items-center gap-2 text-slate-600 font-bold cursor-pointer hover:bg-slate-50">
-				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-				Preventa: Todas <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-			</div>
-			
-			<div class="flex bg-white border border-slate-200 rounded-lg px-3 py-2 items-center gap-2 text-slate-600 font-bold cursor-pointer hover:bg-slate-50">
-				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-				Saldo: Todos <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-			</div>
+									<td class="p-3.5">
+										<span class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+											isRetiro 
+												? 'bg-purple-50 text-purple-700 border-purple-200' 
+												: 'bg-blue-50 text-blue-700 border-blue-200'
+										}`}>
+											{isRetiro ? '🏪 Retiro en Punto' : '🚚 Envíos a Domicilio'}
+										</span>
+									</td>
 
-			<div class="flex bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 items-center gap-2 text-slate-600 font-bold cursor-pointer hover:bg-slate-100">
-				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-				Estado: Todos <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-			</div>
-		</form>
+									<td class="p-3.5">
+										{o.pickupPoint ? (
+											<div>
+												<p class="font-bold text-slate-900">{o.pickupPoint.nombre_comercial}</p>
+												<p class="text-[10px] text-slate-400">{o.pickupPoint.direccion}, {o.pickupPoint.localidad}</p>
+											</div>
+										) : o.canillitaProfile ? (
+											<div>
+												<p class="font-bold text-slate-900">{o.canillitaProfile.nombre}</p>
+												<p class="text-[10px] text-slate-400">Canillita Atribuidor</p>
+											</div>
+										) : (
+											<span class="text-slate-400 italic">Directo</span>
+										)}
+									</td>
 
-		{/* Tabla de Pedidos */}
-		{/* Tabla de Pedidos (Vista Tabla) */}
-		<div id="vista-tabla" class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-			<table class="w-full text-left border-collapse">
-				<thead>
-					<tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-						<th class="p-4 w-12 text-center"><input type="checkbox" class="rounded border-slate-300" /></th>
-						<th class="p-4 flex items-center gap-1">PEDIDO <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 10 12 15 17 10"></polyline></svg></th>
-						<th class="p-4">CLIENTE <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline"><polyline points="7 10 12 15 17 10"></polyline></svg></th>
-						<th class="p-4">VENDEDOR</th>
-						<th class="p-4 text-center">ESTADO</th>
-						<th class="p-4 text-center">ARTÍCULOS</th>
-						<th class="p-4 text-right">TOTAL <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline"><polyline points="7 10 12 15 17 10"></polyline></svg></th>
-						<th class="p-4 text-right">FECHA <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline"><polyline points="7 10 12 15 17 10"></polyline></svg></th>
-						<th class="p-4 text-center">ACCIONES</th>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-slate-100">
-					
-					{orders.map(order => {
-						const date = new Date(order.$createdAt);
-						const formattedDate = date.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
-						const shortTotal = (order.total || 0) / 100 > 1000 ? `$${((order.total || 0) / 100000).toFixed(1)}K` : formateador.format((order.total || 0) / 100);
+									<td class="p-3.5 text-center font-bold text-slate-700">
+										{o.totalItems} u.
+									</td>
 
-						return (
-							<tr class="hover:bg-slate-50 group cursor-pointer" onclick={`window.location.href='/admin/pedidos/${order.$id}'`}>
-								<td class="p-4 text-center"><input type="checkbox" class="rounded border-slate-300" onclick="event.stopPropagation()" /></td>
-								<td class="p-4 font-bold text-orange-700 text-xs">
-									ORD-{order.numero || order.$id.substring(0,6).toUpperCase()}
-								</td>
-								<td class="p-4 text-sm">
-									<div class="flex items-center gap-3">
-										<div class="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold text-xs flex items-center justify-center shrink-0">
-											{order.customerProfile?.nombre?.substring(0, 1).toUpperCase() || 'A'}
-										</div>
-										<div>
-											<p class="font-bold text-slate-900 text-sm flex items-center gap-2">
-												{order.customerProfile?.nombre || 'Anónimo'} 
-												<span class="bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">{order.customerProfile?.role || 'Invitado'}</span>
-											</p>
-											<p class="text-xs text-slate-500 flex items-center gap-1 mt-0.5"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg> {order.fulfillment || 'retiro'}</p>
-										</div>
-									</div>
-								</td>
-								<td class="p-4 text-xs font-medium text-slate-600">
-									{order.customerProfile?.email || 'N/A'}
-								</td>
-								<td class="p-4 text-center">
-									<div class="flex flex-col items-center gap-2">
-										<div class="flex items-center gap-2">
-											<span class={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${order.estado === 'enviado' || order.estado === 'despachado' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
-												<span class={`w-1.5 h-1.5 rounded-full ${order.estado === 'enviado' || order.estado === 'despachado' ? 'bg-blue-500' : 'bg-emerald-500'}`}></span> {getStatusLabel(order.estado)}
-											</span>
-											{order.estado === 'pendiente_pago' && (
-												<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-200 bg-amber-50 text-amber-700">
-													Debe {shortTotal}
-												</span>
-											)}
-										</div>
-									</div>
-								</td>
-								<td class="p-4 text-center font-bold text-slate-700 text-xs">
-									{order.totalItems} <span class="text-slate-400 font-medium">{order.totalItems === 1 ? 'unidad' : 'unidades'}</span>
-								</td>
-								<td class="p-4 text-right font-black text-slate-900 text-sm">
-									{shortTotal}
-								</td>
-								<td class="p-4 text-right text-xs text-slate-500 font-medium">
-									{formattedDate}
-								</td>
-								<td class="p-4 text-center">
-									<div class="flex items-center justify-center gap-2 text-slate-400">
-										<button class="hover:text-slate-700 transition-colors" onclick="event.stopPropagation()">
-											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-										</button>
-										<button class="hover:text-slate-700 transition-colors" onclick="event.stopPropagation()">
-											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
-										</button>
-									</div>
+									<td class="p-3.5 text-right font-black text-slate-900 text-sm">
+										{formateador.format((o.total || 0) / 100)}
+									</td>
+
+									<td class="p-3.5 text-right font-bold text-emerald-600">
+										{o.comisionCentavos > 0 ? formateador.format(o.comisionCentavos / 100) : '$0,00'}
+									</td>
+
+									<td class="p-3.5 text-center">
+										<span class={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${getStatusClass(o.estado)}`}>
+											{getStatusLabel(o.estado)}
+										</span>
+									</td>
+
+									<td class="p-3.5 text-center">
+										<a 
+											href={`/admin/pedidos/${o.$id}`}
+											class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-xl transition-colors shadow-sm inline-block"
+										>
+											Ver Ficha
+										</a>
+									</td>
+								</tr>
+							);
+						})}
+
+						{orders.length === 0 && (
+							<tr>
+								<td colspan="9" class="p-8 text-center text-slate-500 font-medium">
+									No se encontraron pedidos en la categoría seleccionada.
 								</td>
 							</tr>
-						)
-					})}
-
-					{orders.length === 0 && (
-						<tr>
-							<td colspan="9" class="p-8 text-center text-slate-500">No hay pedidos registrados con los filtros seleccionados.</td>
-						</tr>
-					)}
-
-				</tbody>
-			</table>
-		</div>
-
-		{/* Kanban de Pedidos (Vista Flujo) */}
-		<div id="vista-flujo" class="hidden">
-			<div class="flex items-center justify-between mb-4">
-				<p class="text-xs text-slate-400 font-bold">Vista de flujo • avanzá los pedidos por etapa</p>
-				<button class="px-3 py-1 bg-white border border-slate-200 text-slate-600 font-bold rounded-lg text-[10px] hover:bg-slate-50 transition-colors flex items-center gap-1 shadow-sm">
-					<span class="w-2 h-2 rounded-full bg-rose-500"></span> Cancelados 0
-				</button>
-			</div>
-			
-			<div class="flex gap-4 overflow-x-auto pb-4 hide-scrollbar snap-x snap-mandatory">
-				{/* Columna Nuevos */}
-				<div class="min-w-[280px] flex-1 bg-slate-50/50 rounded-2xl p-4 snap-center border border-slate-100">
-					<div class="flex items-center justify-between mb-4">
-						<h3 class="font-black text-slate-900 text-sm flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span> Nuevos <span class="text-xs text-slate-400 font-bold">9</span></h3>
-						<span class="text-xs text-slate-400 font-bold">$25,3M</span>
-					</div>
-					<div class="space-y-3">
-						{/* Card Pedido */}
-						<div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm cursor-grab active:cursor-grabbing hover:border-slate-300 transition-colors">
-							<div class="flex justify-between items-start mb-3">
-								<span class="text-xs font-bold text-orange-700">#ORD-20260722-0001</span>
-								<span class="text-[10px] font-bold text-slate-400 flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Envío</span>
-							</div>
-							<div class="flex items-center gap-2 mb-3">
-								<div class="w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-bold text-[10px] flex items-center justify-center">B</div>
-								<span class="font-bold text-slate-900 text-sm">Beyla</span>
-							</div>
-							<div class="inline-flex px-2 py-0.5 rounded-full border border-slate-200 bg-white text-[10px] font-bold text-slate-500 mb-4 items-center gap-1 shadow-sm">
-								<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-								Sin confirmar <span class="text-orange-500">+8d</span>
-							</div>
-							<div class="flex items-center justify-between">
-								<div class="flex flex-col">
-									<span class="font-black text-slate-900 text-sm">$106,9K</span>
-									<span class="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1 rounded">Debe $ 106.885,00</span>
-								</div>
-								<button class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] rounded-lg shadow-sm transition-colors">Confirmar</button>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				{/* Columna Confirmados */}
-				<div class="min-w-[280px] flex-1 bg-slate-50/50 rounded-2xl p-4 snap-center border border-slate-100">
-					<div class="flex items-center justify-between mb-4">
-						<h3 class="font-black text-slate-900 text-sm flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-indigo-600"></span> Confirmados <span class="text-xs text-slate-400 font-bold">0</span></h3>
-					</div>
-				</div>
-
-				{/* Columna Preparados */}
-				<div class="min-w-[280px] flex-1 bg-slate-50/50 rounded-2xl p-4 snap-center border border-slate-100">
-					<div class="flex items-center justify-between mb-4">
-						<h3 class="font-black text-slate-900 text-sm flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Preparados <span class="text-xs text-slate-400 font-bold">3</span></h3>
-						<span class="text-xs text-slate-400 font-bold">$218,7K</span>
-					</div>
-					<div class="space-y-3">
-						{/* Card Pedido */}
-						<div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm cursor-grab active:cursor-grabbing hover:border-slate-300 transition-colors">
-							<div class="flex justify-between items-start mb-3">
-								<span class="text-xs font-bold text-orange-700">#ORD-20260723-0002</span>
-								<span class="text-[10px] font-bold text-slate-400 flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Envío</span>
-							</div>
-							<div class="flex items-center gap-2 mb-3">
-								<div class="w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-bold text-[10px] flex items-center justify-center">B</div>
-								<span class="font-bold text-slate-900 text-sm">Beyla</span>
-							</div>
-							<div class="inline-flex px-2 py-0.5 rounded-full border border-slate-200 bg-white text-[10px] font-bold text-slate-500 mb-4 items-center gap-1 shadow-sm">
-								<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-								Sin seguimiento
-							</div>
-							<div class="flex items-center justify-between">
-								<div class="flex flex-col">
-									<span class="font-black text-slate-900 text-sm">$23,7K</span>
-									<span class="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1 rounded">Debe $ 23.700,00</span>
-								</div>
-								<button class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] rounded-lg shadow-sm transition-colors flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Marcar enviado</button>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				{/* Columna En envío */}
-				<div class="min-w-[280px] flex-1 bg-slate-50/50 rounded-2xl p-4 snap-center border border-slate-100">
-					<div class="flex items-center justify-between mb-4">
-						<h3 class="font-black text-slate-900 text-sm flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> En envío <span class="text-xs text-slate-400 font-bold">1</span></h3>
-						<span class="text-xs text-slate-400 font-bold">$28,8K</span>
-					</div>
-					<div class="space-y-3">
-						{/* Card Pedido */}
-						<div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm cursor-grab active:cursor-grabbing hover:border-slate-300 transition-colors">
-							<div class="flex justify-between items-start mb-3">
-								<span class="text-xs font-bold text-orange-700">#ORD-20260726-0001</span>
-								<span class="text-[10px] font-bold text-slate-400 flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Envío</span>
-							</div>
-							<div class="flex items-center gap-2 mb-3">
-								<div class="w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-bold text-[10px] flex items-center justify-center">B</div>
-								<span class="font-bold text-slate-900 text-sm">Beyla</span>
-							</div>
-							<div class="inline-flex px-2 py-0.5 rounded-full border border-slate-200 bg-white text-[10px] font-bold text-slate-500 mb-4 items-center gap-1 shadow-sm">
-								<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-								Sin seguimiento
-							</div>
-							<div class="flex items-center justify-between">
-								<div class="flex flex-col">
-									<span class="font-black text-slate-900 text-sm">$28,8K</span>
-									<span class="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1 rounded">Debe $ 28.840,00</span>
-								</div>
-								<button class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] rounded-lg shadow-sm transition-colors flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Marcar entregado</button>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				{/* Columna Entregados */}
-				<div class="min-w-[280px] flex-1 bg-emerald-50/50 rounded-2xl p-4 snap-center border border-emerald-100">
-					<div class="flex items-center justify-between mb-4">
-						<h3 class="font-black text-slate-900 text-sm flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-emerald-700"></span> Entregados <span class="text-xs text-slate-400 font-bold">0</span></h3>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		{/* Modal Importar Pedidos */}
-		<div id="modal-importar-pedidos" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-			<div class="bg-white rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
-				<div class="p-6 border-b border-slate-100 flex items-start justify-between shrink-0">
-					<div class="flex items-center gap-3">
-						<div class="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center">
-							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
-						</div>
-						<h3 class="text-xl font-bold text-slate-900">Importar pedidos</h3>
-					</div>
-					<button id="close-modal-importar" class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors">
-						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-					</button>
-				</div>
-				
-				<div class="p-8 overflow-y-auto">
-					<div class="flex items-center justify-center gap-4 mb-8 text-sm font-bold">
-						<div class="flex items-center gap-2 text-slate-900">
-							<div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center border border-slate-900">
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path></svg>
-							</div>
-							Pegar datos
-						</div>
-						<div class="w-10 h-px bg-slate-200"></div>
-						<div class="flex items-center gap-2 text-slate-400">
-							<div class="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-slate-200">
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
-							</div>
-							Mapear columnas
-						</div>
-						<div class="w-10 h-px bg-slate-200"></div>
-						<div class="flex items-center gap-2 text-slate-400">
-							<div class="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-slate-200">
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect></svg>
-							</div>
-							Agrupar
-						</div>
-						<div class="w-10 h-px bg-slate-200"></div>
-						<div class="flex items-center gap-2 text-slate-400">
-							<div class="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-slate-200">
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-							</div>
-							Confirmar
-						</div>
-					</div>
-
-					<div class="border-2 border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50 relative mb-6">
-						<textarea class="w-full h-48 bg-transparent focus:outline-none resize-none font-mono text-sm text-slate-500 placeholder-slate-400" placeholder={`Pega aquí los datos de tu hoja de cálculo...
-
-Ejemplo (tabulado, CSV, o cualquier delimitador):
-
-Cliente N° OC   Producto   Cantidad   Precio  Notas
-Juan Pérez  OC-1001 SKU-001 5      19700   Urgente
-María López OC-1002 SKU-002 10     8500
-Juan Pérez  OC-1003 SKU-003 3      12300`}></textarea>
-					</div>
-
-					<div class="flex items-center justify-center gap-4 mb-8">
-						<button class="px-6 py-2 border border-slate-200 rounded-xl font-bold text-slate-400 cursor-not-allowed">Continuar</button>
-						<span class="text-slate-400 text-sm">o</span>
-						<button class="px-6 py-2 border border-slate-200 bg-white rounded-xl font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
-							Subir archivo CSV / texto
-						</button>
-						<button class="px-6 py-2 text-slate-600 font-bold hover:bg-slate-50 rounded-xl flex items-center gap-2 transition-colors">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-							Descargar plantilla CSV
-						</button>
-					</div>
-
-					<div class="bg-slate-50 rounded-xl p-5 flex gap-4 text-sm text-slate-600 leading-relaxed border border-slate-100">
-						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400 shrink-0"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-						<div>
-							<p class="mb-2"><strong class="text-slate-900">Columnas requeridas:</strong> Cliente, Producto y Cantidad. N° OC, Precio y Notas son opcionales — el N° OC permite que un mismo cliente tenga varios pedidos, y Precio (neto, sin IVA) respeta el precio acordado en vez del de catálogo.</p>
-							<p class="mb-2"><strong class="text-slate-900">Producto</strong> acepta SKU o nombre. <strong class="text-slate-900">Cantidad</strong> acepta "1" o "1,5".</p>
-							<p>Copia un rango de celdas desde Excel o Google Sheets y pega directamente aquí, o subí un archivo CSV / texto (no Excel .xlsx). El delimitador se detecta automáticamente (tab, coma, punto y coma, pipe).</p>
-						</div>
-					</div>
-				</div>
-				<div class="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
-					<button id="cancel-modal-importar" class="px-6 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">Cancelar</button>
-				</div>
+						)}
+					</tbody>
+				</table>
 			</div>
 		</div>
 
 	</main>
-
-	<script>
-		const modalImportar = document.getElementById('modal-importar-pedidos');
-		document.getElementById('btn-importar-pedidos')?.addEventListener('click', () => {
-			modalImportar?.classList.remove('hidden');
-			modalImportar?.classList.add('flex');
-		});
-		
-		const closeModal = () => {
-			modalImportar?.classList.add('hidden');
-			modalImportar?.classList.remove('flex');
-		};
-
-		document.getElementById('close-modal-importar')?.addEventListener('click', closeModal);
-		document.getElementById('cancel-modal-importar')?.addEventListener('click', closeModal);
-
-		// Switcher de Vistas (Tabla / Flujo)
-		const btnTabla = document.getElementById('btn-vista-tabla');
-		const btnFlujo = document.getElementById('btn-vista-flujo');
-		const vistaTabla = document.getElementById('vista-tabla');
-		const vistaFlujo = document.getElementById('vista-flujo');
-
-		const activeClasses = ['bg-slate-100', 'text-slate-900'];
-		const inactiveClasses = ['text-slate-500', 'hover:bg-slate-50'];
-
-		btnTabla?.addEventListener('click', () => {
-			vistaTabla?.classList.remove('hidden');
-			vistaFlujo?.classList.add('hidden');
-			
-			btnTabla.classList.add(...activeClasses);
-			btnTabla.classList.remove(...inactiveClasses);
-			btnFlujo.classList.remove(...activeClasses);
-			btnFlujo.classList.add(...inactiveClasses);
-		});
-
-		btnFlujo?.addEventListener('click', () => {
-			vistaFlujo?.classList.remove('hidden');
-			vistaTabla?.classList.add('hidden');
-			
-			btnFlujo.classList.add(...activeClasses);
-			btnFlujo.classList.remove(...inactiveClasses);
-			btnTabla.classList.remove(...activeClasses);
-			btnTabla.classList.add(...inactiveClasses);
-		});
-	</script>
 </AdminLayout>

@@ -25,6 +25,13 @@ try {
 	
 	const catRes = await databases.listDocuments('urbanpoint', 'categories');
 	categories = catRes.documents;
+
+	const categoryMap: Record<string, any> = {};
+	categories.forEach(c => { categoryMap[c.$id] = c; });
+	products = products.map(p => ({
+		...p,
+		categoryObj: typeof p.categoria_id === 'string' ? categoryMap[p.categoria_id] : p.categoria_id
+	}));
 } catch (e) {
 	console.error(e);
 }
@@ -342,7 +349,7 @@ if (soloDestacados) {
 									</div>
 								</div>
 							</td>
-							<td class="p-4 text-center text-sm font-bold text-slate-600">{product.categoria_id?.nombre || 'Ropa Invierno Disney'}</td>
+							<td class="p-4 text-center text-sm font-bold text-slate-600">{product.categoryObj?.nombre || product.categoria_id?.nombre || 'Sin categoría'}</td>
 							<td class="p-4 text-center">
 								<p class="font-black text-slate-900 text-base">{formateador.format(product.precio / 100)}</p>
 							</td>

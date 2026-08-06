@@ -1,252 +1,212 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { createAdminClient } from '../../../lib/server/appwrite';
+import { Query } from 'node-appwrite';
 
 export const prerender = false;
+
+const { id } = Astro.params;
+const { databases } = createAdminClient();
+
+let profile = null;
+let orders = [];
+let totalSpentCentavos = 0;
+let preferredPoint = null;
+let referringCanillita = null;
+
+try {
+	profile = await databases.getDocument('urbanpoint', 'profiles', id as string);
+
+	const ordersRes = await databases.listDocuments('urbanpoint', 'orders', [
+		Query.equal('customer_id', id as string),
+		Query.orderDesc('$createdAt'),
+		Query.limit(100)
+	]);
+	orders = ordersRes.documents;
+
+	totalSpentCentavos = orders
+		.filter(o => o.estado !== 'cancelado')
+		.reduce((acc, curr) => acc + (curr.total || 0), 0);
+
+	// Determine preferred pickup point if any
+	const ptCountMap: Record<string, number> = {};
+	let lastRefCodeId = null;
+
+	for (const o of orders) {
+		if (o.pickup_point_id) {
+			const ptId = typeof o.pickup_point_id === 'string' ? o.pickup_point_id : o.pickup_point_id?.$id;
+			if (ptId) {
+				ptCountMap[ptId] = (ptCountMap[ptId] || 0) + 1;
+			}
+		}
+		if (o.referral_code_id && !lastRefCodeId) {
+			lastRefCodeId = typeof o.referral_code_id === 'string' ? o.referral_code_id : o.referral_code_id?.$id;
+		}
+	}
+
+	const topPtId = Object.keys(ptCountMap).sort((a, b) => ptCountMap[b] - ptCountMap[a])[0];
+	if (topPtId) {
+		try {
+			preferredPoint = await databases.getDocument('urbanpoint', 'pickup_points', topPtId);
+		} catch (e) {}
+	}
+
+	if (lastRefCodeId) {
+		try {
+			const refDoc = await databases.getDocument('urbanpoint', 'referral_codes', lastRefCodeId);
+			const ownerId = typeof refDoc.owner_id === 'string' ? refDoc.owner_id : refDoc.owner_id?.$id;
+			if (ownerId) {
+				referringCanillita = await databases.getDocument('urbanpoint', 'profiles', ownerId);
+			}
+		} catch (e) {}
+	}
+} catch (e) {
+	console.error("Error loading customer profile:", e);
+	return Astro.redirect('/admin/clientes');
+}
+
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+
+const getStatusClass = (estado: string) => {
+	switch(estado) {
+		case 'pendiente_pago': return 'bg-amber-50 text-amber-700 border-amber-200';
+		case 'pagado': return 'bg-blue-50 text-blue-700 border-blue-200';
+		case 'preparando': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+		case 'entregado': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+		case 'cancelado': return 'bg-rose-50 text-rose-700 border-rose-200';
+		default: return 'bg-slate-50 text-slate-700 border-slate-200';
+	}
+};
 ---
 
-<AdminLayout title="Cliente Beyla">
-	<main class="p-8 max-w-[1400px] mx-auto pb-24">
+<AdminLayout title={`Ficha de Cliente - ${profile.nombre}`}>
+	<main class="p-8 max-w-[1400px] mx-auto space-y-6">
+		
 		{/* Header & Breadcrumb */}
-		<header class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
+		<header class="flex flex-col md:flex-row md:items-center justify-between gap-4">
 			<div>
-				<div class="flex items-center gap-2 text-sm text-slate-500 mb-1">
-					<a href="/admin/clientes" class="hover:text-slate-700 font-medium">Clientes</a> 
-					<span class="text-slate-300">/</span> 
-					<span class="text-slate-900 font-bold">Beyla</span>
+				<div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+					<a href="/admin/clientes" class="hover:text-slate-700">Clientes</a> 
+					<span class="text-slate-300">&gt;</span> 
+					<span class="text-slate-900">{profile.nombre}</span>
 				</div>
-				<div class="flex items-center gap-3">
-					<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Beyla</h1>
-					<span class="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded uppercase font-bold tracking-wider border border-amber-200">Potencial</span>
-				</div>
+				<h1 class="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+					{profile.nombre}
+					<span class={`px-2.5 py-0.5 rounded-full text-xs font-bold border uppercase ${
+						profile.role === 'canillita' 
+							? 'bg-purple-50 text-purple-700 border-purple-200' 
+							: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+					}`}>
+						{profile.role === 'canillita' ? 'Canillita Afiliado' : 'Cliente B2C'}
+					</span>
+				</h1>
 			</div>
 			<div class="flex items-center gap-3">
-				<button class="px-4 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 transition-colors shadow-sm flex items-center gap-2">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-					Crear pedido
-				</button>
-				<button class="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-					Editar
-				</button>
-				<button class="p-2 bg-white border border-slate-200 text-slate-400 font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
-				</button>
+				<a href="/admin/clientes" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors">
+					Volver a Clientes
+				</a>
 			</div>
 		</header>
 
-		{/* Metrics Row */}
-		<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-6 flex flex-wrap gap-8 justify-between items-center">
-			
-			<div class="flex-1 min-w-[200px] border-r border-slate-100 pr-8">
-				<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">Puntaje comercial <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></p>
-				<div class="flex items-center gap-4">
-					<span class="text-4xl font-black text-slate-900">7.2</span>
-					<div class="w-full bg-slate-100 rounded-full h-2">
-						<div class="bg-emerald-500 h-2 rounded-full" style="width: 72%"></div>
-					</div>
-				</div>
+		{/* Cards Resumen Métricas */}
+		<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+			<div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
+				<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Compras</p>
+				<p class="text-3xl font-black text-slate-900">{orders.length}</p>
 			</div>
 
-			<div class="min-w-[120px]">
-				<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pedidos</p>
-				<span class="text-2xl font-black text-slate-900">1</span>
+			<div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
+				<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Acumulado Gastado</p>
+				<p class="text-3xl font-black text-emerald-600">{formateador.format(totalSpentCentavos / 100)}</p>
 			</div>
 
-			<div class="min-w-[120px]">
-				<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ingresos</p>
-				<span class="text-2xl font-black text-slate-900">$ 0,00</span>
+			<div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
+				<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Canillita Atribuidor</p>
+				<p class="text-sm font-bold text-slate-900 mt-1">
+					{referringCanillita ? referringCanillita.nombre : 'Directo (Sin referido)'}
+				</p>
 			</div>
 
-			<div class="min-w-[120px]">
-				<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Saldo</p>
-				<span class="text-2xl font-black text-rose-600">-$ 28.840,00</span>
+			<div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
+				<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Punto de Retiro Habitual</p>
+				<p class="text-sm font-bold text-slate-900 mt-1">
+					{preferredPoint ? preferredPoint.nombre_comercial : 'Sin preferencia'}
+				</p>
 			</div>
-
-			<div class="min-w-[120px]">
-				<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Último contacto</p>
-				<span class="text-sm font-bold text-slate-900">Hace 2 días</span>
-			</div>
-		</div>
-
-		{/* Tabs */}
-		<div class="flex space-x-6 border-b border-slate-200 mb-6 overflow-x-auto hide-scrollbar">
-			<a href="#" class="border-b-2 border-slate-900 pb-2 text-sm font-bold text-slate-900 whitespace-nowrap flex items-center gap-2">Resumen</a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap flex items-center gap-2">Pedidos <span class="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full">1</span></a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap flex items-center gap-2">Contactos <span class="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full">1</span></a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap flex items-center gap-1">WhatsApp <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-500"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg></a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap">Actividades</a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap">Tareas</a>
-			<a href="#" class="border-b-2 border-transparent pb-2 text-sm font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap">Seguimientos</a>
 		</div>
 
 		<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-			
-			<div class="lg:col-span-2 space-y-6">
-				{/* Información de contacto */}
-				<div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm relative">
-					<button class="absolute top-6 right-6 text-slate-400 hover:text-indigo-600 transition-colors">
-						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-					</button>
-					<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6">Información de contacto</h3>
-					
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8">
-						<div>
-							<span class="block text-[11px] font-bold text-slate-400 mb-1">Correo electrónico</span>
-							<span class="text-sm font-bold text-indigo-600 flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg> pmamone1@gmail.com</span>
-						</div>
-						<div>
-							<span class="block text-[11px] font-bold text-slate-400 mb-1">Teléfono principal</span>
-							<span class="text-sm font-bold text-slate-900 flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> +54 9 11 5060-6395</span>
-						</div>
-						<div>
-							<span class="block text-[11px] font-bold text-slate-400 mb-1">Tipo de cliente</span>
-							<span class="text-sm font-bold text-slate-900">Mayorista (B2B)</span>
-						</div>
-						<div>
-							<span class="block text-[11px] font-bold text-slate-400 mb-1">Canal de origen</span>
-							<span class="text-sm font-bold text-slate-900">Portal Mayorista</span>
-						</div>
-						<div>
-							<span class="block text-[11px] font-bold text-slate-400 mb-1">CUIT / RUT</span>
-							<span class="text-sm font-medium text-slate-500 italic">No especificado</span>
-						</div>
-						<div>
-							<span class="block text-[11px] font-bold text-slate-400 mb-1">Condición IVA</span>
-							<span class="text-sm font-medium text-slate-500 italic">No especificada</span>
-						</div>
-					</div>
+			{/* Información Personal */}
+			<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+				<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-3">Datos de Contacto</h3>
+				<div>
+					<span class="block text-[11px] font-bold text-slate-400">Email</span>
+					<span class="text-sm font-bold text-slate-900">{profile.email || 'Sin Registrar'}</span>
 				</div>
-
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-					{/* Direcciones */}
-					<div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm relative">
-						<button class="absolute top-6 right-6 text-slate-400 hover:text-indigo-600 transition-colors">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-						</button>
-						<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6">Direcciones</h3>
-						
-						<div class="mb-5">
-							<div class="flex items-center gap-2 mb-1">
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-								<span class="text-[11px] font-bold text-slate-700">Fiscal / Facturación</span>
-							</div>
-							<p class="text-sm text-slate-600 font-medium ml-6 leading-relaxed">
-								Thames 2276<br/>
-								C1425 CABA<br/>
-								Argentina
-							</p>
-						</div>
-
-						<div>
-							<div class="flex items-center gap-2 mb-1">
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
-								<span class="text-[11px] font-bold text-slate-700">Envío predeterminada</span>
-							</div>
-							<p class="text-sm text-slate-600 font-medium ml-6 leading-relaxed">
-								Thames 2276<br/>
-								C1425 CABA<br/>
-								Argentina
-							</p>
-						</div>
-					</div>
-
-					<div class="space-y-6 flex flex-col">
-						{/* Transportes */}
-						<div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex-1 relative">
-							<button class="absolute top-6 right-6 text-slate-400 hover:text-indigo-600 transition-colors">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-							</button>
-							<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6">Transportes</h3>
-							<div class="flex items-start gap-3">
-								<div class="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
-									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-500"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
-								</div>
-								<div>
-									<p class="text-sm font-bold text-slate-900">Expreso Vía Cargo</p>
-									<p class="text-xs text-slate-500 mt-0.5">Retira en sucursal destino</p>
-								</div>
-							</div>
-						</div>
-
-						{/* Detalles del negocio */}
-						<div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm relative">
-							<button class="absolute top-6 right-6 text-slate-400 hover:text-indigo-600 transition-colors">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-							</button>
-							<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6">Detalles del negocio</h3>
-							
-							<div class="space-y-4">
-								<div>
-									<span class="block text-[11px] font-bold text-slate-400 mb-1">Rubro / Industria</span>
-									<span class="text-sm font-medium text-slate-500 italic">No especificado</span>
-								</div>
-								<div>
-									<span class="block text-[11px] font-bold text-slate-400 mb-1">Redes sociales</span>
-									<span class="text-sm font-medium text-slate-500 italic">No especificado</span>
-								</div>
-							</div>
-						</div>
-					</div>
+				<div>
+					<span class="block text-[11px] font-bold text-slate-400">Teléfono</span>
+					<span class="text-sm font-bold text-slate-900">{profile.telefono || 'Sin Registrar'}</span>
+				</div>
+				<div>
+					<span class="block text-[11px] font-bold text-slate-400">Fecha de Registro</span>
+					<span class="text-sm font-bold text-slate-900">
+						{new Date(profile.$createdAt).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}
+					</span>
 				</div>
 			</div>
 
-			<div class="col-span-1 lg:col-span-1 space-y-6">
+			{/* Historial de Pedidos */}
+			<div class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+				<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-3">Historial de Pedidos Realizados</h3>
 				
-				{/* Acciones Rápidas */}
-				<div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-					<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Acciones Rápidas</h3>
-					
-					<div class="space-y-2">
-						<button class="w-full py-2.5 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-sm rounded-xl transition-colors text-left flex items-center justify-between group">
-							<span class="flex items-center gap-2">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-								Enviar email
-							</span>
-							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-300 group-hover:text-slate-500 transition-colors"><polyline points="9 18 15 12 9 6"></polyline></svg>
-						</button>
-						<button class="w-full py-2.5 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-sm rounded-xl transition-colors text-left flex items-center justify-between group">
-							<span class="flex items-center gap-2">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-500"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
-								Mensaje WhatsApp
-							</span>
-							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-300 group-hover:text-slate-500 transition-colors"><polyline points="9 18 15 12 9 6"></polyline></svg>
-						</button>
-						<button class="w-full py-2.5 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-sm rounded-xl transition-colors text-left flex items-center justify-between group">
-							<span class="flex items-center gap-2">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-								Agendar reunión
-							</span>
-							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-300 group-hover:text-slate-500 transition-colors"><polyline points="9 18 15 12 9 6"></polyline></svg>
-						</button>
-						<button class="w-full py-2.5 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-sm rounded-xl transition-colors text-left flex items-center justify-between group">
-							<span class="flex items-center gap-2">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-								Registrar reclamo
-							</span>
-							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-300 group-hover:text-slate-500 transition-colors"><polyline points="9 18 15 12 9 6"></polyline></svg>
-						</button>
-					</div>
-				</div>
+				<div class="overflow-x-auto">
+					<table class="w-full text-left border-collapse">
+						<thead>
+							<tr class="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+								<th class="p-3">Pedido</th>
+								<th class="p-3">Fecha</th>
+								<th class="p-3 text-right">Total</th>
+								<th class="p-3 text-center">Estado</th>
+								<th class="p-3 text-center">Ver</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-slate-100 text-xs">
+							{orders.map(o => (
+								<tr class="hover:bg-slate-50">
+									<td class="p-3 font-mono font-bold text-emerald-700">
+										ORD-{o.numero || o.$id.substring(0,6)}
+									</td>
+									<td class="p-3 text-slate-500">
+										{new Date(o.$createdAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+									</td>
+									<td class="p-3 text-right font-black text-slate-900">
+										{formateador.format((o.total || 0) / 100)}
+									</td>
+									<td class="p-3 text-center">
+										<span class={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusClass(o.estado)}`}>
+											{o.estado}
+										</span>
+									</td>
+									<td class="p-3 text-center">
+										<a href={`/admin/pedidos/${o.$id}`} class="text-xs font-bold text-emerald-600 hover:underline">
+											Detalle &rarr;
+										</a>
+									</td>
+								</tr>
+							))}
 
-				{/* Acceso Activo */}
-				<div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-					<div class="flex items-center justify-between mb-4">
-						<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Acceso Activo</h3>
-						<div class="w-10 h-6 bg-emerald-500 rounded-full relative cursor-pointer">
-							<div class="w-4 h-4 bg-white rounded-full absolute right-1 top-1 shadow-sm"></div>
-						</div>
-					</div>
-					<p class="text-xs text-slate-500 font-medium mb-4">El cliente tiene acceso habilitado al portal B2B con la lista de precios Mayorista.</p>
-					
-					<button class="w-full py-2 bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-colors shadow-sm mb-2">
-						Reenviar email de bienvenida
-					</button>
-					<button class="w-full py-2 bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-colors shadow-sm">
-						Forzar reseteo de contraseña
-					</button>
+							{orders.length === 0 && (
+								<tr>
+									<td colspan="5" class="p-6 text-center text-slate-500 font-medium">
+										Este cliente aún no ha realizado ningún pedido.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
 				</div>
-
 			</div>
 		</div>
+
 	</main>
 </AdminLayout>
