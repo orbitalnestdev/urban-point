@@ -20,37 +20,56 @@ try {
 	allOrders = res.documents;
 
 	// fetch profiles for all customer_ids
-	const customerIds = [...new Set(allOrders.map(o => o.customer_id).filter(Boolean))];
+	const customerIds = [...new Set(allOrders.map(o => {
+		if (!o.customer_id) return null;
+		return typeof o.customer_id === 'string' ? o.customer_id : o.customer_id.$id;
+	}).filter(Boolean))];
+	
 	const profiles = {};
 	if (customerIds.length > 0) {
-		const profRes = await databases.listDocuments('urbanpoint', 'profiles', [
-			Query.equal('$id', customerIds),
-			Query.limit(customerIds.length)
-		]);
-		profRes.documents.forEach(p => {
-			profiles[p.$id] = p;
-		});
+		try {
+			const profRes = await databases.listDocuments('urbanpoint', 'profiles', [
+				Query.equal('$id', customerIds),
+				Query.limit(customerIds.length)
+			]);
+			profRes.documents.forEach(p => {
+				profiles[p.$id] = p;
+			});
+		} catch (err) {
+			console.error('Error fetching customer profiles:', err);
+		}
 	}
 
 	// fetch order items to count articles
 	const orderIds = allOrders.map(o => o.$id);
 	const orderItemsCount = {};
 	if (orderIds.length > 0) {
-		const itemsRes = await databases.listDocuments('urbanpoint', 'order_items', [
-			Query.equal('order_id', orderIds),
-			Query.limit(orderIds.length * 5)
-		]);
-		itemsRes.documents.forEach(item => {
-			if (!orderItemsCount[item.order_id]) orderItemsCount[item.order_id] = 0;
-			orderItemsCount[item.order_id] += item.cantidad || 1;
-		});
+		try {
+			const itemsRes = await databases.listDocuments('urbanpoint', 'order_items', [
+				Query.equal('order_id', orderIds),
+				Query.limit(orderIds.length * 5)
+			]);
+			itemsRes.documents.forEach(item => {
+				const itemOrderId = typeof item.order_id === 'string' ? item.order_id : item.order_id?.$id;
+				if (itemOrderId) {
+					if (!orderItemsCount[itemOrderId]) orderItemsCount[itemOrderId] = 0;
+					orderItemsCount[itemOrderId] += item.cantidad || 1;
+				}
+			});
+		} catch (err) {
+			console.error('Error fetching order items:', err);
+		}
 	}
 
-	allOrders = allOrders.map(o => ({
-		...o,
-		customerProfile: o.customer_id ? profiles[o.customer_id] : null,
-		totalItems: orderItemsCount[o.$id] || 0
-	}));
+	allOrders = allOrders.map(o => {
+		const custId = typeof o.customer_id === 'string' ? o.customer_id : o.customer_id?.$id;
+		const profile = custId ? profiles[custId] : (typeof o.customer_id === 'object' ? o.customer_id : null);
+		return {
+			...o,
+			customerProfile: profile,
+			totalItems: orderItemsCount[o.$id] || 0
+		};
+	});
 
 	let filtered = [...allOrders];
 

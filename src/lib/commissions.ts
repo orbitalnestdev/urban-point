@@ -74,7 +74,9 @@ export async function resolverComisiones(orderId: string) {
 		let pickupProfileId: string | null = null;
 		if (order.pickup_point_id) {
 			const pickupPoint = await db.getDocument('urbanpoint', 'pickup_points', typeof order.pickup_point_id === 'string' ? order.pickup_point_id : order.pickup_point_id.$id);
-			pickupProfileId = typeof pickupPoint.profile_id === 'string' ? pickupPoint.profile_id : pickupPoint.profile_id.$id;
+			if (pickupPoint.profile_id) {
+				pickupProfileId = typeof pickupPoint.profile_id === 'string' ? pickupPoint.profile_id : pickupPoint.profile_id.$id;
+			}
 		}
 
 		// 2. Determinar quién refirió la compra (Comisión por Referido)
@@ -95,7 +97,7 @@ export async function resolverComisiones(orderId: string) {
 			const product = await db.getDocument('urbanpoint', 'products', productId);
 			const categoryId = product.categoria_id ? (typeof product.categoria_id === 'string' ? product.categoria_id : product.categoria_id.$id) : null;
 			
-			const baseCents = item.subtotal_centavos || (item.precio_unitario_centavos * item.cantidad);
+			const baseCents = item.subtotal || (item.precio_unitario * item.cantidad);
 
 			// Descontar stock real del producto
 			const nuevoStock = Math.max(0, (product.stock || 0) - item.cantidad);

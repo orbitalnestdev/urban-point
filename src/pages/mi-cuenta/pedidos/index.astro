@@ -13,7 +13,7 @@ let orders: any[] = [];
 try {
 	const { databases } = createAdminClient();
 	const res = await databases.listDocuments('urbanpoint', 'orders', [
-		Query.equal('profile_id', profile.$id),
+		Query.equal('customer_id', profile.$id),
 		Query.orderDesc('$createdAt')
 	]);
 	orders = res.documents;
@@ -62,7 +62,7 @@ const getStatusBadge = (status: string) => {
 								</div>
 								<div>
 									<div class="flex items-center gap-2 mb-1">
-										<span class="font-extrabold text-slate-900 text-sm md:text-base">Pedido #{order.$id.substring(0,6).toUpperCase()}</span>
+										<span class="font-extrabold text-slate-900 text-sm md:text-base">Pedido #{order.numero || order.$id.substring(0,6).toUpperCase()}</span>
 										<Fragment set:html={getStatusBadge(order.estado)} />
 									</div>
 									<p class="text-xs text-slate-500">
@@ -73,7 +73,7 @@ const getStatusBadge = (status: string) => {
 							<div class="flex items-center justify-between md:justify-end gap-6 md:border-l md:border-slate-200 md:pl-6">
 								<div>
 									<p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total</p>
-									<p class="font-black text-slate-900">{formateador.format(order.total_centavos / 100)}</p>
+									<p class="font-black text-slate-900">{formateador.format((order.total || 0) / 100)}</p>
 								</div>
 								<div class="text-slate-400 group-hover:text-[#2D5A27] transition-colors">
 									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>

@@ -186,7 +186,10 @@ export const server = {
 				productId: z.string(),
 				cantidad: z.number().min(1)
 			})),
-			pickupPointId: z.string(),
+			pickupPointId: z.string().optional(),
+			fulfillment: z.enum(['retiro', 'envio']).optional(),
+			direccionEnvio: z.string().optional(),
+			costoEnvio: z.number().optional(),
 			referralCode: z.string().optional(),
 			paymentMethod: z.string().optional()
 		}),
@@ -233,14 +236,18 @@ export const server = {
 					
 					orderItemsData.push({
 						product_id: p.$id,
-						product_snapshot: JSON.stringify({ nombre: p.nombre, sku: p.sku }),
+						sku_snapshot: p.sku || 'SKU-GEN',
+						nombre_snapshot: p.nombre,
+						precio_unitario: p.precio,
 						cantidad: item.cantidad,
-						precio_unitario_centavos: p.precio,
-						subtotal_centavos: p.precio * item.cantidad
+						subtotal: p.precio * item.cantidad
 					});
 					
 					totalCentavos += p.precio * item.cantidad;
 				}
+
+				const costoEnvio = input.costoEnvio || 0;
+				const grandTotal = totalCentavos + costoEnvio;
 
 				const pickupCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -248,13 +255,19 @@ export const server = {
 				const orderPayload: any = {
 					numero: Math.floor(100000 + Math.random() * 900000).toString(),
 					subtotal: totalCentavos,
-					total: totalCentavos,
+					total: grandTotal,
+					costo_envio: costoEnvio,
 					estado: 'pendiente_pago',
-					fulfillment: 'retiro',
-					pickup_point_id: input.pickupPointId,
+					fulfillment: input.fulfillment || 'retiro',
 					referral_code_id: referralCodeId,
 					pickup_code_hash: pickupCode
 				};
+				if (input.pickupPointId) {
+					orderPayload.pickup_point_id = input.pickupPointId;
+				}
+				if (input.direccionEnvio) {
+					orderPayload.direccion_envio = input.direccionEnvio;
+				}
 				if (profileId) {
 					orderPayload.customer_id = profileId;
 				}

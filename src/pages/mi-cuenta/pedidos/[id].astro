@@ -18,7 +18,8 @@ try {
 	const { databases } = createAdminClient();
 	order = await databases.getDocument('urbanpoint', 'orders', id as string);
 	
-	if (order.profile_id !== profile.$id) {
+	const orderCustId = typeof order.customer_id === 'string' ? order.customer_id : order.customer_id?.$id;
+	if (orderCustId && orderCustId !== profile.$id) {
 		return Astro.redirect('/mi-cuenta/pedidos');
 	}
 
@@ -27,7 +28,12 @@ try {
 	]);
 	orderItems = itemsRes.documents;
 
-	pickupPoint = await databases.getDocument('urbanpoint', 'pickup_points', order.pickup_point_id);
+	if (order.pickup_point_id) {
+		const pickupPointId = typeof order.pickup_point_id === 'string' ? order.pickup_point_id : order.pickup_point_id?.$id;
+		if (pickupPointId) {
+			pickupPoint = await databases.getDocument('urbanpoint', 'pickup_points', pickupPointId);
+		}
+	}
 
 } catch (e) {
 	return Astro.redirect('/mi-cuenta/pedidos');
@@ -48,7 +54,7 @@ const getStatusBadge = (status: string) => {
 };
 ---
 
-<ClientLayout title={`Pedido #${order.$id.substring(0,6).toUpperCase()} | UrbanPoint`} activeTab="pedidos">
+<ClientLayout title={`Pedido #${order.numero || order.$id.substring(0,6).toUpperCase()} | UrbanPoint`} activeTab="pedidos">
 	<div class="mb-4">
 		<a href="/mi-cuenta/pedidos" class="text-sm font-bold text-slate-500 hover:text-[#2D5A27]">← Volver a Mis Pedidos</a>
 	</div>
@@ -59,7 +65,7 @@ const getStatusBadge = (status: string) => {
 			<div class="bg-white rounded-3xl p-6 md:p-8 border border-slate-200/80 shadow-sm">
 				<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-100">
 					<div>
-						<h2 class="text-2xl font-black text-slate-900">Pedido #{order.$id.substring(0,6).toUpperCase()}</h2>
+						<h2 class="text-2xl font-black text-slate-900">Pedido #{order.numero || order.$id.substring(0,6).toUpperCase()}</h2>
 						<p class="text-sm text-slate-500 font-medium">
 							{new Date(order.$createdAt).toLocaleDateString('es-AR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
 						</p>
@@ -78,18 +84,18 @@ const getStatusBadge = (status: string) => {
 									{item.cantidad}x
 								</div>
 								<div>
-									<p class="font-bold text-slate-900 text-sm">{JSON.parse(item.product_snapshot).nombre}</p>
-									<p class="text-xs text-slate-500">SKU: {JSON.parse(item.product_snapshot).sku}</p>
+									<p class="font-bold text-slate-900 text-sm">{item.nombre_snapshot || 'Producto'}</p>
+									<p class="text-xs text-slate-500">SKU: {item.sku_snapshot || 'N/A'}</p>
 								</div>
 							</div>
-							<p class="font-black text-slate-900">{formateador.format(item.subtotal_centavos / 100)}</p>
+							<p class="font-black text-slate-900">{formateador.format((item.subtotal || 0) / 100)}</p>
 						</div>
 					))}
 				</div>
 				
 				<div class="mt-6 pt-6 border-t border-slate-100 flex justify-between items-center">
 					<p class="text-lg font-bold text-slate-600">Total pagado</p>
-					<p class="text-2xl font-black text-[#2D5A27]">{formateador.format(order.total_centavos / 100)}</p>
+					<p class="text-2xl font-black text-[#2D5A27]">{formateador.format((order.total || 0) / 100)}</p>
 				</div>
 			</div>
 		</div>
@@ -118,7 +124,7 @@ const getStatusBadge = (status: string) => {
 				</h3>
 				{pickupPoint && (
 					<div>
-						<p class="font-bold text-slate-900 text-sm mb-1">{pickupPoint.nombre}</p>
+						<p class="font-bold text-slate-900 text-sm mb-1">{pickupPoint.nombre_comercial || pickupPoint.nombre}</p>
 						<p class="text-sm text-slate-600 mb-4">{pickupPoint.direccion}</p>
 						
 						{pickupPoint.map_url && (

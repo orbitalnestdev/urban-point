@@ -163,38 +163,59 @@ import Logo from '../../components/Logo.astro';
         if (itemsContainer) itemsContainer.innerHTML = itemsHtml;
         if (totalEl) totalEl.textContent = formateador.format(totalSum);
 
-        // 2. Load Selected Point
-        const currentCheckout = checkoutData.get();
-        if (!currentCheckout || !currentCheckout.pickupPointId) {
-            window.location.href = '/checkout/retiro';
-            return;
-        }
+        // 2. Load Selected Delivery / Point
+        const currentCheckout = checkoutData.get() || {};
+        const isEnvio = currentCheckout.fulfillment === 'envio';
 
-        // Fetch point details from Appwrite (client-side read-only)
-        try {
-            const client = new Client()
-                .setEndpoint('https://aw.orbitalnest.net/v1')
-                .setProject('6a6a5321001439f06817');
-            const databases = new Databases(client);
+        if (isEnvio) {
+            const envioCosto = currentCheckout.costoEnvio || 150000;
+            totalSum += envioCosto;
 
-            const point = await databases.getDocument('urbanpoint', 'pickup_points', currentCheckout.pickupPointId);
-            
             if (pointDetailsEl) {
                 pointDetailsEl.innerHTML = `
-                    <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-[#2D5A27] shrink-0 border border-[#D4E5D6] shadow-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-blue-600 shrink-0 border border-blue-100 shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
                     </div>
                     <div>
-                        <p class="font-extrabold text-slate-900">${point.nombre_comercial}</p>
-                        <p class="text-xs text-slate-600 mt-0.5">${point.direccion}, ${point.localidad}</p>
-                        <p class="text-xs font-semibold text-[#2D5A27] mt-1">Retiro GRATIS</p>
+                        <p class="font-extrabold text-slate-900">Envío a Domicilio</p>
+                        <p class="text-xs text-slate-600 mt-0.5">${currentCheckout.direccionEnvio || 'Dirección no especificada'}</p>
+                        <p class="text-xs font-semibold text-blue-600 mt-1">Costo de envío: ${formateador.format(envioCosto)}</p>
                     </div>
                 `;
             }
-        } catch (e) {
-            console.error(e);
-            if (pointDetailsEl) pointDetailsEl.innerHTML = `<p class="text-red-500 font-bold text-sm">Error al cargar el punto de retiro.</p>`;
+        } else {
+            if (!currentCheckout.pickupPointId) {
+                window.location.href = '/checkout/retiro';
+                return;
+            }
+
+            try {
+                const client = new Client()
+                    .setEndpoint('https://aw.orbitalnest.net/v1')
+                    .setProject('6a6a5321001439f06817');
+                const databases = new Databases(client);
+
+                const point = await databases.getDocument('urbanpoint', 'pickup_points', currentCheckout.pickupPointId);
+                
+                if (pointDetailsEl) {
+                    pointDetailsEl.innerHTML = `
+                        <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-[#2D5A27] shrink-0 border border-[#D4E5D6] shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                        </div>
+                        <div>
+                            <p class="font-extrabold text-slate-900">${point.nombre_comercial}</p>
+                            <p class="text-xs text-slate-600 mt-0.5">${point.direccion}, ${point.localidad}</p>
+                            <p class="text-xs font-semibold text-[#2D5A27] mt-1">Retiro GRATIS</p>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                console.error(e);
+                if (pointDetailsEl) pointDetailsEl.innerHTML = `<p class="text-red-500 font-bold text-sm">Error al cargar el punto de retiro.</p>`;
+            }
         }
+
+        if (totalEl) totalEl.textContent = formateador.format(totalSum);
 
         // 3. Radio Buttons logic
         const radios = document.querySelectorAll('input[name="payment_method"]');
@@ -241,7 +262,10 @@ import Logo from '../../components/Logo.astro';
 
                     const { data, error } = await actions.createCheckout({
                         items: payload,
+                        fulfillment: finalCheckout.fulfillment || 'retiro',
                         pickupPointId: finalCheckout.pickupPointId,
+                        direccionEnvio: finalCheckout.direccionEnvio,
+                        costoEnvio: finalCheckout.costoEnvio,
                         referralCode: refCode,
                         paymentMethod: finalCheckout.paymentMethod
                     });
@@ -253,7 +277,7 @@ import Logo from '../../components/Logo.astro';
                         return;
                     }
 
-                    if (data.init_point === '/checkout/success') {
+                    if (data.init_point.startsWith('/checkout/success')) {
                         window.location.href = data.init_point;
                     } else {
                         window.location.href = data.init_point!;
