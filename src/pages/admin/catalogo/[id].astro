@@ -189,9 +189,17 @@ if (product.galeria_urls) {
 									<label class="block text-sm font-bold text-slate-900 mb-1">Categoría</label>
 									<select id="input-categoria" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 h-[46px]">
 										<option value="">Sin Categoría</option>
-										{categories.map((c: any) => (
-											<option value={c.$id} selected={product.categoria_id?.$id === c.$id || product.categoria_id === c.$id}>{c.nombre}</option>
-										))}
+										{categories.map((c: any) => {
+											const isSub = !!c.parent_id;
+											const parent = isSub ? categories.find((p: any) => p.$id === c.parent_id) : null;
+											const displayName = parent ? `${parent.nombre} › ${c.nombre}` : c.nombre;
+
+											return (
+												<option value={c.$id} selected={product.categoria_id?.$id === c.$id || product.categoria_id === c.$id}>
+													{displayName}
+												</option>
+											);
+										})}
 									</select>
 								</div>
 								<div>
