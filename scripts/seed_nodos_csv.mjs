@@ -1,4 +1,4 @@
-import { Client, Databases, ID } from 'node-appwrite';
+import { Client, Databases, Query, ID } from 'node-appwrite';
 import fs from 'fs';
 import path from 'path';
 import 'dotenv/config';
@@ -14,7 +14,6 @@ const db = new Databases(client);
 const DB_ID = 'urbanpoint';
 const COLLECTION_ID = 'pickup_points';
 
-// Reference street anchor coordinates for Buenos Aires
 const STREET_ANCHORS = [
   { keywords: ['CABILDO'], lat: -34.5615, lng: -58.4568, barrio: 'Belgrano / Nuñez' },
   { keywords: ['CORRIENTES'], lat: -34.6033, lng: -58.4194, barrio: 'Almagro / Villa Crespo' },
@@ -58,7 +57,6 @@ function calculateCoords(calle, altura, index) {
   const num = parseInt(altura.replace(/\D/g, '') || '1000', 10);
   const anchor = getAnchor(calle, num);
   
-  // Deterministic offset based on street height & index
   const latOffset = ((num % 5000) / 100000) * (index % 2 === 0 ? 1 : -1);
   const lngOffset = (((index * 37) % 200) / 10000) * (index % 3 === 0 ? -1 : 1);
 
@@ -71,9 +69,8 @@ function calculateCoords(calle, altura, index) {
 }
 
 async function run() {
-  console.log('🚀 Iniciando sincronización de 385 Puntos Canillita desde public/nodos.csv...');
+  console.log('🚀 Actualizando formato de nombres a "Puesto [Puesto] - [Dirección]"...');
 
-  // 1. Read and parse CSV
   const csvPath = path.resolve(process.cwd(), 'public/nodos.csv');
   const content = fs.readFileSync(csvPath, 'utf8');
   const lines = content.split('\n').filter(l => l.trim());
@@ -108,27 +105,19 @@ async function run() {
 
   console.log(`📋 Nodos procesados del CSV: ${parsedNodes.length}`);
 
-  // 2. Fetch existing pickup points from Appwrite
-  console.log('📦 Consultando puntos de retiro existentes en Appwrite...');
+  // Fetch all existing pickup points from Appwrite with limit 500
+  console.log('📦 Obteniendo la lista completa de puntos en Appwrite...');
   let existingDocs = [];
   try {
-    let response = await db.listDocuments(DB_ID, COLLECTION_ID);
+    let response = await db.listDocuments(DB_ID, COLLECTION_ID, [Query.limit(500)]);
     existingDocs = response.documents;
-    console.log(`Se encontraron ${existingDocs.length} puntos existentes en la base de datos.`);
+    console.log(`Puntos actualmente en Appwrite: ${existingDocs.length}`);
   } catch (err) {
-    console.log('No se pudieron obtener puntos existentes:', err.message);
+    console.log('Error consultando documentos:', err.message);
   }
 
-  // 3. Purge or deactivate old non-CSV test points
-  const existingNames = new Set();
-  for (const doc of existingDocs) {
-    existingNames.add(doc.nombre_comercial);
-  }
-
-  // 4. Insert nodes from CSV
-  console.log('📥 Insertando los 385 Nodos Canillita...');
-  let inserted = 0;
-  let skipped = 0;
+  let updatedCount = 0;
+  let insertedCount = 0;
 
   for (let i = 0; i < parsedNodes.length; i++) {
     const node = parsedNodes[i];
@@ -136,43 +125,51 @@ async function run() {
     const isAlturaZero = !node.altura || node.altura === '0';
     const direccionClean = isAlturaZero ? cleanCalle : `${cleanCalle} ${node.altura}`;
     
-    const puestoLabel = node.puesto ? (isNaN(Number(node.puesto)) ? node.puesto : `#${node.puesto}`) : `Puesto ${i + 1}`;
-    const nombreComercial = `Punto Canillita ${puestoLabel} - ${direccionClean}`;
+    // Format: "Puesto [Puesto] - [Dirección]"
+    const puestoLabel = node.puesto ? node.puesto : `${i + 1}`;
+    const nombreComercial = `Puesto ${puestoLabel} - ${direccionClean}`;
 
-    if (existingNames.has(nombreComercial)) {
-      skipped++;
-      continue;
-    }
+    const existingDoc = existingDocs[i];
 
-    const { lat, lng, barrio, provincia } = calculateCoords(node.calle, node.altura, i);
-
-    const docPayload = {
-      nombre_comercial: nombreComercial,
-      direccion: direccionClean,
-      localidad: barrio,
-      provincia: provincia,
-      lat: lat,
-      lng: lng,
-      horarios: 'Lunes a Sábado 07:00 a 20:00 hs.',
-      estado: 'activo',
-      cbu: `00000031000${String(i + 1).padStart(11, '0')}`,
-      condicion_fiscal: 'Monotributo'
-    };
-
-    try {
-      await db.createDocument(DB_ID, COLLECTION_ID, ID.unique(), docPayload);
-      inserted++;
-      if (inserted % 25 === 0 || inserted === parsedNodes.length) {
-        console.log(`✅ Avance: ${inserted}/${parsedNodes.length} nodos insertados en Appwrite...`);
+    if (existingDoc) {
+      try {
+        await db.updateDocument(DB_ID, COLLECTION_ID, existingDoc.$id, {
+          nombre_comercial: nombreComercial,
+          direccion: direccionClean
+        });
+        updatedCount++;
+        if (updatedCount % 50 === 0 || updatedCount === parsedNodes.length) {
+          console.log(`🔄 Avance: ${updatedCount}/${parsedNodes.length} nombres de Puesto actualizados...`);
+        }
+      } catch (err) {
+        console.error(`❌ Error actualizando [${existingDoc.$id}]:`, err.message);
       }
-    } catch (err) {
-      console.error(`❌ Error al insertar nodo [${nombreComercial}]:`, err.message);
+    } else {
+      const { lat, lng, barrio, provincia } = calculateCoords(node.calle, node.altura, i);
+      const docPayload = {
+        nombre_comercial: nombreComercial,
+        direccion: direccionClean,
+        localidad: barrio,
+        provincia: provincia,
+        lat: lat,
+        lng: lng,
+        horarios: 'Lunes a Sábado 07:00 a 20:00 hs.',
+        estado: 'activo',
+        cbu: `00000031000${String(i + 1).padStart(11, '0')}`,
+        condicion_fiscal: 'Monotributo'
+      };
+      try {
+        await db.createDocument(DB_ID, COLLECTION_ID, ID.unique(), docPayload);
+        insertedCount++;
+      } catch (err) {
+        console.error(`❌ Error creando document:`, err.message);
+      }
     }
   }
 
-  console.log(`\n🎉 Sincronización completada exitosamente!`);
-  console.log(`   - Nodos insertados: ${inserted}`);
-  console.log(`   - Nodos omitidos (ya existentes): ${skipped}`);
+  console.log(`\n🎉 Nombres de puestos actualizados exitosamente!`);
+  console.log(`   - Puestos actualizados: ${updatedCount}`);
+  console.log(`   - Puestos creados: ${insertedCount}`);
 }
 
 run().catch(console.error);
