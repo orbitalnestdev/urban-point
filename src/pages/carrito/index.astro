@@ -94,20 +94,18 @@ export const prerender = false;
 						<span id="full-cart-total" class="text-3xl font-black text-slate-900">$ 0</span>
 					</div>
 
-					<!-- Delivery Method Selection -->
+					<!-- Delivery Method Selection (Envío a domicilio desactivado) -->
 					<div class="space-y-2">
 						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Forma de entrega</label>
-						<div class="grid grid-cols-2 gap-2 text-xs font-bold">
-							<a href="/checkout/retiro" id="btn-[#2D5A27]-retiro" class="p-3 bg-[#F2F7F3] border-2 border-[#2D5A27] text-[#2D5A27] rounded-xl text-center flex flex-col items-center justify-center gap-1 hover:shadow-xs transition-all">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-								Retiro Canillita
-								<span class="text-[10px] text-emerald-600 font-extrabold uppercase">GRATIS</span>
-							</a>
-							<a href="/checkout/envio" id="btn-checkout-envio" class="p-3 bg-white border-2 border-slate-200 text-slate-700 rounded-xl text-center flex flex-col items-center justify-center gap-1 hover:border-slate-400 hover:shadow-xs transition-all">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
-								Envío Domicilio
-								<span class="text-[10px] text-slate-400 font-bold uppercase">$ 1.500</span>
-							</a>
+						<div class="p-3.5 bg-[#F2F7F3] border-2 border-[#2D5A27] text-[#2D5A27] rounded-xl flex items-center justify-between">
+							<div class="flex items-center gap-2.5 text-xs font-bold">
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+								<div>
+									<span class="block">Retiro en Punto UrbanPoint</span>
+									<span class="text-[11px] text-slate-500 font-normal">Retirá gratis en el comercio de tu zona</span>
+								</div>
+							</div>
+							<span class="text-xs text-emerald-600 font-extrabold uppercase px-2 py-0.5 bg-emerald-100 rounded-md">GRATIS</span>
 						</div>
 					</div>
 
