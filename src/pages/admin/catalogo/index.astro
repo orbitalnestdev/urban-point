@@ -93,6 +93,26 @@ if (soloBorradores) {
 // 30 days window in ms for derived "Nuevo" flag
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const now = Date.now();
+
+// Paginación optimizada (30 productos por página)
+const ITEMS_PER_PAGE = 30;
+const pageParam = parseInt(Astro.url.searchParams.get('page') || '1', 10);
+const currentPage = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+
+const totalFiltered = filteredProducts.length;
+const totalPages = Math.max(1, Math.ceil(totalFiltered / ITEMS_PER_PAGE));
+const validPage = Math.min(currentPage, totalPages);
+
+const startIndex = (validPage - 1) * ITEMS_PER_PAGE;
+const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalFiltered);
+
+const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
+
+function getPageUrl(targetPage: number) {
+	const params = new URLSearchParams(Astro.url.searchParams);
+	params.set('page', targetPage.toString());
+	return `/admin/catalogo?${params.toString()}`;
+}
 ---
 
 <AdminLayout title="Catálogo de Productos">
@@ -294,7 +314,7 @@ const now = Date.now();
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-slate-100 text-xs">
-						{filteredProducts.map((product) => {
+						{paginatedProducts.map((product) => {
 							const createdAtMs = new Date(product.$createdAt).getTime();
 							const isNuevoCalculated = !(now - createdAtMs > THIRTY_DAYS_MS);
 							const showNuevoBadge = product.es_nuevo_manual !== undefined && product.es_nuevo_manual !== null 
@@ -404,6 +424,65 @@ const now = Date.now();
 					</tbody>
 				</table>
 			</div>
+
+			{/* Componente de Paginación Optimizado - 30 por página */}
+			{totalPages > 1 && (
+				<div class="px-4 py-3 bg-slate-50 border-t border-slate-200 rounded-b-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+					<div class="text-xs text-slate-500 font-medium">
+						Mostrando <span class="font-bold text-slate-900">{totalFiltered > 0 ? startIndex + 1 : 0}</span> a <span class="font-bold text-slate-900">{endIndex}</span> de <span class="font-bold text-slate-900">{totalFiltered}</span> productos
+					</div>
+
+					<div class="flex items-center gap-1.5 overflow-x-auto">
+						{/* Botón Anterior */}
+						<a 
+							href={validPage > 1 ? getPageUrl(validPage - 1) : '#'} 
+							class={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+								validPage > 1 
+									? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs' 
+									: 'bg-slate-100 text-slate-400 cursor-not-allowed pointer-events-none'
+							}`}
+						>
+							&larr; Anterior
+						</a>
+
+						{/* Números de página */}
+						{Array.from({ length: totalPages }, (_, i) => i + 1)
+							.filter(p => p === 1 || p === totalPages || Math.abs(p - validPage) <= 2)
+							.map((p, index, array) => {
+								const showEllipsisBefore = index > 0 && p - array[index - 1] > 1;
+								return (
+									<>
+										{showEllipsisBefore && (
+											<span class="px-1.5 py-1 text-slate-400 text-xs font-bold">...</span>
+										)}
+										<a 
+											href={getPageUrl(p)} 
+											class={`w-8 h-8 rounded-xl text-xs font-bold flex items-center justify-center transition-all ${
+												p === validPage 
+													? 'bg-slate-900 text-white shadow-sm' 
+													: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+											}`}
+										>
+											{p}
+										</a>
+									</>
+								);
+							})}
+
+						{/* Botón Siguiente */}
+						<a 
+							href={validPage < totalPages ? getPageUrl(validPage + 1) : '#'} 
+							class={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+								validPage < totalPages 
+									? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs' 
+									: 'bg-slate-100 text-slate-400 cursor-not-allowed pointer-events-none'
+							}`}
+						>
+							Siguiente &rarr;
+						</a>
+					</div>
+				</div>
+			)}
 		</div>
 
 		{/* Quick Edit Drawer Ampliado y Mejorado */}
