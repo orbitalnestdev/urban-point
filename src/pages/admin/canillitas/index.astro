@@ -10,17 +10,25 @@ const { databases } = createAdminClient();
 let puntos: any[] = [];
 let referidos: any[] = [];
 
+async function fetchAllDocs(coll: string, baseQueries: any[] = []) {
+	let docs: any[] = [];
+	let offset = 0;
+	while (true) {
+		const res = await databases.listDocuments('urbanpoint', coll, [
+			...baseQueries,
+			Query.limit(100),
+			Query.offset(offset)
+		]);
+		docs.push(...res.documents);
+		if (res.documents.length < 100) break;
+		offset += 100;
+	}
+	return docs;
+}
+
 try {
-	const resPuntos = await databases.listDocuments('urbanpoint', 'pickup_points', [
-		Query.orderDesc('$createdAt'),
-		Query.limit(100)
-	]);
-	puntos = resPuntos.documents;
-	
-	const resReferidos = await databases.listDocuments('urbanpoint', 'referral_codes', [
-		Query.limit(100)
-	]);
-	referidos = resReferidos.documents;
+	puntos = await fetchAllDocs('pickup_points', [Query.orderDesc('$createdAt')]);
+	referidos = await fetchAllDocs('referral_codes');
 } catch (e) {
 	console.error(e);
 }

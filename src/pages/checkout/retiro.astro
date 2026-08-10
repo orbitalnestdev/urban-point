@@ -11,11 +11,20 @@ let provincias: string[] = [];
 
 try {
   const { databases } = createAdminClient();
-  const res = await databases.listDocuments('urbanpoint', 'pickup_points', [
-    Query.equal('estado', 'activo'),
-    Query.limit(500)
-  ]);
-  pickupPoints = res.documents.map(p => ({
+  let rawDocs: any[] = [];
+  let offset = 0;
+  while (true) {
+    const res = await databases.listDocuments('urbanpoint', 'pickup_points', [
+      Query.equal('estado', 'activo'),
+      Query.limit(100),
+      Query.offset(offset)
+    ]);
+    rawDocs.push(...res.documents);
+    if (res.documents.length < 100) break;
+    offset += 100;
+  }
+
+  pickupPoints = rawDocs.map(p => ({
     id: p.$id,
     nombre: p.nombre_comercial,
     direccion: p.direccion,
