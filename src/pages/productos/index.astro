@@ -215,13 +215,14 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 									</div>
 									<AddToCartBtn 
 										client:load 
-										product={{
+										item={{
 											id: prod.$id,
 											nombre: prod.nombre,
 											precio: precioMinorista,
-											portadaUrl: prod.portada_url,
-											stock: prod.stock || 99
+											imagen: prod.portada_url || '',
+											sku: prod.sku || prod.$id
 										}}
+										variant="plus"
 									/>
 								</div>
 							</div>
@@ -231,6 +232,9 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 			)}
 		</div>
 	</main>
+
+	<!-- Cart Drawer Integration -->
+	<CartDrawer client:load pickupPoints={pickupPoints} />
 
 	<!-- Footer -->
 	<Footer />
@@ -346,6 +350,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 				catLocResult.classList.remove('hidden');
 			});
 		}
-	</script>
+	});
+</script>
 	<Footer />
 </Layout>
