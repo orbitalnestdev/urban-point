@@ -18,12 +18,24 @@ const { databases } = createAdminClient();
 let products = [];
 let categories = [];
 
+async function fetchAllDocs(collectionId: string) {
+	let allDocs: any[] = [];
+	let offset = 0;
+	while (true) {
+		const res = await databases.listDocuments('urbanpoint', collectionId, [
+			Query.limit(100),
+			Query.offset(offset)
+		]);
+		allDocs = allDocs.concat(res.documents);
+		if (res.documents.length < 100) break;
+		offset += 100;
+	}
+	return allDocs;
+}
+
 try {
-	const res = await databases.listDocuments('urbanpoint', 'products', [Query.limit(500)]);
-	products = res.documents;
-	
-	const catRes = await databases.listDocuments('urbanpoint', 'categories');
-	categories = catRes.documents;
+	products = await fetchAllDocs('products');
+	categories = await fetchAllDocs('categories');
 
 	const categoryMap: Record<string, any> = {};
 	categories.forEach(c => { categoryMap[c.$id] = c; });
