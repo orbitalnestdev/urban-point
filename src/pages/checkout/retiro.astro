@@ -13,7 +13,7 @@ try {
   const { databases } = createAdminClient();
   const res = await databases.listDocuments('urbanpoint', 'pickup_points', [
     Query.equal('estado', 'activo'),
-    Query.limit(100)
+    Query.limit(500)
   ]);
   pickupPoints = res.documents.map(p => ({
     id: p.$id,

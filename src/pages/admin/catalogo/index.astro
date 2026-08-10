@@ -333,7 +333,21 @@ const now = Date.now();
 									</td>
 
 									<td class="p-3.5 text-right font-black text-slate-900 text-sm">
-										{formateador.format((product.precio || 0) / 100)}
+										<div>{formateador.format((product.precio || 0) / 100)}</div>
+										{(product.precio_distribuidor > 0 || product.precio_canillita > 0) && (
+											<div class="flex items-center justify-end gap-1.5 mt-1 text-[10px] font-medium text-slate-500">
+												{product.precio_distribuidor > 0 && (
+													<span title="Precio Distribuidor" class="px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded border border-purple-200">
+														Dist: {formateador.format(product.precio_distribuidor / 100)}
+													</span>
+												)}
+												{product.precio_canillita > 0 && (
+													<span title="Precio Canillita" class="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded border border-emerald-200">
+														Can: {formateador.format(product.precio_canillita / 100)}
+													</span>
+												)}
+											</div>
+										)}
 									</td>
 
 									<td class="p-3.5 text-center font-bold text-slate-700">

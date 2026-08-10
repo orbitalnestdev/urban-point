@@ -1217,6 +1217,8 @@ export const server = {
 			descripcion: z.string().optional(),
 			precio: z.number().min(0),
 			precio_promocional: z.number().min(0).optional(),
+			precio_distribuidor: z.number().min(0).optional(),
+			precio_canillita: z.number().min(0).optional(),
 			costo: z.number().min(0).optional(),
 			stock: z.number().min(0),
 			stock_maximo: z.number().min(0).optional(),
@@ -1246,6 +1248,8 @@ export const server = {
 				};
 
 				if (input.precio_promocional !== undefined) updateData.precio_promocional = input.precio_promocional;
+				if (input.precio_distribuidor !== undefined) updateData.precio_distribuidor = input.precio_distribuidor;
+				if (input.precio_canillita !== undefined) updateData.precio_canillita = input.precio_canillita;
 				if (input.marca !== undefined) updateData.marca = input.marca;
 				if (input.costo !== undefined) updateData.costo = input.costo;
 				if (input.stock_maximo !== undefined) updateData.stock_maximo = input.stock_maximo;
@@ -1344,6 +1348,8 @@ export const server = {
 				if (original.categoria_id) {
 					duplicatePayload.categoria_id = typeof original.categoria_id === 'string' ? original.categoria_id : original.categoria_id.$id;
 				}
+				if (original.precio_distribuidor !== undefined) duplicatePayload.precio_distribuidor = original.precio_distribuidor;
+				if (original.precio_canillita !== undefined) duplicatePayload.precio_canillita = original.precio_canillita;
 
 				const doc = await db.createDocument('urbanpoint', 'products', ID.unique(), duplicatePayload);
 				return { success: true, id: doc.$id };

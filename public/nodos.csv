@@ -1,0 +1,386 @@
+Puesto,Calle,Direecion
+15, AV. CONGRESO                 ,3299
+384,11 DE SEPTIEMBRE              ,3709
+53,11 DE SEPTIEMBRE              ,4608
+MAIPU          ,25 DE MAYO                    ,130
+GOROSTIAG      ,3 DE FEBRERO                  ,840
+321,ACHA                          ,3614
+CERETTI17      ,ACHEGA                        ,3176
+AGUIRRE55      ,AGUIRRE                       ,1110
+203,AMENABAR                      ,3211
+CONESA         ,AMENABAR                      ,1461
+GUEVARA        ,ANDEN NORTE CARRANZA          ,0
+2,ARCE                          ,502
+IMPRENTA       ,ARCE                          ,906
+ARCE           ,ARCE                          ,906
+PATY61         ,AREVALO                       ,2026
+ARIAS          ,ARIAS                         ,1851
+249,ARRIBE#OS                     ,2193
+347,AV CABILDO                    ,698
+348,AV CABILDO                    ,792
+VIRREY         ,AV CABILDO                    ,1567
+POETA25        ,AV CORDOBA                    ,4312
+ALVAREZ        ,AV CORRIENTES                 ,4992
+CONTRERAS      ,AV LACROZE 4191 EST F.F.G.U.HA,0
+PAGANO25       ,AV. CORRIENTES                ,4290
+21,AV. CRAMER                    ,2893
+NAVAL          ,AV. DIAZ VELEZ                ,5094
+ANGELIT27      ,AV. DIAZ VELEZ                ,5094
+244,AV. MAIPU                     ,598
+34,AV. R BALBIN                  ,3080
+43,AV. RICARDO BALBIN            ,2686
+39,AV.CABILDO                    ,1580
+PACHIN         ,AVDA ALVAREZ JONTE            ,2909
+ARTIGAS        ,AVDA ALVAREZ JONTE            ,2512
+A THOMAS65     ,AVDA ALVAREZ THOMAS           ,1320
+ANTONIO65      ,AVDA ALVAREZ THOMAS           ,1219
+RAUL 15        ,AVDA ALVAREZ THOMAS           ,3115
+FELIPE 15      ,AVDA ALVAREZ THOMAS           ,2389
+CHUBUT         ,AVDA ANGEL GALLARDO           ,613
+BOYACA         ,AVDA BOYACA                   ,892
+SORDO          ,AVDA BOYACA                   ,1590
+89,AVDA CABILDO                  ,808
+30,AVDA CABILDO                  ,1388
+55,AVDA CABILDO                  ,1212
+343,AVDA CABILDO                  ,4394
+CAPITAN        ,AVDA CABILDO                  ,3756
+60,AVDA CABILDO                  ,2533
+HERNANDEZ      ,AVDA CABILDO                  ,1567
+114,AVDA CABILDO                  ,2928
+349,AVDA CABILDO                  ,1080
+237,AVDA CABILDO                  ,4
+1,AVDA CABILDO                  ,4107
+352,AVDA CABILDO                  ,1757
+4,AVDA CABILDO                  ,2294
+46,AVDA CABILDO                  ,1906
+205,AVDA CABILDO                  ,893
+382,AVDA CABILDO                  ,4644
+363,AVDA CABILDO                  ,1507
+94,AVDA CABILDO                  ,2093
+95,AVDA CABILDO                  ,106
+313,AVDA CABILDO                  ,2879
+HECTOR20       ,AVDA CABILDO                  ,2294
+80,AVDA CABILDO                  ,2323
+6,AVDA CABILDO                  ,4009
+351,AVDA CABILDO                  ,1708
+219,AVDA CABILDO                  ,3329
+ALFREDO        ,AVDA CABILDO                  ,2447
+52,AVDA CABILDO                  ,3111
+ECHEV          ,AVDA CABILDO                  ,2011
+ZABALA         ,AVDA CABILDO                  ,1388
+96,AVDA CABILDO                  ,480
+37,AVDA CABILDO                  ,3440
+230,AVDA CABILDO                  ,3500
+87,AVDA CABILDO                  ,1816
+61,AVDA CABILDO                  ,4693
+CERUTTI        ,AVDA CABILDO                  ,2544
+225,AVDA CABILDO                  ,2865
+224,AVDA CABILDO                  ,2190
+32,AVDA CABILDO                  ,3111
+350,AVDA CABILDO                  ,1652
+246,AVDA CABILDO                  ,2118
+FRAVEGA20      ,AVDA CABILDO                  ,2202
+35,AVDA CABILDO                  ,2185
+13,AVDA CABILDO                  ,2135
+BLAS 15        ,AVDA CONGRESO                 ,4795
+TRIUNVI15      ,AVDA CONGRESO                 ,5207
+MELIAN         ,AVDA CONGRESO                 ,3597
+35-17          ,AVDA CONGRESO                 ,5709
+240,AVDA CONGRESO                 ,2414
+TECLA17        ,AVDA CONSTITUYENTES           ,4400
+HECTOR17       ,AVDA CONSTITUYENTES           ,6277
+MENA17         ,AVDA CONSTITUYENTES           ,6175
+WAL-MART/C17   ,AVDA CONSTITUYENTES           ,6020
+W-MART C-17    ,AVDA CONSTITUYENTES           ,6020
+RAMON25        ,AVDA CORDOBA                  ,4614
+PAMI25         ,AVDA CORDOBA                  ,5908
+ZURDO65        ,AVDA CORDOBA                  ,6290
+PEDRO25        ,AVDA CORDOBA                  ,5194
+MERCADO25      ,AVDA CORDOBA                  ,4187
+JACINTO54      ,AVDA CORRIENTES               ,4693
+DOMINGO55      ,AVDA CORRIENTES               ,5509
+ACEVEDO55      ,AVDA CORRIENTES               ,5377
+PIVOII 55      ,AVDA CORRIENTES               ,4515
+NEGRO 55       ,AVDA CORRIENTES               ,5280
+MANOLO55       ,AVDA CORRIENTES               ,5885
+#A#A           ,AVDA CORRIENTES               ,4108
+FLOGNA25       ,AVDA CORRIENTES               ,4245
+GALLEGO55      ,AVDA CORRIENTES               ,5609
+LAVALLE55      ,AVDA CORRIENTES               ,486
+LORO           ,AVDA CORRIENTES               ,3488
+CANARO 55      ,AVDA CORRIENTES               ,5761
+WARNES27       ,AVDA CORRIENTES               ,486
+CAA25          ,AVDA CORRIENTES               ,4528
+JORGE 55       ,AVDA CORRIENTES               ,5239
+GANDARA        ,AVDA DE LOS CONSTITUYENTES    ,3842
+BRUNO17        ,AVDA DE LOS INCAS             ,4910
+108,AVDA DEL LIBERTADOR           ,6820
+GUAYRA         ,AVDA DEL LIBERTADOR           ,7112
+CARLOS         ,AVDA DEL LIBERTADOR           ,8340
+PAYBA          ,AVDA DEL LIBERTADOR           ,7999
+VILLAR         ,AVDA DEL LIBERTADOR           ,8616
+OMAR27         ,AVDA DIAZ VELEZ               ,5289
+PEREZ17        ,AVDA DIAZ VELEZ               ,3812
+OTAMENDI       ,AVDA DIAZ VELEZ               ,4826
+jul-65,AVDA DORREGO                  ,805
+70,AVDA DORREGO  Y L. M.CAMPOS   ,0
+FORTUNA25      ,AVDA DORREGO Y CORDOBA        ,0
+YOKI 55        ,AVDA DR HONORIO PUEYRREDON    ,1906
+XXX65          ,AVDA ELCANO                   ,3218
+362,AVDA ELCANO                   ,2773
+LACROZE        ,AVDA F LACROZE                ,1909
+97,AVDA F LACROZE                ,1775
+TAMANGO65      ,AVDA F LACROZE                ,3493
+CAMILO65       ,AVDA F LACROZE                ,3294
+FERNANDO       ,AVDA F LACROZE                ,4169
+372,AVDA F LACROZE                ,2482
+LAZARO65       ,AVDA F LACROZE                ,3185
+90,AVDA F LACROZE                ,2971
+374,AVDA F LACROZE                ,2493
+DEVOTO65       ,AVDA F LACROZE                ,2791
+NASO           ,AVDA F LACROZE                ,4169
+LOPEZ          ,AVDA F LACROZE                ,4185
+RODOLFO56      ,AVDA F LACROZE                ,4185
+MANOLO CH      ,AVDA FEDERICO LACROZE         ,4196
+CHACARITA61    ,AVDA FEDERICO LACROZE         ,4196
+DONATO         ,AVDA GAONA                    ,2320
+CARACAS        ,AVDA GAONA                    ,2906
+MARTINEZ       ,AVDA GAONA                    ,2524
+LUIS27         ,AVDA GAONA                    ,1791
+ROBERTO27      ,AVDA GAONA                    ,1950
+RAUL27         ,AVDA GAONA                    ,3496
+MANCHUCA       ,AVDA GAONA                    ,3519
+ANTONIO27      ,AVDA GAONA                    ,3108
+BARBIE25       ,AVDA GAONA                    ,3496
+SOBRINO25      ,AVDA GAONA                    ,3004
+CACHO20        ,AVDA GRAL I CHENAUT           ,1850
+A 1-17         ,AVDA GRAL MOSCONI             ,2514
+PANCHO         ,AVDA JUAN B JUSTO             ,5061
+BOSCO65        ,AVDA LACROZE Y FREIRE         ,0
+CHOLO          ,AVDA LUIS M CAMPOS            ,1195
+FALUCHO        ,AVDA LUIS M CAMPOS            ,26
+PLAZA          ,AVDA LUIS MARIA CAMPOS        ,1700
+BONELLI        ,AVDA MAIPU                    ,1507
+MELO           ,AVDA MAIPU                    ,897
+ESPADA         ,AVDA MAIPU                    ,1508
+305,AVDA MAIPU                    ,502
+302,AVDA MAIPU                    ,196
+308,AVDA MAIPU                    ,99
+NORTE          ,AVDA MAIPU                    ,936
+ADOLFO         ,AVDA MAIPU                    ,1100
+38,AVDA MAIPU                    ,302
+CORDOBA        ,AVDA MAIPU                    ,1374
+33,AVDA MAIPU                    ,1510
+DESEADO        ,AVDA NAZCA                    ,1614
+M.17           ,AVDA NAZCA                    ,5517
+109,AVDA QUINTEROS                ,1493
+PARODI 55      ,AVDA RAUL S ORTIZ             ,242
+NU#EZ 55       ,AVDA RAUL S ORTIZ             ,525
+318,AVDA RICARDO BALBIN           ,4183
+338,AVDA RICARDO BALBIN           ,3714
+317,AVDA RICARDO BALBIN           ,3496
+16,AVDA SAN ISIDRO               ,4892
+LELA           ,AVDA SAN ISIDRO               ,4646
+TRAPICHE       ,AVDA SANTA FE                 ,0
+207,AVDA SANTA FE                 ,4599
+81,AVDA SANTA FE                 ,5082
+SANTA FE       ,AVDA SANTA FE                 ,4880
+CERVI#O        ,AVDA SANTA FE                 ,4599
+20,AVDA SANTA FE                 ,4712
+40,AVDA SANTA FE                 ,4602
+#ATO 15        ,AVDA TRIUNVIRATO              ,4690
+ANTONIO15      ,AVDA TRIUNVIRATO              ,4495
+PETACA 15      ,AVDA TRIUNVIRATO              ,4320
+NENE17         ,AVDA TRIUNVIRATO              ,4896
+ATILIO 15      ,AVDA TRIUNVIRATO              ,4774
+LITO17         ,AVDA TRIUNVIRATO              ,5618
+PAMPA 15       ,AVDA TRIUNVIRATO              ,4114
+ESTOMBA17      ,AVDA TRIUNVIRATO              ,2902
+TANITO 55      ,AVDA WARNES                   ,680
+JOSE 55        ,AVDA WARNES                   ,408
+EDUARDO55      ,AVDA WARNES                   ,994
+WARNES55       ,AVDA WARNES                   ,1058
+GREGORI55      ,AVDA WARNES                   ,202
+DORREGO55      ,AVDA WARNES                   ,1442
+117,AVELLANEDA                    ,198
+BARTOLU25      ,AVELLANEDA                    ,3240
+50,BENJAMIN MATIENZO             ,1750
+250,BESARES                       ,2019
+86,BONPLAND                      ,2323
+82,BORGES                        ,2205
+MANOLO 15      ,BUCARELLI                     ,2464
+ALFREDO17      ,BUCARELLI                     ,1812
+306,C LARRALDE                    ,3015
+CACHO 15       ,C.DE MALVINAS ESQ.BALLIVIAN   ,1
+BOLITA         ,CABILDO                       ,2492
+DOMINGO27      ,CAMARONES                     ,2889
+83,CARRANZA                      ,1995
+SANATORIO      ,CERVI･O                       ,4720
+PASCUAL56      ,CHARLONE                      ,594
+CHENAUT        ,CHENAUT                       ,1992
+CHORRO 15      ,COMB. MALVINAS                ,3008
+NICOLAS15      ,COMBATIENTES DE MALVINAS      ,3590
+RICARDO20      ,CONGRESO                      ,1512
+48,CONGRESO                      ,2215
+64,CONGRESO                      ,1808
+358,CRAMER                        ,2196
+49,CRAMER                        ,2496
+CRAMER         ,CRAMER                        ,3312
+333,CRAMER                        ,3602
+332,CRISOLOGO LARRALDE            ,3829
+323,CRISOLOGO LARRALDE            ,4920
+334,CUBA                          ,2491
+314,CUBA                          ,1813
+COMPADRE25     ,CUENCA                        ,1320
+BARRERA17      ,CULLEN                        ,4994
+DORREGO20      ,DE MARIA                      ,4616
+JUAN17         ,DEL CARRIL                    ,2497
+TITI 15        ,DONADO                        ,1087
+POCHO          ,DORREGO                       ,0
+CELESTI25      ,DORREGO                       ,994
+HOSP ALVAR25   ,DR JUAN F ARANGUREN           ,2701
+FELISA         ,ECHEVERRIA                    ,2108
+BELGRANO       ,ECHEVERRIA                    ,3102
+ROBERTI        ,ECHEVERRIA                    ,805
+102,ECHEVERRIA                    ,1509
+ALEJANDRO      ,ECHEVERRIA                    ,985
+CUBA           ,ECHEVERRIA                    ,2108
+BARRERA        ,ECHEVERRIA                    ,1685
+CHICO          ,ECHEVERRIA Y V ARREDONDO      ,547
+JOSE20         ,ELCANO                        ,3012
+NU#EZ20        ,EST. NUYES                    ,0
+84,EST. SAAVEDRA                 ,0
+COGHLAN        ,EST.COGHLAN (T.B.A.)          ,0
+77,"ESTACION BELGRANO ""C""         ",0
+REPARTO        ,ESTACION RIVADAVIA            ,0
+CASTILLO       ,ESTADO DE ISRAEL              ,4605
+PAZ17          ,ESTRADA                       ,2058
+EDU17          ,ESTRADA                       ,2058
+KIOSCO56       ,F.LACROZE                     ,4078
+DEPOSIT15      ,FALTA CALLE           00000065,509
+POLICIA17      ,FALTA CALLE           00000085 obsequio,536
+BIANCHI        ,FALTA CALLE           00000088 reparto,544
+DEPOSI20       ,FALTA CALLE           00000094,562
+DEPOPER        ,FALTA CALLE           00000094,562
+SOLDADO        ,FEDERICO LACROZE              ,1775
+COLEGIALE      ,FERROCARRIL MITRE(EST COLEGIAL,700
+118,FRANCISCO N LAPRIDA           ,1758
+ALBERTO        ,FRAY JUSTO S DE ORO           ,3009
+PETISO         ,FRAY JUSTO S DE ORO           ,3009
+HIDALGO        ,GALLARDO                      ,794
+ARTUR2D15      ,GANDARA                       ,2211
+#ATO 27        ,GASCON                        ,308
+MORO25         ,GAZCON                        ,585
+242,GODOY CRUZ                    ,2992
+GARA           ,GOROSTIAGA                    ,1898
+QUIQUE25       ,GRAL EUSTUAQUIO DIAZ VELEZ    ,3917
+7,GRAL HORNOS                   ,3900
+GRAFA17        ,GRAL J G DE ARTIGAS           ,5598
+PEDRO          ,GRAL RAMON FREIRE             ,2253
+VEGA           ,GRAL RAMON FREIRE             ,1999
+GRIVEO17       ,GRIVEO                        ,2501
+PIBE25         ,GUEVARA                       ,401
+AMATO 55       ,GURRUCHAGA                    ,339
+VIEJO          ,GURRUCHAGA                    ,593
+HOMBERG        ,HOLMBERG                      ,2600
+REGALO20       ,HONDURAS                      ,5691
+85,HUMBOLDT                      ,2306
+CARLITO55      ,HUMBOLDT                      ,9
+CATA17         ,IBERA                         ,5614
+HUGO           ,IRIARTE                       ,1341
+MERCADO        ,J AGUSTIN GARCIA              ,2913
+CAYETANO20     ,J.L.BORGES                    ,1637
+ADELINA25      ,JERONIMO SALGUERO             ,420
+93,JORGE NEWBERY                 ,1898
+387,JOSE HERNANDEZ                ,2681
+76,JOSE HERNANDEZ                ,2145
+18,JOSE HERNANDEZ Y 3 DE FEBRERO ,0
+NAZCA17        ,JOSE LEON CABEZON             ,2894
+VELAZCO25      ,JUAN R DE VELAZCO             ,1495
+JUFRE25        ,JUFRE                         ,390
+59,JURAMENTO                     ,1985
+100,JURAMENTO                     ,1608
+31,JURAMENTO                     ,2527
+254,JURAMENTO                     ,2149
+29,LA PAMPA                      ,2875
+359,LA PAMPA                      ,2479
+BARRANCAS      ,LA PAMPA                      ,1602
+PAMPA20        ,LA PAMPA                      ,1531
+370,LA PAMPA                      ,3048
+CASTRO         ,LA PAMPA                      ,3400
+NAON           ,LA PAMPA                      ,3774
+PAMPA56        ,LA PAMPA                      ,5996
+340,LARRALDE                      ,2079
+339,LARRALDE                      ,1935
+TANO           ,LOYOLA                        ,207
+CAMPOS         ,LUIS MARIA CAMPOS             ,1544
+MARIO55        ,LUIS MARIA DRAGO              ,50
+ADELIO         ,MAIPU                         ,1196
+232,MANUELA PEDRAZA               ,1781
+EMILIO         ,MANUELA PEDRAZA               ,2077
+42,MANZANARES                    ,2115
+316,MARIANO ACHA                  ,3008
+MENDOZA15      ,MARIANO ACHA                  ,2102
+JUAN 15        ,MARIANO ACHA (EST. DRAGO)     ,1430
+ESTACIO27      ,MARTIN DE GAINZA              ,1095
+ABADIA         ,MAURE                         ,1765
+54,MCAL A J DE SUCRE             ,1385
+SAVERIO25      ,MEDRANO                       ,493
+24,MENDOZA                       ,2123
+LALO 15        ,MENDOZA                       ,5496
+TONY 15        ,MENDOZA                       ,5050
+JOAQUIN15      ,MENDOZA                       ,506
+98,MENDOZA ESQ HUSARES           ,0
+VIDAL          ,MENDOZA Y MOLDES              ,0
+245,MOLDES                        ,1903
+341,MOLDES                        ,2497
+26,MONROE                        ,3298
+25,MONROE                        ,3397
+ERNESTO15      ,MONROE                        ,4481
+PASCUAL15      ,MONROE                        ,5392
+HILDA          ,MONROE                        ,3106
+67,MONROE                        ,3555
+ARDUIN         ,MONROE                        ,1802
+336,MONROE                        ,3796
+213,MONROE                        ,3410
+DONADO 15      ,MONROE                        ,4334
+68,MONTAYESES                    ,2481
+ANGELIT55      ,MURILLO                       ,1100
+NU#EZ 15       ,NU･EZ                         ,5620
+MIGUEL17       ,NU･EZ Y CERETI                ,0
+357,O'HIGGINS                     ,1798
+GOMEZ65        ,OLAGUER Y FELIU               ,3397
+SANTIAG15      ,OLAZABAL                      ,4935
+IDEAL 15       ,OLAZABAL                      ,4935
+N 2-17         ,OLAZABAL                      ,5506
+337,OLAZABAL                      ,3710
+JOSE 15        ,OLAZABAL                      ,4603
+OLAZABA15      ,OLAZABAL                      ,4290
+ADAM           ,OLLEROS                       ,3996
+367,OLLEROS Y LIBERTADOR          ,0
+PIPO CHIC      ,OTERO                         ,201
+ISIDRO         ,PAMPA                         ,3390
+88,PARAGUAY                      ,4687
+UGARTE         ,PEDRO I RIVERA                ,3005
+19,PICO                          ,2410
+41,PINTO                         ,3911
+364,PINTO                         ,4760
+8,PINTO                         ,3620
+12,PINTO                         ,4495
+BOGADO25       ,PRINGLES                      ,700
+105,RAMALLO Y 11 DE SEPTIEMBRE    ,0
+VIROLA25       ,RIO DE JANEIRO                ,995
+VICARIO17      ,ROOSBELT                      ,5765
+312,ROOSVELT                      ,2585
+62,RUIZ HUIDOBRO                 ,4049
+1500,SAN MARTIN                    ,1532
+POLICIA20      ,SIN CALLE                     ,1000
+71,SUCRE                         ,1816
+TEODORO G      ,TEODORO GARCIA                ,1800
+PIPO GR55      ,THAMES                        ,590
+ANDRES17       ,TRIUNVIRATO                   ,5796
+URIARTE25      ,URIARTE                       ,1364
+390,VIRREY DEL PINO               ,2706
+MONI           ,VIRREY LORETO                 ,1506
+LUIS65         ,VIRREY LOVETO                 ,3093
+ABALLAY65      ,ZAPIOLA                       ,1012

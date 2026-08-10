@@ -228,28 +228,39 @@ const isPaid = order.estado === 'pagado' || order.estado === 'entregado';
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-slate-100">
-							{orderItems.map((item, idx) => (
-								<tr class="hover:bg-slate-50/50">
-									<td class="p-4">
-										<div class="flex items-center gap-3">
-											<div class="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex-shrink-0 overflow-hidden flex items-center justify-center text-slate-400">
-												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+							{orderItems.map((item, idx) => {
+								const matchedProduct = allProducts.find(p => p.$id === (typeof item.product_id === 'string' ? item.product_id : item.product_id?.$id) || p.sku === item.sku_snapshot);
+								const pDist = matchedProduct?.precio_distribuidor || 0;
+								const pCan = matchedProduct?.precio_canillita || 0;
+
+								return (
+									<tr class="hover:bg-slate-50/50">
+										<td class="p-4">
+											<div class="flex items-center gap-3">
+												<div class="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex-shrink-0 overflow-hidden flex items-center justify-center text-slate-400">
+													<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+												</div>
+												<div>
+													<p class="font-bold text-slate-900 text-xs">{item.nombre_snapshot || `Producto ${idx + 1}`}</p>
+													{(pDist > 0 || pCan > 0) && (
+														<div class="flex items-center gap-1.5 mt-1 text-[10px]">
+															{pDist > 0 && <span class="px-1.5 py-0.5 bg-purple-50 text-purple-700 font-semibold rounded border border-purple-200">P. Dist: {formateador.format(pDist / 100)}</span>}
+															{pCan > 0 && <span class="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 font-semibold rounded border border-emerald-200">P. Canillita: {formateador.format(pCan / 100)}</span>}
+														</div>
+													)}
+												</div>
 											</div>
-											<div>
-												<p class="font-bold text-slate-900 text-xs">{item.nombre_snapshot || `Producto ${idx + 1}`}</p>
-												<span class="text-[10px] text-slate-400 font-medium">Detalle de precio &rsaquo;</span>
-											</div>
-										</div>
-									</td>
-									<td class="p-4 font-mono text-slate-500 text-[11px]">{item.sku_snapshot || 'SKU-VAR'}</td>
-									<td class="p-4 text-slate-500 font-medium">
-										Color: Rojo <br/><span class="text-[10px] text-slate-400">aumento: 2.5</span>
-									</td>
-									<td class="p-4 text-center font-bold text-slate-900">{item.cantidad || 1}</td>
-									<td class="p-4 text-right font-semibold text-slate-700">{formateador.format((item.precio_unitario || 0) / 100)}</td>
-									<td class="p-4 text-right font-bold text-slate-900">{formateador.format((item.subtotal || 0) / 100)}</td>
-								</tr>
-							))}
+										</td>
+										<td class="p-4 font-mono text-slate-500 text-[11px]">{item.sku_snapshot || 'SKU-VAR'}</td>
+										<td class="p-4 text-slate-500 font-medium">
+											Color: Estándar
+										</td>
+										<td class="p-4 text-center font-bold text-slate-900">{item.cantidad || 1}</td>
+										<td class="p-4 text-right font-semibold text-slate-700">{formateador.format((item.precio_unitario || 0) / 100)}</td>
+										<td class="p-4 text-right font-bold text-slate-900">{formateador.format((item.subtotal || 0) / 100)}</td>
+									</tr>
+								);
+							})}
 						</tbody>
 					</table>
 
