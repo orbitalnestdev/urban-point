@@ -113,6 +113,14 @@ function getPageUrl(targetPage: number) {
 	params.set('page', targetPage.toString());
 	return `/admin/catalogo?${params.toString()}`;
 }
+
+const filteredPages = Array.from({ length: totalPages }, (_, i) => i + 1)
+	.filter(p => p === 1 || p === totalPages || Math.abs(p - validPage) <= 2);
+
+const paginationItems = filteredPages.map((p, index) => ({
+	page: p,
+	showEllipsisBefore: index > 0 && p - filteredPages[index - 1] > 1
+}));
 ---
 
 <AdminLayout title="Catálogo de Productos">
@@ -446,28 +454,23 @@ function getPageUrl(targetPage: number) {
 						</a>
 
 						{/* Números de página */}
-						{Array.from({ length: totalPages }, (_, i) => i + 1)
-							.filter(p => p === 1 || p === totalPages || Math.abs(p - validPage) <= 2)
-							.map((p, index, array) => {
-								const showEllipsisBefore = index > 0 && p - array[index - 1] > 1;
-								return (
-									<>
-										{showEllipsisBefore && (
-											<span class="px-1.5 py-1 text-slate-400 text-xs font-bold">...</span>
-										)}
-										<a 
-											href={getPageUrl(p)} 
-											class={`w-8 h-8 rounded-xl text-xs font-bold flex items-center justify-center transition-all ${
-												p === validPage 
-													? 'bg-slate-900 text-white shadow-sm' 
-													: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-											}`}
-										>
-											{p}
-										</a>
-									</>
-								);
-							})}
+						{paginationItems.map((item) => (
+							<Fragment key={item.page}>
+								{item.showEllipsisBefore && (
+									<span class="px-1.5 py-1 text-slate-400 text-xs font-bold">...</span>
+								)}
+								<a 
+									href={getPageUrl(item.page)} 
+									class={`w-8 h-8 rounded-xl text-xs font-bold flex items-center justify-center transition-all ${
+										item.page === validPage 
+											? 'bg-slate-900 text-white shadow-sm' 
+											: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+									}`}
+								>
+									{item.page}
+								</a>
+							</Fragment>
+						))}
 
 						{/* Botón Siguiente */}
 						<a 

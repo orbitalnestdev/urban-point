@@ -179,12 +179,12 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
                   </span>
                   <AddToCartBtn 
                     client:load 
-                    product={{
+                    item={{
                       id: p.$id,
+                      sku: p.sku || '',
                       nombre: p.nombre,
                       precio: p.precio,
-                      imagen: p.portada_url,
-                      stock: p.stock || 99
+                      imagen: p.portada_url || ''
                     }} 
                   />
                 </div>
