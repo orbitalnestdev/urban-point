@@ -1527,6 +1527,13 @@ export const server = {
 					throw new Error('Solo los administradores pueden gestionar puntos de retiro');
 				}
 
+				const reservedSlugs = new Set([
+					'tienda', 'carrito', 'checkout', 'pago', 'retiro', 'success', 'mi-cuenta',
+					'contacto', 'admin', 'canillita', 'puntos-de-retiro', 'login', 'registro',
+					'api', 'productos', 'ingresar', 'nosotros', 'ayuda', 'terminos', 'privacidad',
+					'comisiones', 'favicon.ico', 'robots.txt'
+				]);
+
 				const payload: any = {
 					nombre_comercial: input.nombre_comercial,
 					direccion: input.direccion,
@@ -1539,9 +1546,26 @@ export const server = {
 					estado: input.estado || 'activo'
 				};
 
-				if (input.slug) {
-					payload.slug = input.slug.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+				let rawSlug = input.slug || (input.id ? undefined : input.nombre_comercial);
+				if (rawSlug) {
+					const cleanSlug = rawSlug.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+					if (reservedSlugs.has(cleanSlug)) {
+						throw new Error(`El slug "${cleanSlug}" es una ruta reservada del sistema.`);
+					}
+
+					// Verify uniqueness across pickup points
+					const existingRes = await db.listDocuments('urbanpoint', 'pickup_points', [
+						Query.equal('slug', cleanSlug),
+						Query.limit(2)
+					]);
+					const duplicate = existingRes.documents.find((doc: any) => doc.$id !== input.id);
+					if (duplicate) {
+						throw new Error(`El slug "${cleanSlug}" ya pertenece al punto "${duplicate.nombre_comercial}".`);
+					}
+
+					payload.slug = cleanSlug;
 				}
+
 				if (input.comision_pct !== undefined) {
 					payload.comision_pct = input.comision_pct;
 				}
@@ -1550,9 +1574,6 @@ export const server = {
 					const updated = await db.updateDocument('urbanpoint', 'pickup_points', input.id, payload);
 					return { success: true, id: updated.$id };
 				} else {
-					if (!payload.slug) {
-						payload.slug = payload.nombre_comercial.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-					}
 					const created = await db.createDocument('urbanpoint', 'pickup_points', ID.unique(), payload);
 					return { success: true, id: created.$id };
 				}
