@@ -6,10 +6,14 @@ import Logo from '../../components/Logo.astro';
 import { createAdminClient } from '../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 
+import { parseActiveNodeCookie } from '../../lib/nodeSession';
+
 let pickupPoints: any[] = [];
-let provincias: string[] = [];
+let activeNodeSession: any = null;
 
 try {
+  activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cookie'));
+
   const { databases } = createAdminClient();
   let rawDocs: any[] = [];
   let offset = 0;
@@ -34,7 +38,8 @@ try {
     lng: p.lng,
     horarios: p.horarios,
     telefono: p.telefono || '(11) 2478-5603',
-    condicion_fiscal: p.condicion_fiscal || ''
+    condicion_fiscal: p.condicion_fiscal || '',
+    canillitaId: typeof p.profile_id === 'string' ? p.profile_id : p.profile_id?.$id
   }));
 
   provincias = Array.from(new Set(pickupPoints.map(p => p.provincia))).sort();
@@ -71,6 +76,25 @@ try {
     </header>
 
     <div class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-6 sm:mt-8">
+      {activeNodeSession && (
+        <div class="mb-6 bg-gradient-to-r from-[#E2EFE4] to-[#F2F7F3] border-2 border-[#D4E5D6] rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div class="flex items-center gap-3.5">
+            <div class="w-10 h-10 rounded-xl bg-[#2D5A27] text-white flex items-center justify-center font-bold shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            </div>
+            <div>
+              <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#2D5A27]">Punto de retiro preseleccionado</span>
+              <h3 class="text-lg font-black text-slate-900 leading-snug">{activeNodeSession.nombre}</h3>
+              <p class="text-xs text-slate-600 font-medium">{activeNodeSession.direccion} ({activeNodeSession.localidad || 'CABA'})</p>
+            </div>
+          </div>
+
+          <button id="btn-change-pickup-node" class="px-4 py-2.5 bg-white border border-[#2D5A27] text-[#2D5A27] hover:bg-[#2D5A27] hover:text-white rounded-xl text-xs font-bold transition-all shrink-0">
+            Cambiar punto de retiro
+          </button>
+        </div>
+      )}
+
       <div class="mb-6">
         <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Elegí dónde retirar tu compra</h1>
         <p class="text-slate-500 mt-1">Seleccioná el punto de retiro (Canillita) más cercano. El envío es 100% GRATIS.</p>
@@ -332,16 +356,29 @@ try {
         searchInput.addEventListener('input', () => renderPoints(getFilteredPoints()));
       }
 
-      // Automatically select the saved pickup point if it exists
+      // Automatically select active node from localStorage or checkout state
+      let initialActiveId: string | null = null;
+      try {
+        const savedNodeStr = localStorage.getItem('up_active_node');
+        if (savedNodeStr) {
+          const savedNode = JSON.parse(savedNodeStr);
+          if (savedNode && savedNode.id) initialActiveId = savedNode.id;
+        }
+      } catch (e) {}
+
       const savedData = checkoutData.get();
       if (savedData && savedData.pickupPointId) {
-         activeMarkerId = savedData.pickupPointId;
+        initialActiveId = savedData.pickupPointId;
+      }
+
+      if (initialActiveId) {
+        activeMarkerId = initialActiveId;
       }
 
       renderPoints(rawPoints);
-      
+
       if (activeMarkerId) {
-         selectPoint(activeMarkerId, true);
+        selectPoint(activeMarkerId, true);
       }
     });
   </script>

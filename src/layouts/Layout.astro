@@ -2,12 +2,14 @@
 import '../styles/global.css';
 import '../styles/design-system.css';
 import FloatingWhatsApp from '../components/FloatingWhatsApp.astro';
+import { parseActiveNodeCookie } from '../lib/nodeSession';
 
 interface Props {
 	title: string;
 }
 
 const { title } = Astro.props;
+const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cookie'));
 ---
 
 <!doctype html>
@@ -24,6 +26,16 @@ const { title } = Astro.props;
 		<title>{title}</title>
 	</head>
 	<body class="bg-[#F8FAFC] text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white flex flex-col min-h-screen">
+		{activeNodeSession && (
+			<div class="bg-[#1E3E1B] text-white px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 text-center shadow-inner z-50">
+				<span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+				<span>Estás comprando en <strong>UrbanPoint — {activeNodeSession.nombre}</strong> ({activeNodeSession.direccion})</span>
+				<a href={`/${activeNodeSession.slug}`} class="ml-2 underline hover:text-emerald-200 transition-colors">
+					Ver punto &rarr;
+				</a>
+			</div>
+		)}
+
 		<slot />
 		<FloatingWhatsApp />
 		

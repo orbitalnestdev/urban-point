@@ -1,0 +1,219 @@
+---
+export const prerender = false;
+
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import AddToCartBtn from '../components/shop/AddToCartBtn';
+import { getCachedCatalog } from '../lib/server/catalogCache';
+import { createAdminClient } from '../lib/server/appwrite';
+import { Query } from 'node-appwrite';
+import { serializeActiveNodeCookie } from '../lib/nodeSession';
+
+const reservedSlugs = new Set([
+  'tienda', 'carrito', 'checkout', 'pago', 'retiro', 'success', 'mi-cuenta',
+  'contacto', 'admin', 'canillita', 'puntos-de-retiro', 'login', 'registro',
+  'api', 'productos', 'ingresar', 'nosotros', 'ayuda', 'terminos', 'privacidad',
+  'comisiones', 'favicon.ico', 'robots.txt'
+]);
+
+const rawSlug = Astro.params.slug || '';
+
+// Reject if reserved, contains period, or starts with underscore
+if (reservedSlugs.has(rawSlug.toLowerCase()) || rawSlug.includes('.') || rawSlug.startsWith('_')) {
+  return Astro.rewrite('/404');
+}
+
+let activeNode: any = null;
+let featuredProducts: any[] = [];
+let categories: any[] = [];
+
+try {
+  const { databases } = createAdminClient();
+  const nodeRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
+    Query.equal('slug', rawSlug),
+    Query.equal('estado', 'activo'),
+    Query.limit(1)
+  ]);
+
+  if (nodeRes.documents.length === 0) {
+    return Astro.rewrite('/404');
+  }
+
+  activeNode = nodeRes.documents[0];
+
+  // Prepare node data object
+  const activeNodeData = {
+    id: activeNode.$id,
+    nombre: activeNode.nombre_comercial,
+    slug: activeNode.slug,
+    direccion: activeNode.direccion,
+    localidad: activeNode.localidad,
+    horarios: activeNode.horarios,
+    canillitaId: typeof activeNode.profile_id === 'string' ? activeNode.profile_id : activeNode.profile_id?.$id,
+    telefono: activeNode.telefono || '(11) 2478-5603'
+  };
+
+  // Set HTTP Cookie for 30 days session persistence
+  Astro.cookies.set('up_active_node', JSON.stringify(activeNodeData), {
+    path: '/',
+    maxAge: 30 * 24 * 60 * 60,
+    sameSite: 'lax'
+  });
+
+  const cache = await getCachedCatalog();
+  featuredProducts = cache.products.slice(0, 12);
+  categories = cache.categories;
+} catch (e) {
+  console.error(`Error procesando nodo /${rawSlug}:`, e);
+  return Astro.rewrite('/404');
+}
+
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+---
+
+<Layout title={`UrbanPoint — ${activeNode.nombre_comercial} | Comprá Online & Retirá Cerca`}>
+  <Header />
+
+  <main>
+    {/* Specialized Hero Banner for Node */}
+    <section class="relative pt-10 pb-16 lg:pt-14 lg:pb-20 overflow-hidden bg-gradient-to-b from-[#F2F7F3] via-white to-slate-50">
+      <!-- Background Decorative Elements -->
+      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] opacity-30 pointer-events-none">
+        <div class="absolute inset-0 bg-gradient-to-b from-[#2D5A27]/20 to-transparent blur-3xl rounded-full"></div>
+        <div class="absolute top-20 right-20 w-[400px] h-[400px] bg-gradient-to-b from-emerald-400/20 to-transparent blur-3xl rounded-full"></div>
+      </div>
+
+      <div class="max-w-7xl mx-auto px-6 relative z-10">
+        <!-- Node Dedicated Card Header -->
+        <div class="bg-white border-2 border-[#D4E5D6] rounded-3xl p-6 sm:p-10 shadow-xl mb-12 relative overflow-hidden">
+          <div class="absolute top-0 right-0 w-64 h-64 bg-[#2D5A27]/5 rounded-full blur-2xl pointer-events-none"></div>
+
+          <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
+            <div class="space-y-3 max-w-3xl">
+              <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#E2EFE4] text-[#2D5A27] font-extrabold text-xs uppercase tracking-wider">
+                <span class="flex h-2.5 w-2.5 rounded-full bg-[#2D5A27] animate-ping"></span>
+                Tu Punto UrbanPoint Activo
+              </div>
+
+              <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+                UrbanPoint — <span class="text-[#2D5A27]">{activeNode.nombre_comercial}</span>
+              </h1>
+
+              <p class="text-slate-600 font-medium text-base sm:text-lg">
+                Comprá online y retirá sin costo adicional en nuestro punto de cercanía.
+              </p>
+
+              <!-- Node Info Pills -->
+              <div class="flex flex-wrap items-center gap-3 pt-2">
+                <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-[#2D5A27]"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                  <span>{activeNode.direccion} ({activeNode.localidad})</span>
+                </div>
+
+                {activeNode.horarios && (
+                  <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-[#2D5A27]"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span>{activeNode.horarios}</span>
+                  </div>
+                )}
+
+                <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-50 text-[#2D5A27] text-xs font-extrabold border border-emerald-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"></path></svg>
+                  <span>Retiro 100% GRATIS</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Call to Action -->
+            <div class="w-full lg:w-auto shrink-0 flex flex-col sm:flex-row lg:flex-col gap-3">
+              <a href="#catalogo-nodo" class="w-full px-8 py-4 bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold rounded-2xl transition-all shadow-lg hover:shadow-[#2D5A27]/30 text-center flex items-center justify-center gap-2 text-base">
+                Comprar ahora
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* Featured Categories */}
+        <div id="catalogo-nodo" class="pt-4 space-y-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Catálogo del Punto</h2>
+              <p class="text-slate-500 text-sm mt-1">Seleccioná tus productos y retirados directamente en {activeNode.nombre_comercial}.</p>
+            </div>
+            <a href="/productos" class="text-sm font-extrabold text-[#2D5A27] hover:underline flex items-center gap-1">
+              Ver todos los productos &rarr;
+            </a>
+          </div>
+
+          <!-- Category Badges Bar -->
+          <div class="flex items-center gap-2 overflow-x-auto pb-2">
+            <a href="/productos" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs whitespace-nowrap shadow-sm">
+              Todas las categorías
+            </a>
+            {categories.map((c) => (
+              <a href={`/productos?categoria=${c.$id}`} class="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:border-[#2D5A27] hover:text-[#2D5A27] font-bold text-xs whitespace-nowrap transition-colors shadow-xs">
+                {c.nombre}
+              </a>
+            ))}
+          </div>
+
+          <!-- Product Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 pt-4">
+            {featuredProducts.map((p) => (
+              <div class="bg-white rounded-2xl border border-slate-200/80 p-4 hover:shadow-xl hover:border-[#2D5A27]/30 transition-all flex flex-col justify-between group">
+                <div>
+                  <div class="aspect-square rounded-xl bg-slate-50 border border-slate-100 overflow-hidden mb-3 relative">
+                    <img src={p.portada_url || ''} alt={p.nombre} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.src='data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23cbd5e1%22%20stroke-width%3D%221%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%20ry%3D%222%22%3E%3C%2Frect%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%3E%3C%2Fcircle%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E';" />
+                  </div>
+
+                  <h3 class="font-extrabold text-slate-900 text-sm line-clamp-2 leading-tight group-hover:text-[#2D5A27] transition-colors mb-2">
+                    {p.nombre}
+                  </h3>
+                </div>
+
+                <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 mt-2">
+                  <span class="text-base sm:text-lg font-black text-slate-900">
+                    {formateador.format((p.precio || 0) / 100)}
+                  </span>
+                  <AddToCartBtn 
+                    client:load 
+                    product={{
+                      id: p.$id,
+                      nombre: p.nombre,
+                      precio: p.precio,
+                      imagen: p.portada_url,
+                      stock: p.stock || 99
+                    }} 
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Client-side localStorage backup for active node -->
+  <script is:inline set:html={`
+    (function() {
+      const activeNode = ${JSON.stringify({
+        id: activeNode.$id,
+        nombre: activeNode.nombre_comercial,
+        slug: activeNode.slug,
+        direccion: activeNode.direccion,
+        localidad: activeNode.localidad,
+        horarios: activeNode.horarios,
+        canillitaId: typeof activeNode.profile_id === 'string' ? activeNode.profile_id : activeNode.profile_id?.$id,
+        telefono: activeNode.telefono || '(11) 2478-5603'
+      })};
+      try {
+        localStorage.setItem('up_active_node', JSON.stringify(activeNode));
+      } catch (e) {}
+    })();
+  `} />
+
+  <Footer />
+</Layout>

@@ -635,6 +635,20 @@ export const server = {
 
 				const pickupCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
+				// Parse active node session from cookie for origin attribution
+				let activeNodeSession: any = null;
+				try {
+					const nodeCookieVal = ctx.cookies.get('up_active_node')?.value;
+					if (nodeCookieVal) {
+						activeNodeSession = JSON.parse(decodeURIComponent(nodeCookieVal));
+					}
+				} catch (e) {
+					try {
+						const rawVal = ctx.cookies.get('up_active_node')?.value;
+						if (rawVal) activeNodeSession = JSON.parse(rawVal);
+					} catch (err) {}
+				}
+
 				// Create the Order in Appwrite
 				const orderPayload: any = {
 					numero: Math.floor(100000 + Math.random() * 900000).toString(),
@@ -646,11 +660,22 @@ export const server = {
 					referral_code_id: referralCodeId,
 					pickup_code_hash: pickupCode
 				};
+
+				if (activeNodeSession) {
+					orderPayload.origin_node_id = activeNodeSession.id;
+					orderPayload.origin_node_name = activeNodeSession.nombre;
+					orderPayload.origin_slug = activeNodeSession.slug;
+					if (activeNodeSession.canillitaId) {
+						orderPayload.origin_canillita_id = activeNodeSession.canillitaId;
+					}
+				}
+
 				if (resolvedCanillitaId) {
 					orderPayload.canillita_id = resolvedCanillitaId;
 				}
 				if (input.pickupPointId) {
 					orderPayload.pickup_point_id = input.pickupPointId;
+					orderPayload.pickup_node_id = input.pickupPointId;
 				}
 				if (input.direccionEnvio) {
 					orderPayload.direccion_envio = input.direccionEnvio;
@@ -1474,6 +1499,81 @@ export const server = {
 					// Fallback si no existe la colección promotions
 					return { success: true, id: 'demo-' + Date.now() };
 				}
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	savePickupPoint: defineAction({
+		accept: 'json',
+		input: z.object({
+			id: z.string().optional(),
+			nombre_comercial: z.string().min(2),
+			slug: z.string().optional(),
+			direccion: z.string().min(3),
+			localidad: z.string().min(2),
+			provincia: z.string().optional(),
+			horarios: z.string().optional(),
+			telefono: z.string().optional(),
+			lat: z.number(),
+			lng: z.number(),
+			estado: z.string().optional(),
+			comision_pct: z.number().optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo los administradores pueden gestionar puntos de retiro');
+				}
+
+				const payload: any = {
+					nombre_comercial: input.nombre_comercial,
+					direccion: input.direccion,
+					localidad: input.localidad,
+					provincia: input.provincia || 'CABA',
+					horarios: input.horarios || 'Lunes a Sábado 09:00 a 20:00 hs.',
+					telefono: input.telefono || '',
+					lat: input.lat,
+					lng: input.lng,
+					estado: input.estado || 'activo'
+				};
+
+				if (input.slug) {
+					payload.slug = input.slug.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+				}
+				if (input.comision_pct !== undefined) {
+					payload.comision_pct = input.comision_pct;
+				}
+
+				if (input.id) {
+					const updated = await db.updateDocument('urbanpoint', 'pickup_points', input.id, payload);
+					return { success: true, id: updated.$id };
+				} else {
+					if (!payload.slug) {
+						payload.slug = payload.nombre_comercial.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+					}
+					const created = await db.createDocument('urbanpoint', 'pickup_points', ID.unique(), payload);
+					return { success: true, id: created.$id };
+				}
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	deletePickupPoint: defineAction({
+		accept: 'json',
+		input: z.object({
+			id: z.string()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo los administradores pueden eliminar puntos de retiro');
+				}
+				await db.deleteDocument('urbanpoint', 'pickup_points', input.id);
+				return { success: true };
 			} catch (error: any) {
 				return { success: false, error: error.message };
 			}
