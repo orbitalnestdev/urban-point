@@ -130,7 +130,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
 								Explorar productos
 							</a>
-							<a href="/login" class="w-full sm:w-auto px-8 py-4 bg-white border-2 border-slate-200 hover:border-[#2D5A27] hover:text-[#2D5A27] text-slate-700 rounded-2xl font-bold transition-all hover:shadow-md flex items-center justify-center gap-2 text-base">
+							<a href={`/login?redirect=/${activeNode.slug}`} class="w-full sm:w-auto px-8 py-4 bg-white border-2 border-slate-200 hover:border-[#2D5A27] hover:text-[#2D5A27] text-slate-700 rounded-2xl font-bold transition-all hover:shadow-md flex items-center justify-center gap-2 text-base">
 								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
 								Crear mi cuenta
 							</a>
@@ -382,7 +382,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 						<h3 class="text-xl font-bold mb-1">¿Querés acceder a descuentos exclusivos?</h3>
 						<p class="text-slate-300 text-sm">Registrate gratis en segundos para comprar en {activeNode.nombre_comercial} y recibir ofertas especiales.</p>
 					</div>
-					<a href="/login" class="px-6 py-3 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-xl text-sm font-bold shadow-md whitespace-nowrap transition-all hover:scale-105">
+					<a href={`/login?redirect=/${activeNode.slug}`} class="px-6 py-3 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-xl text-sm font-bold shadow-md whitespace-nowrap transition-all hover:scale-105">
 						Crear Mi Cuenta Gratis
 					</a>
 				</div>
