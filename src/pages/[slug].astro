@@ -27,6 +27,7 @@ if (reservedSlugs.has(rawSlug.toLowerCase()) || rawSlug.includes('.') || rawSlug
 let activeNode: any = null;
 let featuredProducts: any[] = [];
 let categories: any[] = [];
+let pickupPoints: any[] = [];
 
 try {
   const { databases } = createAdminClient();
@@ -54,16 +55,17 @@ try {
     telefono: activeNode.telefono || '(11) 2478-5603'
   };
 
-  // Set HTTP Cookie for 30 days session persistence
-  Astro.cookies.set('up_active_node', JSON.stringify(activeNodeData), {
+  // Set HTTP Cookie for 30 days session persistence by default
+  Astro.cookies.set('up_active_node', serializeActiveNodeCookie(activeNodeData), {
     path: '/',
     maxAge: 30 * 24 * 60 * 60,
     sameSite: 'lax'
   });
 
   const cache = await getCachedCatalog();
-  featuredProducts = cache.products.slice(0, 12);
+  featuredProducts = cache.products.slice(0, 8);
   categories = cache.categories;
+  pickupPoints = cache.pickupPoints;
 } catch (e) {
   console.error(`Error procesando nodo /${rawSlug}:`, e);
   return Astro.rewrite('/404');
@@ -72,148 +74,497 @@ try {
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 ---
 
-<Layout title={`UrbanPoint — ${activeNode.nombre_comercial} | Comprá Online & Retirá Cerca`}>
-  <Header />
+<Layout title={`UrbanPoint — ${activeNode.nombre_comercial} | Tienda Minorista & Retiro de Cercanía`}>
+	<!-- Floating Pill Header Navbar -->
+	<Header />
 
-  <main>
-    {/* Specialized Hero Banner for Node */}
-    <section class="relative pt-10 pb-16 lg:pt-14 lg:pb-20 overflow-hidden bg-gradient-to-b from-[#F2F7F3] via-white to-slate-50">
-      <!-- Background Decorative Elements -->
-      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] opacity-30 pointer-events-none">
-        <div class="absolute inset-0 bg-gradient-to-b from-[#2D5A27]/20 to-transparent blur-3xl rounded-full"></div>
-        <div class="absolute top-20 right-20 w-[400px] h-[400px] bg-gradient-to-b from-emerald-400/20 to-transparent blur-3xl rounded-full"></div>
-      </div>
+	<main>
+		<!-- Hero Section (Exact Replica of Home adapted for Node) -->
+		<section class="relative pt-10 pb-16 lg:pt-14 lg:pb-24 overflow-hidden bg-gradient-to-b from-slate-50/80 via-white to-slate-50/50">
+			<!-- Background Glows -->
+			<div class="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] opacity-25 pointer-events-none">
+				<div class="absolute inset-0 bg-gradient-to-b from-[#2D5A27]/30 to-transparent blur-3xl rounded-full"></div>
+				<div class="absolute top-20 right-20 w-[400px] h-[400px] bg-gradient-to-b from-emerald-400/20 to-transparent blur-3xl rounded-full"></div>
+			</div>
 
-      <div class="max-w-7xl mx-auto px-6 relative z-10">
-        <!-- Node Dedicated Card Header -->
-        <div class="bg-white border-2 border-[#D4E5D6] rounded-3xl p-6 sm:p-10 shadow-xl mb-12 relative overflow-hidden">
-          <div class="absolute top-0 right-0 w-64 h-64 bg-[#2D5A27]/5 rounded-full blur-2xl pointer-events-none"></div>
+			<div class="max-w-7xl mx-auto px-6 relative z-10">
+				<div class="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
+					<div class="max-w-2xl text-center lg:text-left">
+						<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#F2F7F3] border border-[#D4E5D6] text-[#2D5A27] font-bold text-xs uppercase tracking-wider mb-6 shadow-sm">
+							<span class="flex h-2 w-2 rounded-full bg-[#2D5A27] animate-pulse"></span>
+							Punto de retiro: {activeNode.nombre_comercial}
+						</div>
+						
+						<h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.12] mb-6">
+							Productos seleccionados con retiro en <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#2D5A27] via-[#356830] to-[#1E3E1B]">{activeNode.nombre_comercial}.</span>
+						</h1>
+						
+						<p class="text-lg text-slate-600 mb-8 leading-relaxed max-w-lg mx-auto lg:mx-0">
+							Comprá online con precios especiales y retirá tu pedido 100% GRATIS en {activeNode.direccion} ({activeNode.localidad}).
+						</p>
+						
+						<div class="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start mb-8">
+							<a href="#catalogo-nodo" class="w-full sm:w-auto px-8 py-4 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-2xl font-bold transition-all hover:shadow-xl hover:shadow-[#2D5A27]/25 hover:-translate-y-0.5 flex items-center justify-center gap-2 text-base">
+								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+								Explorar productos
+							</a>
+							<a href="/login" class="w-full sm:w-auto px-8 py-4 bg-white border-2 border-slate-200 hover:border-[#2D5A27] hover:text-[#2D5A27] text-slate-700 rounded-2xl font-bold transition-all hover:shadow-md flex items-center justify-center gap-2 text-base">
+								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+								Crear mi cuenta
+							</a>
+						</div>
 
-          <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
-            <div class="space-y-3 max-w-3xl">
-              <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#E2EFE4] text-[#2D5A27] font-extrabold text-xs uppercase tracking-wider">
-                <span class="flex h-2.5 w-2.5 rounded-full bg-[#2D5A27] animate-ping"></span>
-                Tu Punto UrbanPoint Activo
-              </div>
+						<!-- Card de Punto de Retiro Definido Por Default -->
+						<div class="bg-[#F2F7F3] p-4 rounded-2xl border-2 border-[#2D5A27]/40 shadow-sm max-w-lg mx-auto lg:mx-0 text-left">
+							<p class="text-[11px] font-extrabold text-[#2D5A27] uppercase tracking-wider mb-1 flex items-center gap-1.5">
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-[#2D5A27]"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+								Punto de retiro asignado por default para tu compra:
+							</p>
+							<h4 class="text-base font-extrabold text-slate-900">{activeNode.nombre_comercial}</h4>
+							<p class="text-xs text-slate-600 font-medium">{activeNode.direccion}, {activeNode.localidad} ({activeNode.provincia || 'CABA'})</p>
+							<p class="text-[11px] text-slate-500 font-medium mt-0.5">Horarios: {activeNode.horarios || 'Lunes a Sábado 09:00 a 20:00 hs.'}</p>
+							<div class="mt-2.5 pt-2 border-t border-[#D4E5D6] flex items-center justify-between text-[11px] font-bold text-[#2D5A27]">
+								<span>✓ Retiro 100% GRATIS</span>
+								<span class="bg-[#2D5A27] text-white px-2 py-0.5 rounded-md text-[10px]">Punto Activo</span>
+							</div>
+						</div>
 
-              <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
-                UrbanPoint — <span class="text-[#2D5A27]">{activeNode.nombre_comercial}</span>
-              </h1>
+						<div class="pt-6 mt-6 border-t border-slate-200/80 flex flex-wrap items-center justify-center lg:justify-start gap-6 text-xs font-semibold text-slate-500">
+							<span class="flex items-center gap-1.5 text-[#2D5A27]">
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+								Precios Exclusivos
+							</span>
+							<span class="flex items-center gap-1.5 text-[#2D5A27]">
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+								Retiro Gratis en tu Barrio
+							</span>
+							<span class="flex items-center gap-1.5 text-[#2D5A27]">
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+								Comercios Verificados
+							</span>
+						</div>
+					</div>
 
-              <p class="text-slate-600 font-medium text-base sm:text-lg">
-                Comprá online y retirá sin costo adicional en nuestro punto de cercanía.
-              </p>
+					<div class="relative mx-auto w-full max-w-[480px] lg:max-w-[540px]">
+						<div class="absolute inset-0 bg-gradient-to-tr from-[#2D5A27]/25 to-emerald-500/25 rounded-[3rem] blur-3xl transform -rotate-6 scale-105"></div>
+						
+						<!-- Main Hero Composition Image -->
+						<img src="/images/hero_kiosk_app.jpg" alt="UrbanPoint App y Punto Canillita" class="relative rounded-[2.5rem] shadow-2xl border-8 border-slate-900/10 object-cover w-full aspect-[4/3] transform hover:scale-[1.01] transition-transform duration-500" />
+						
+						<!-- Floating Location Pickup Notification Badge (Top Right) -->
+						<div class="absolute -top-6 -right-4 sm:-right-6 bg-white/95 backdrop-blur-md p-3.5 rounded-2xl shadow-2xl border border-slate-200/80 flex items-center gap-3 max-w-[260px] animate-[bounce_5s_infinite]">
+							<div class="w-10 h-10 rounded-full bg-[#2D5A27] text-white flex items-center justify-center shrink-0 shadow-md">
+								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+							</div>
+							<div class="text-left">
+								<p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Retirá en</p>
+								<p class="text-xs font-black text-slate-900 leading-tight">{activeNode.nombre_comercial}</p>
+								<p class="text-[10px] font-semibold text-[#2D5A27]">{activeNode.direccion}, {activeNode.localidad}</p>
+							</div>
+						</div>
 
-              <!-- Node Info Pills -->
-              <div class="flex flex-wrap items-center gap-3 pt-2">
-                <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-[#2D5A27]"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                  <span>{activeNode.direccion} ({activeNode.localidad})</span>
-                </div>
+						<!-- Floating Local Support Advantage Card (Bottom Left) -->
+						<div class="absolute -bottom-6 -left-4 sm:-left-6 bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl border border-white/10 flex items-center gap-3 backdrop-blur-md">
+							<div class="w-10 h-10 rounded-xl bg-[#2D5A27] flex items-center justify-center text-white shrink-0">
+								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+							</div>
+							<div class="text-left">
+								<p class="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Apoyá tu barrio</p>
+								<p class="text-xs font-bold text-white leading-tight">Impulsamos el comercio local</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
 
-                {activeNode.horarios && (
-                  <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-[#2D5A27]"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                    <span>{activeNode.horarios}</span>
-                  </div>
-                )}
+		<!-- Pillars Section -->
+		<section class="py-20 bg-white">
+			<div class="max-w-7xl mx-auto px-6">
+				<div class="text-center max-w-2xl mx-auto mb-16">
+					<h2 class="text-3xl font-extrabold text-slate-900 tracking-tight mb-4">
+						Comprá mejor, más cerca
+					</h2>
+					<p class="text-slate-600 text-base">
+						Productos seleccionados, precios especiales y retiro directo en {activeNode.nombre_comercial}.
+					</p>
+				</div>
 
-                <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-50 text-[#2D5A27] text-xs font-extrabold border border-emerald-200">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"></path></svg>
-                  <span>Retiro 100% GRATIS</span>
-                </div>
-              </div>
-            </div>
+				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+					<!-- Card 1 -->
+					<div class="bg-slate-50/70 p-8 rounded-3xl border border-slate-200/70 hover:border-[#2D5A27]/40 hover:shadow-lg transition-all group">
+						<div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#F2F7F3] to-[#E2EFE4] text-[#2D5A27] flex items-center justify-center mb-6 shadow-sm border border-[#D4E5D6]/60 group-hover:scale-105 transition-transform">
+							<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none">
+								<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" stroke="#2D5A27" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#2D5A27" fill-opacity="0.15"/>
+								<circle cx="7" cy="7" r="1.75" fill="#2D5A27"/>
+								<path d="M12 9l1.2 2.5 2.8.4-2 2 .5 2.8-2.5-1.3-2.5 1.3.5-2.8-2-2 2.8-.4L12 9z" fill="#2D5A27"/>
+							</svg>
+						</div>
+						<h3 class="text-lg font-bold text-slate-900 mb-2">Precios especiales</h3>
+						<p class="text-sm text-slate-600 leading-relaxed">
+							Registrate y accedé a productos con beneficios y precios exclusivos dentro de UrbanPoint.
+						</p>
+					</div>
 
-            <!-- Call to Action -->
-            <div class="w-full lg:w-auto shrink-0 flex flex-col sm:flex-row lg:flex-col gap-3">
-              <a href="#catalogo-nodo" class="w-full px-8 py-4 bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold rounded-2xl transition-all shadow-lg hover:shadow-[#2D5A27]/30 text-center flex items-center justify-center gap-2 text-base">
-                Comprar ahora
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-              </a>
-            </div>
-          </div>
-        </div>
+					<!-- Card 2 -->
+					<div class="bg-slate-50/70 p-8 rounded-3xl border border-slate-200/70 hover:border-[#2D5A27]/40 hover:shadow-lg transition-all group">
+						<div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#F2F7F3] to-[#E2EFE4] text-[#2D5A27] flex items-center justify-center mb-6 shadow-sm border border-[#D4E5D6]/60 group-hover:scale-105 transition-transform">
+							<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none">
+								<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" stroke="#2D5A27" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#2D5A27" fill-opacity="0.15"/>
+								<polyline points="3.27 6.96 12 12.01 20.73 6.96" stroke="#2D5A27" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+								<line x1="12" y1="22.08" x2="12" y2="12" stroke="#2D5A27" stroke-width="2" stroke-linecap="round"/>
+								<circle cx="12" cy="12" r="2.5" fill="#2D5A27"/>
+							</svg>
+						</div>
+						<h3 class="text-lg font-bold text-slate-900 mb-2">Productos seleccionados</h3>
+						<p class="text-sm text-slate-600 leading-relaxed">
+							Encontrá una selección de productos útiles, elegidos para resolver compras del día a día.
+						</p>
+					</div>
 
-        {/* Featured Categories */}
-        <div id="catalogo-nodo" class="pt-4 space-y-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Catálogo del Punto</h2>
-              <p class="text-slate-500 text-sm mt-1">Seleccioná tus productos y retirados directamente en {activeNode.nombre_comercial}.</p>
-            </div>
-            <a href="/productos" class="text-sm font-extrabold text-[#2D5A27] hover:underline flex items-center gap-1">
-              Ver todos los productos &rarr;
-            </a>
-          </div>
+					<!-- Card 3 -->
+					<div class="bg-slate-50/70 p-8 rounded-3xl border border-slate-200/70 hover:border-[#2D5A27]/40 hover:shadow-lg transition-all group">
+						<div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#F2F7F3] to-[#E2EFE4] text-[#2D5A27] flex items-center justify-center mb-6 shadow-sm border border-[#D4E5D6]/60 group-hover:scale-105 transition-transform">
+							<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none">
+								<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="#2D5A27" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#2D5A27" fill-opacity="0.15"/>
+								<circle cx="12" cy="10" r="3.5" stroke="#2D5A27" stroke-width="2" fill="#2D5A27"/>
+								<path d="M12 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" fill="#ffffff"/>
+							</svg>
+						</div>
+						<h3 class="text-lg font-bold text-slate-900 mb-2">Retiro en {activeNode.nombre_comercial}</h3>
+						<p class="text-sm text-slate-600 leading-relaxed">
+							Retirá tu pedido 100% gratis en {activeNode.direccion} ({activeNode.localidad}).
+						</p>
+					</div>
 
-          <!-- Category Badges Bar -->
-          <div class="flex items-center gap-2 overflow-x-auto pb-2">
-            <a href="/productos" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs whitespace-nowrap shadow-sm">
-              Todas las categorías
-            </a>
-            {categories.map((c) => (
-              <a href={`/productos?categoria=${c.$id}`} class="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:border-[#2D5A27] hover:text-[#2D5A27] font-bold text-xs whitespace-nowrap transition-colors shadow-xs">
-                {c.nombre}
-              </a>
-            ))}
-          </div>
+					<!-- Card 4 -->
+					<div class="bg-slate-50/70 p-8 rounded-3xl border border-slate-200/70 hover:border-[#2D5A27]/40 hover:shadow-lg transition-all group">
+						<div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#F2F7F3] to-[#E2EFE4] text-[#2D5A27] flex items-center justify-center mb-6 shadow-sm border border-[#D4E5D6]/60 group-hover:scale-105 transition-transform">
+							<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none">
+								<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="#2D5A27" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#2D5A27" fill-opacity="0.15"/>
+								<path d="M9 22V12h6v10" stroke="#2D5A27" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+								<path d="M12 7v3M10.5 8.5l3 3M13.5 8.5l-3 3" stroke="#2D5A27" stroke-width="2" stroke-linecap="round"/>
+							</svg>
+						</div>
+						<h3 class="text-lg font-bold text-slate-900 mb-2">Más oportunidades para tu barrio</h3>
+						<p class="text-sm text-slate-600 leading-relaxed">
+							Cada compra genera movimiento directo para {activeNode.nombre_comercial} y la red UrbanPoint.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
 
-          <!-- Product Grid -->
-          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 pt-4">
-            {featuredProducts.map((p) => (
-              <div class="bg-white rounded-2xl border border-slate-200/80 p-4 hover:shadow-xl hover:border-[#2D5A27]/30 transition-all flex flex-col justify-between group">
-                <div>
-                  <div class="aspect-square rounded-xl bg-slate-50 border border-slate-100 overflow-hidden mb-3 relative">
-                    <img src={p.portada_url || ''} alt={p.nombre} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.src='data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23cbd5e1%22%20stroke-width%3D%221%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%20ry%3D%222%22%3E%3C%2Frect%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%3E%3C%2Fcircle%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E';" />
-                  </div>
+		<!-- Featured Products Section with Category Filters -->
+		<section id="catalogo-nodo" class="py-20 bg-slate-50 border-y border-slate-200/60">
+			<div class="max-w-7xl mx-auto px-6">
+				<div class="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+					<div>
+						<div class="inline-flex items-center gap-2 text-[#2D5A27] font-semibold text-xs uppercase tracking-wider mb-2">
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+							Destacados para retirar en {activeNode.nombre_comercial}
+						</div>
+						<h2 class="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">
+							Ofertas seleccionadas con retiro directo
+						</h2>
+					</div>
+					<a href="/productos" class="inline-flex items-center gap-2 text-sm font-bold text-[#2D5A27] hover:text-[#23471F] transition-colors group">
+						Ver todo el catálogo
+						<svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+					</a>
+				</div>
 
-                  <h3 class="font-extrabold text-slate-900 text-sm line-clamp-2 leading-tight group-hover:text-[#2D5A27] transition-colors mb-2">
-                    {p.nombre}
-                  </h3>
-                </div>
+				<!-- Category Filter Pills -->
+				<div class="flex items-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-none">
+					<button class="cat-pill active px-4 py-2 bg-[#2D5A27] text-white rounded-full text-xs font-bold whitespace-nowrap shadow-sm transition-all" data-category="all">
+						Todos los productos
+					</button>
+					{categories.map((cat) => (
+						<button class="cat-pill px-4 py-2 bg-white hover:bg-slate-200 text-slate-700 rounded-full text-xs font-semibold whitespace-nowrap border border-slate-200 transition-all" data-category={cat.$id}>
+							{cat.nombre}
+						</button>
+					))}
+				</div>
 
-                <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 mt-2">
-                  <span class="text-base sm:text-lg font-black text-slate-900">
-                    {formateador.format((p.precio || 0) / 100)}
-                  </span>
-                  <AddToCartBtn 
-                    client:load 
-                    item={{
-                      id: p.$id,
-                      sku: p.sku || '',
-                      nombre: p.nombre,
-                      precio: p.precio,
-                      imagen: p.portada_url || ''
-                    }} 
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
+				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="product-grid">
+					{featuredProducts.map((prod) => {
+						const precioMinorista = prod.precio / 100;
+						const precioLista = Math.round(precioMinorista * 1.25);
 
-  <!-- Client-side localStorage backup for active node -->
-  <script is:inline set:html={`
-    (function() {
-      const activeNode = ${JSON.stringify({
-        id: activeNode.$id,
-        nombre: activeNode.nombre_comercial,
-        slug: activeNode.slug,
-        direccion: activeNode.direccion,
-        localidad: activeNode.localidad,
-        horarios: activeNode.horarios,
-        canillitaId: typeof activeNode.profile_id === 'string' ? activeNode.profile_id : activeNode.profile_id?.$id,
-        telefono: activeNode.telefono || '(11) 2478-5603'
-      })};
-      try {
-        localStorage.setItem('up_active_node', JSON.stringify(activeNode));
-      } catch (e) {}
-    })();
-  `} />
+						return (
+							<div 
+								class="prod-item group bg-white rounded-3xl border border-slate-200/70 p-5 shadow-sm hover:shadow-2xl hover:border-[#2D5A27]/40 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between relative overflow-hidden" 
+								data-cat-id={prod.categoria_id?.$id || prod.categoria_id}
+							>
+								<div>
+									<!-- Image Container -->
+									<a href={`/productos/${prod.slug}`} class="block aspect-square rounded-2xl bg-slate-50 mb-4 overflow-hidden relative cursor-pointer group-hover:opacity-95 p-3 flex items-center justify-center">
+										{prod.portada_url ? (
+											<img src={prod.portada_url} alt={prod.nombre} loading="lazy" decoding="async" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
+										) : (
+											<div class="w-full h-full flex items-center justify-center text-slate-300">
+												<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+											</div>
+										)}
+										<div class="absolute top-3 left-3 flex flex-col items-start gap-1 z-10 pointer-events-none">
+											<span class="px-3 py-1 bg-[#2D5A27] text-white text-[10px] font-extrabold uppercase tracking-wider rounded-full shadow-md text-center leading-tight">
+												3 sin interés
+											</span>
+										</div>
+									</a>
 
-  <Footer />
+									<!-- Brand & Title -->
+									<div class="mb-3">
+										<span class="text-[11px] font-extrabold text-[#2D5A27] uppercase tracking-wider block mb-1">
+											{prod.marca || 'UrbanPoint'}
+										</span>
+										<a href={`/productos/${prod.slug}`} class="font-bold text-slate-900 text-sm line-clamp-2 hover:text-[#2D5A27] transition-colors leading-snug">
+											{prod.nombre}
+										</a>
+									</div>
+
+									<!-- Main Pricing & Payment Benefits -->
+									<div class="mb-3">
+										<div class="flex items-baseline gap-2 mb-1">
+											<span class="text-2xl font-black text-slate-900 tracking-tight leading-none">
+												{formateador.format(precioMinorista)}
+											</span>
+											<span class="text-xs text-slate-400 line-through font-medium">
+												{formateador.format(precioLista)}
+											</span>
+										</div>
+										
+										<p class="text-xs font-bold text-[#2D5A27] flex items-center gap-1 mt-1">
+											<span>3 cuotas sin interés</span>
+											<span class="text-slate-500 font-medium">de {formateador.format(Math.round(precioMinorista / 3))}</span>
+										</p>
+									</div>
+								</div>
+
+								<!-- Bottom CTA Section -->
+								<div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 mt-2">
+									<div class="flex flex-col">
+										<span class="text-[11px] font-bold text-[#2D5A27]">3 cuotas sin interés</span>
+										<span class="text-[11px] text-slate-500 font-medium">de {formateador.format(Math.round(precioMinorista / 3))}</span>
+									</div>
+									<AddToCartBtn client:load item={{ id: prod.$id, sku: prod.sku || prod.$id, nombre: prod.nombre, precio: precioMinorista, imagen: prod.portada_url || '' }} variant="plus" />
+								</div>
+							</div>
+						);
+					})}
+				</div>
+
+				<!-- Member Sign-Up Incentive Banner -->
+				<div class="mt-12 bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
+					<div>
+						<h3 class="text-xl font-bold mb-1">¿Querés acceder a descuentos exclusivos?</h3>
+						<p class="text-slate-300 text-sm">Registrate gratis en segundos para comprar en {activeNode.nombre_comercial} y recibir ofertas especiales.</p>
+					</div>
+					<a href="/login" class="px-6 py-3 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-xl text-sm font-bold shadow-md whitespace-nowrap transition-all hover:scale-105">
+						Crear Mi Cuenta Gratis
+					</a>
+				</div>
+			</div>
+		</section>
+
+		<!-- How It Works Section -->
+		<section id="como-funciona" class="py-24 bg-white">
+			<div class="max-w-7xl mx-auto px-6">
+				<div class="text-center max-w-2xl mx-auto mb-16">
+					<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F2F7F3] text-[#2D5A27] font-semibold text-xs uppercase tracking-wider mb-3">
+						Así de simple
+					</div>
+					<h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-4">
+						Comprá online y retirá en {activeNode.nombre_comercial}
+					</h2>
+					<p class="text-slate-600 text-base">
+						Elegí tus productos, comprá en segundos y retirá 100% gratis en {activeNode.direccion}.
+					</p>
+				</div>
+
+				<div class="grid md:grid-cols-3 gap-8 relative">
+					<!-- Step 1 -->
+					<div class="bg-slate-50 p-8 rounded-3xl border border-slate-200/80 relative flex flex-col items-center text-center">
+						<div class="w-16 h-16 rounded-full bg-[#2D5A27] text-white font-extrabold text-xl flex items-center justify-center mb-6 shadow-lg shadow-[#2D5A27]/20">
+							1
+						</div>
+						<h3 class="text-xl font-bold text-slate-900 mb-3">Elegí tus productos</h3>
+						<p class="text-slate-600 text-sm leading-relaxed">
+							Explorá el catálogo y comprá productos seleccionados a precios especiales.
+						</p>
+					</div>
+
+					<!-- Step 2 -->
+					<div class="bg-slate-50 p-8 rounded-3xl border border-slate-200/80 relative flex flex-col items-center text-center">
+						<div class="w-16 h-16 rounded-full bg-[#2D5A27] text-white font-extrabold text-xl flex items-center justify-center mb-6 shadow-lg shadow-[#2D5A27]/20">
+							2
+						</div>
+						<h3 class="text-xl font-bold text-slate-900 mb-3">Retiro preseleccionado por default</h3>
+						<p class="text-slate-600 text-sm leading-relaxed">
+							{activeNode.nombre_comercial} ({activeNode.direccion}) queda asignado automáticamente a tu compra.
+						</p>
+					</div>
+
+					<!-- Step 3 -->
+					<div class="bg-slate-50 p-8 rounded-3xl border border-slate-200/80 relative flex flex-col items-center text-center">
+						<div class="w-16 h-16 rounded-full bg-[#2D5A27] text-white font-extrabold text-xl flex items-center justify-center mb-6 shadow-lg shadow-[#2D5A27]/20">
+							3
+						</div>
+						<h3 class="text-xl font-bold text-slate-900 mb-3">Retirá tu pedido</h3>
+						<p class="text-slate-600 text-sm leading-relaxed">
+							Cuando esté listo, te avisamos para que puedas retirarlo de forma simple y cerca de vos.
+						</p>
+					</div>
+				</div>
+
+				<!-- Encontrá tu punto UrbanPoint Banner -->
+				<div class="mt-16 bg-gradient-to-r from-[#F4F8F4] via-[#F7FAF7] to-[#F2F7F3] border border-[#D8E8D9] rounded-3xl p-6 sm:p-8 lg:p-10 shadow-sm overflow-hidden">
+					<div class="grid lg:grid-cols-12 gap-8 items-center">
+						<!-- Left Map Image Container -->
+						<div class="lg:col-span-6 relative w-full rounded-2xl overflow-hidden shadow-sm border border-[#D8E8D9]">
+							<img 
+								src="/images/map_banner.jpg" 
+								alt="Puntos UrbanPoint en el mapa" 
+								class="w-full h-full object-cover rounded-2xl transform hover:scale-105 transition-transform duration-700" 
+							/>
+						</div>
+
+						<!-- Right Content Text & Action -->
+						<div class="lg:col-span-6 flex flex-col justify-center">
+							<span class="text-[#2D5A27] font-bold text-xs sm:text-sm uppercase tracking-wider mb-2 block">
+								Punto de Retiro Oficial
+							</span>
+							<h2 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight mb-4">
+								{activeNode.nombre_comercial}
+							</h2>
+							<p class="text-slate-600 text-sm sm:text-base leading-relaxed mb-6">
+								{activeNode.direccion}, {activeNode.localidad}. Horarios de atención: {activeNode.horarios || 'Lunes a Sábado 09:00 a 20:00 hs.'}
+							</p>
+							<div>
+								<a href="#catalogo-nodo" class="inline-flex items-center justify-center px-8 py-3.5 bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold text-sm rounded-2xl shadow-md transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-[#2D5A27]/20">
+									Ver catálogo de ofertas
+								</a>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- Social Proof / Testimonials Section -->
+		<section id="testimonios" class="py-24 bg-white border-t border-slate-200/60">
+			<div class="max-w-7xl mx-auto px-6">
+				<div class="text-center max-w-2xl mx-auto mb-16">
+					<span class="text-[#2D5A27] font-bold text-xs uppercase tracking-wider mb-2 block">
+						Lo que dicen nuestros usuarios
+					</span>
+					<h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+						Vecinos que ya compran más cerca
+					</h2>
+				</div>
+
+				<style>
+					.hide-scrollbar::-webkit-scrollbar { display: none; }
+					@keyframes marquee {
+						0% { transform: translateX(0); }
+						100% { transform: translateX(-50%); }
+					}
+					.animate-marquee {
+						display: flex;
+						width: max-content;
+						animation: marquee 40s linear infinite;
+					}
+					.animate-marquee:hover {
+						animation-play-state: paused;
+					}
+				</style>
+				
+				<div class="overflow-hidden pb-8 -mx-6 sm:mx-0 w-[100vw] sm:w-auto">
+					<div class="animate-marquee gap-6 px-6 sm:px-0">
+						<!-- Review 1 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“¡Excelente! Pude retirar mi pedido al otro día en el kiosco de mi barrio. Súper cómodo y los precios muy buenos.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120" alt="Mariana L." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Mariana L.</p><p class="text-xs text-slate-500">Caballito, CABA</p></div>
+							</div>
+						</div>
+						<!-- Review 2 -->
+						<div class="shrink-0 w-[320px] bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+							<div>
+								<div class="flex text-amber-400 gap-1 mb-4">
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+									<svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+								</div>
+								<p class="text-slate-700 text-sm leading-relaxed mb-6 font-medium">“Me encanta poder elegir dónde retirar. Siempre hay un punto UrbanPoint cerca de casa.”</p>
+							</div>
+							<div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+								<img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120" alt="Lucas G." class="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+								<div><p class="font-bold text-slate-900 text-sm">Lucas G.</p><p class="text-xs text-slate-500">Villa Devoto, CABA</p></div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<!-- Client-side localStorage backup for active node -->
+	<script is:inline set:html={`
+		(function() {
+			const activeNode = ${JSON.stringify({
+				id: activeNode.$id,
+				nombre: activeNode.nombre_comercial,
+				slug: activeNode.slug,
+				direccion: activeNode.direccion,
+				localidad: activeNode.localidad,
+				horarios: activeNode.horarios,
+				canillitaId: typeof activeNode.profile_id === 'string' ? activeNode.profile_id : activeNode.profile_id?.$id,
+				telefono: activeNode.telefono || '(11) 2478-5603'
+			})};
+			try {
+				localStorage.setItem('up_active_node', JSON.stringify(activeNode));
+			} catch (e) {}
+		})();
+
+		document.addEventListener('DOMContentLoaded', () => {
+			const catPills = document.querySelectorAll('.cat-pill');
+			const prodItems = document.querySelectorAll('.prod-item');
+
+			catPills.forEach(pill => {
+				pill.addEventListener('click', () => {
+					const catId = pill.getAttribute('data-category');
+					catPills.forEach(p => {
+						p.classList.remove('active', 'bg-[#2D5A27]', 'text-white');
+						p.classList.add('bg-white', 'text-slate-700', 'border', 'border-slate-200');
+					});
+					pill.classList.remove('bg-white', 'text-slate-700', 'border', 'border-slate-200');
+					pill.classList.add('active', 'bg-[#2D5A27]', 'text-white');
+
+					prodItems.forEach(item => {
+						const itemCat = item.getAttribute('data-cat-id');
+						if (catId === 'all' || itemCat === catId) {
+							(item as HTMLElement).style.display = 'flex';
+						} else {
+							(item as HTMLElement).style.display = 'none';
+						}
+					});
+				});
+			});
+		});
+	`} />
+
+	<Footer />
 </Layout>
