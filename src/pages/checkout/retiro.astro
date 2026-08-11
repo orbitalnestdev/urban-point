@@ -84,15 +84,16 @@ try {
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
             </div>
             <div>
-              <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#2D5A27]">Punto de retiro preseleccionado</span>
+              <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#2D5A27]">Punto de retiro fijado por el Canillita</span>
               <h3 class="text-lg font-black text-slate-900 leading-snug">{activeNodeSession.nombre}</h3>
               <p class="text-xs text-slate-600 font-medium">{activeNodeSession.direccion} ({activeNodeSession.localidad || 'CABA'})</p>
             </div>
           </div>
 
-          <button id="btn-change-pickup-node" class="px-4 py-2.5 bg-white border border-[#2D5A27] text-[#2D5A27] hover:bg-[#2D5A27] hover:text-white rounded-xl text-xs font-bold transition-all shrink-0">
-            Cambiar punto de retiro
-          </button>
+          <div class="px-4 py-2.5 bg-[#2D5A27] text-white rounded-xl text-xs font-extrabold shrink-0 flex items-center gap-2 shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <span>Punto Fijado por Default</span>
+          </div>
         </div>
       )}
 

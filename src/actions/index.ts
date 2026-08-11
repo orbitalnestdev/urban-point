@@ -673,9 +673,10 @@ export const server = {
 				if (resolvedCanillitaId) {
 					orderPayload.canillita_id = resolvedCanillitaId;
 				}
-				if (input.pickupPointId) {
-					orderPayload.pickup_point_id = input.pickupPointId;
-					orderPayload.pickup_node_id = input.pickupPointId;
+				const finalPickupPointId = input.pickupPointId || (activeNodeSession ? activeNodeSession.id : null);
+				if (finalPickupPointId) {
+					orderPayload.pickup_point_id = finalPickupPointId;
+					orderPayload.pickup_node_id = finalPickupPointId;
 				}
 				if (input.direccionEnvio) {
 					orderPayload.direccion_envio = input.direccionEnvio;
