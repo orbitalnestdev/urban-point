@@ -44,6 +44,8 @@ try {
   activeNode = nodeRes.documents[0];
 
   // Prepare node data object
+  const canillitaProfileId = typeof activeNode.profile_id === 'string' ? activeNode.profile_id : activeNode.profile_id?.$id;
+  
   const activeNodeData = {
     id: activeNode.$id,
     nombre: activeNode.nombre_comercial,
@@ -51,7 +53,7 @@ try {
     direccion: activeNode.direccion,
     localidad: activeNode.localidad,
     horarios: activeNode.horarios,
-    canillitaId: typeof activeNode.profile_id === 'string' ? activeNode.profile_id : activeNode.profile_id?.$id,
+    canillitaId: canillitaProfileId,
     telefono: activeNode.telefono || '(11) 2478-5603'
   };
 
@@ -61,6 +63,26 @@ try {
     maxAge: 30 * 24 * 60 * 60,
     sameSite: 'lax'
   });
+
+  // If node has an associated Canillita Profile, automatically attach their referral code
+  if (canillitaProfileId) {
+    try {
+      const refCodeRes = await databases.listDocuments('urbanpoint', 'referral_codes', [
+        Query.equal('owner_id', canillitaProfileId),
+        Query.equal('activo', true),
+        Query.limit(1)
+      ]);
+      if (refCodeRes.documents.length > 0) {
+        Astro.cookies.set('up_ref', refCodeRes.documents[0].code, {
+          path: '/',
+          maxAge: 30 * 24 * 60 * 60,
+          sameSite: 'lax'
+        });
+      }
+    } catch (refErr) {
+      console.warn(`No se pudo obtener código de referido para el perfil ${canillitaProfileId}:`, refErr);
+    }
+  }
 
   const cache = await getCachedCatalog();
   featuredProducts = cache.products.slice(0, 8);
