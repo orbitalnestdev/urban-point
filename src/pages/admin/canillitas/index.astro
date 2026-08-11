@@ -2,7 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
-import { Copy } from 'lucide-react';
+import { Copy, QrCode } from 'lucide-react';
 
 export const prerender = false;
 
@@ -166,6 +166,17 @@ const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
 										)}
 									</td>
 									<td class="p-4 text-right space-x-2 whitespace-nowrap">
+										{punto.slug && (
+											<button 
+												class="btn-generar-qr px-2.5 py-1 bg-[#E2EFE4] hover:bg-[#D4E5D6] text-[#2D5A27] font-extrabold text-xs rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"
+												data-slug={punto.slug}
+												data-nombre={punto.nombre_comercial}
+												data-direccion={punto.direccion}
+												title="Generar QR y Afiche del Puesto"
+											>
+												<QrCode className="w-3.5 h-3.5" /> Afiche QR
+											</button>
+										)}
 										<button 
 											class="btn-editar-punto text-indigo-600 hover:text-indigo-800 font-bold text-xs cursor-pointer"
 											data-punto={JSON.stringify(punto)}
@@ -193,7 +204,7 @@ const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
 
 						{puntos.length === 0 && (
 							<tr>
-								<td colspan="6" class="p-8 text-center text-slate-500">No hay puntos de retiro registrados.</td>
+								<td colspan="7" class="p-8 text-center text-slate-500">No hay puntos de retiro registrados.</td>
 							</tr>
 						)}
 					</tbody>
@@ -201,6 +212,40 @@ const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
 			</div>
 		</div>
 	</main>
+
+	<!-- Modal Afiche / QR del Puesto -->
+	<div id="modal-qr-afiche" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+		<div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 text-center border-4 border-[#2D5A27] relative overflow-hidden">
+			<button id="btn-close-qr-modal" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+
+			<div class="space-y-4">
+				<div class="inline-flex items-center gap-2 px-3.5 py-1 bg-[#E2EFE4] text-[#2D5A27] font-extrabold text-xs uppercase tracking-wider rounded-full">
+					UrbanPoint POS
+				</div>
+
+				<h2 id="qr-modal-nombre" class="text-2xl font-black text-slate-900 leading-tight">Nombre del Puesto</h2>
+				<p id="qr-modal-direccion" class="text-xs text-slate-500 font-medium">Dirección del Puesto</p>
+
+				<div class="p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl inline-block shadow-inner my-2">
+					<img id="qr-code-img" src="" alt="QR Code" class="w-60 h-60 mx-auto object-contain" />
+				</div>
+
+				<div class="space-y-1">
+					<p class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">Escaneá con tu celular para comprar</p>
+					<p id="qr-modal-url" class="font-mono text-sm font-extrabold text-[#2D5A27]">urbanpoint.com.ar/slug</p>
+				</div>
+
+				<div class="pt-4 border-t border-slate-100 flex gap-3 justify-center">
+					<a id="btn-download-qr-img" download="qr-urbanpoint.png" href="#" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors">
+						Descargar QR (PNG)
+					</a>
+					<button id="btn-print-poster" class="px-4 py-2.5 bg-[#2D5A27] hover:bg-[#23471F] text-white text-xs font-bold rounded-xl transition-colors shadow-md">
+						Imprimir Afiche
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
 
 	<!-- Modal ABM Punto de Retiro con Selector de Mapa -->
 	<div id="modal-punto" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
@@ -303,6 +348,7 @@ const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
 	<script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 	<script>
 		import { actions } from 'astro:actions';
+		import QRCode from 'qrcode';
 
 		const modal = document.getElementById('modal-punto');
 		const modalTitle = document.getElementById('modal-title');
@@ -310,6 +356,14 @@ const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
 		const btnNuevo = document.getElementById('btn-nuevo-punto');
 		const btnClose = document.getElementById('btn-close-modal');
 		const btnCancel = document.getElementById('btn-cancel-modal');
+
+		const modalQr = document.getElementById('modal-qr-afiche');
+		const btnCloseQr = document.getElementById('btn-close-qr-modal');
+		const qrNombre = document.getElementById('qr-modal-nombre');
+		const qrDireccion = document.getElementById('qr-modal-direccion');
+		const qrUrl = document.getElementById('qr-modal-url');
+		const qrImg = document.getElementById('qr-code-img') as HTMLImageElement;
+		const btnDownloadQr = document.getElementById('btn-download-qr-img') as HTMLAnchorElement;
 
 		const inputId = document.getElementById('punto-id') as HTMLInputElement;
 		const inputNombre = document.getElementById('punto-nombre') as HTMLInputElement;
@@ -328,6 +382,38 @@ const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
 		let currentLng = -58.3816;
 		let map: any = null;
 		let marker: any = null;
+
+		btnCloseQr?.addEventListener('click', () => modalQr?.classList.add('hidden'));
+
+		document.querySelectorAll('.btn-generar-qr').forEach(btn => {
+			btn.addEventListener('click', async (e) => {
+				const target = e.currentTarget as HTMLElement;
+				const slug = target.dataset.slug || '';
+				const nombre = target.dataset.nombre || '';
+				const direccion = target.dataset.direccion || '';
+				const fullUrl = `${window.location.origin}/${slug}`;
+
+				if (qrNombre) qrNombre.textContent = nombre;
+				if (qrDireccion) qrDireccion.textContent = direccion;
+				if (qrUrl) qrUrl.textContent = fullUrl.replace(/^https?:\/\//, '');
+
+				try {
+					const dataUrl = await QRCode.toDataURL(fullUrl, {
+						width: 400,
+						margin: 2,
+						color: { dark: '#2D5A27', light: '#FFFFFF' }
+					});
+					if (qrImg) qrImg.src = dataUrl;
+					if (btnDownloadQr) {
+						btnDownloadQr.href = dataUrl;
+						btnDownloadQr.download = `qr-urbanpoint-${slug}.png`;
+					}
+					modalQr?.classList.remove('hidden');
+				} catch (err) {
+					console.error('Error generando QR:', err);
+				}
+			});
+		});
 
 		function initModalMap(lat: number, lng: number) {
 			currentLat = lat;
