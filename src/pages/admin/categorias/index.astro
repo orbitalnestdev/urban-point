@@ -1,0 +1,412 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { createAdminClient } from '../../../lib/server/appwrite';
+import { Query } from 'node-appwrite';
+import { toSafeJson } from '../../../lib/safeJson';
+import { FolderTree, Plus, Edit2, Trash2, ChevronRight, Package, Tag } from 'lucide-react';
+
+export const prerender = false;
+
+const { databases } = createAdminClient();
+let categories: any[] = [];
+let products: any[] = [];
+
+async function fetchAllDocs(coll: string) {
+	let docs: any[] = [];
+	let offset = 0;
+	while (true) {
+		const res = await databases.listDocuments('urbanpoint', coll, [
+			Query.limit(100),
+			Query.offset(offset)
+		]);
+		docs.push(...res.documents);
+		if (res.documents.length < 100) break;
+		offset += 100;
+	}
+	return docs;
+}
+
+try {
+	[categories, products] = await Promise.all([
+		fetchAllDocs('categories'),
+		fetchAllDocs('products')
+	]);
+} catch (e) {
+	console.error('Error cargando categorías:', e);
+}
+
+// Calculate product count per category
+const prodCountMap: Record<string, number> = {};
+products.forEach(p => {
+	const catId = typeof p.categoria_id === 'string' ? p.categoria_id : p.categoria_id?.$id;
+	if (catId) {
+		prodCountMap[catId] = (prodCountMap[catId] || 0) + 1;
+	}
+});
+
+// Group categories into Root -> Subcategories tree
+const rootCategories = categories.filter(c => !c.parent_id);
+const childCategoriesMap: Record<string, any[]> = {};
+
+categories.forEach(c => {
+	if (c.parent_id) {
+		const pid = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id.$id;
+		if (!childCategoriesMap[pid]) childCategoriesMap[pid] = [];
+		childCategoriesMap[pid].push(c);
+	}
+});
+
+// Total counts
+const totalCategorias = categories.length;
+const totalPrincipales = rootCategories.length;
+const totalSubcategorias = categories.length - rootCategories.length;
+---
+
+<AdminLayout title="Gestión de Categorías | UrbanPoint">
+	<div class="space-y-6 max-w-6xl mx-auto pb-12">
+		<!-- Top Bar -->
+		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+			<div>
+				<h1 class="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
+					<FolderTree className="w-7 h-7 text-indigo-600" />
+					Categorías y Subcategorías
+				</h1>
+				<p class="text-slate-500 text-xs sm:text-sm mt-1">
+					Organizá tu catálogo estilo Tienda Nube con categorías principales y subniveles.
+				</p>
+			</div>
+			
+			<div class="flex items-center gap-3">
+				<button 
+					id="btn-nueva-categoria" 
+					class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all text-sm flex items-center gap-2 cursor-pointer hover:scale-[1.02]"
+				>
+					<Plus className="w-4 h-4" />
+					Nueva Categoría
+				</button>
+			</div>
+		</div>
+
+		<!-- KPI Cards -->
+		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+				<div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+					<FolderTree className="w-6 h-6" />
+				</div>
+				<div>
+					<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Categorías</p>
+					<h3 class="text-2xl font-black text-slate-900">{totalCategorias}</h3>
+				</div>
+			</div>
+
+			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+				<div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+					<Tag className="w-6 h-6" />
+				</div>
+				<div>
+					<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Categorías Principales</p>
+					<h3 class="text-2xl font-black text-slate-900">{totalPrincipales}</h3>
+				</div>
+			</div>
+
+			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+				<div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+					<ChevronRight className="w-6 h-6" />
+				</div>
+				<div>
+					<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Subcategorías</p>
+					<h3 class="text-2xl font-black text-slate-900">{totalSubcategorias}</h3>
+				</div>
+			</div>
+		</div>
+
+		<!-- Category Tree List (Tienda Nube Style) -->
+		<div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+			<div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+				<h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Estructura del Catálogo</h2>
+				<span class="text-xs text-slate-500 font-medium">Hacé clic en "+ Subcategoría" para anidar un subnivel</span>
+			</div>
+
+			<div class="divide-y divide-slate-100">
+				{rootCategories.map(parent => {
+					const children = childCategoriesMap[parent.$id] || [];
+					const parentProdCount = (prodCountMap[parent.$id] || 0) + children.reduce((sum, child) => sum + (prodCountMap[child.$id] || 0), 0);
+
+					return (
+						<div class="bg-white">
+							<!-- Parent Category Row -->
+							<div class="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50/80 transition-colors group">
+								<div class="flex items-center gap-3.5">
+									<div class="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold">
+										<FolderTree className="w-5 h-5" />
+									</div>
+									<div>
+										<div class="flex items-center gap-2">
+											<h3 class="font-extrabold text-slate-900 text-base">{parent.nombre}</h3>
+											<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+												Categoría Principal
+											</span>
+											{parent.estado === 'oculta' && (
+												<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+													Oculta
+												</span>
+											)}
+										</div>
+										<p class="text-xs text-slate-400 font-mono mt-0.5">/{parent.slug || parent.nombre.toLowerCase()}</p>
+									</div>
+								</div>
+
+								<div class="flex items-center gap-3">
+									<span class="hidden sm:inline-flex items-center gap-1 px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-700">
+										<Package className="w-3.5 h-3.5 text-slate-500" />
+										{parentProdCount} {parentProdCount === 1 ? 'producto' : 'productos'}
+									</span>
+
+									<button 
+										class="btn-nueva-subcat px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1"
+										data-parent-id={parent.$id}
+										data-parent-name={parent.nombre}
+									>
+										<Plus className="w-3.5 h-3.5" /> Subcategoría
+									</button>
+
+									<button 
+										class="btn-editar-cat p-2 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
+										data-cat={toSafeJson(parent)}
+										title="Editar Categoría"
+									>
+										<Edit2 className="w-4 h-4" />
+									</button>
+
+									<button 
+										class="btn-eliminar-cat p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+										data-id={parent.$id}
+										data-nombre={parent.nombre}
+										title="Eliminar Categoría"
+									>
+										<Trash2 className="w-4 h-4" />
+									</button>
+								</div>
+							</div>
+
+							<!-- Children Subcategories List -->
+							{children.length > 0 && (
+								<div class="bg-slate-50/40 border-t border-slate-100 pl-8 sm:pl-14 pr-4 sm:pr-5 py-2 divide-y divide-slate-100">
+									{children.map(child => {
+										const childProdCount = prodCountMap[child.$id] || 0;
+
+										return (
+											<div class="py-3 flex items-center justify-between hover:bg-white p-2 rounded-xl transition-colors">
+												<div class="flex items-center gap-3">
+													<ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+													<div>
+														<div class="flex items-center gap-2">
+															<h4 class="font-bold text-slate-800 text-sm">{child.nombre}</h4>
+															{child.estado === 'oculta' && (
+																<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+																	Oculta
+																</span>
+															)}
+														</div>
+														<p class="text-[11px] text-slate-400 font-mono">/{child.slug}</p>
+													</div>
+												</div>
+
+												<div class="flex items-center gap-3">
+													<span class="text-xs text-slate-500 font-medium">
+														{childProdCount} {childProdCount === 1 ? 'producto' : 'productos'}
+													</span>
+
+													<button 
+														class="btn-editar-cat p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
+														data-cat={toSafeJson(child)}
+														title="Editar Subcategoría"
+													>
+														<Edit2 className="w-3.5 h-3.5" />
+													</button>
+
+													<button 
+														class="btn-eliminar-cat p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+														data-id={child.$id}
+														data-nombre={child.nombre}
+														title="Eliminar Subcategoría"
+													>
+														<Trash2 className="w-3.5 h-3.5" />
+													</button>
+												</div>
+											</div>
+										);
+									})}
+								</div>
+							)}
+						</div>
+					);
+				})}
+
+				{rootCategories.length === 0 && (
+					<div class="p-12 text-center text-slate-500 space-y-3">
+						<FolderTree className="w-12 h-12 text-slate-300 mx-auto" />
+						<p class="font-semibold text-slate-700">No hay categorías registradas.</p>
+						<p class="text-xs text-slate-400">Creá tu primera categoría para organizar los productos de la tienda.</p>
+					</div>
+				)}
+			</div>
+		</div>
+	</div>
+
+	<!-- Modal ABM Categoría / Subcategoría -->
+	<div id="modal-categoria" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+		<div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6">
+			<div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
+				<h3 id="modal-cat-title" class="text-xl font-bold text-slate-900">Categoría</h3>
+				<button id="btn-close-cat-modal" class="text-slate-400 hover:text-slate-600 text-2xl font-bold">&times;</button>
+			</div>
+
+			<form id="form-categoria" class="space-y-4">
+				<input type="hidden" id="cat-id" />
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre de la Categoría</label>
+					<input type="text" id="cat-nombre" required placeholder="Ej: Bebidas, Galletitas, Almacén" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+				</div>
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nivel / Categoría Padre</label>
+					<select id="cat-parent-id" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600 cursor-pointer">
+						<option value="">Ninguna (Categoría Principal / Nivel Superior)</option>
+						{rootCategories.map(p => (
+							<option value={p.$id}>Subcategoría de: {p.nombre}</option>
+						))}
+					</select>
+				</div>
+
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div>
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Slug URL (Opcional)</label>
+						<input type="text" id="cat-slug" placeholder="bebidas-sin-alcohol" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono outline-none focus:border-indigo-600" />
+					</div>
+					<div>
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Estado</label>
+						<select id="cat-estado" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600 cursor-pointer">
+							<option value="activa">Activa (Visible en catálogo)</option>
+							<option value="oculta">Oculta (No se muestra)</option>
+						</select>
+					</div>
+				</div>
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Descripción (Opcional)</label>
+					<textarea id="cat-descripcion" rows="2" placeholder="Breve descripción descriptiva para la categoría..." class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600 resize-none"></textarea>
+				</div>
+
+				<div class="flex justify-end gap-3 pt-4 border-t border-slate-200">
+					<button type="button" id="btn-cancel-cat-modal" class="px-5 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 text-sm">Cancelar</button>
+					<button type="submit" id="btn-save-cat" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md text-sm cursor-pointer">Guardar Categoría</button>
+				</div>
+			</form>
+		</div>
+	</div>
+
+	<script>
+		import { actions } from 'astro:actions';
+
+		const modal = document.getElementById('modal-categoria');
+		const modalTitle = document.getElementById('modal-cat-title');
+		const formCat = document.getElementById('form-categoria') as HTMLFormElement;
+		const btnNuevo = document.getElementById('btn-nueva-categoria');
+		const btnClose = document.getElementById('btn-close-cat-modal');
+		const btnCancel = document.getElementById('btn-cancel-cat-modal');
+
+		const inputId = document.getElementById('cat-id') as HTMLInputElement;
+		const inputNombre = document.getElementById('cat-nombre') as HTMLInputElement;
+		const inputParent = document.getElementById('cat-parent-id') as HTMLSelectElement;
+		const inputSlug = document.getElementById('cat-slug') as HTMLInputElement;
+		const inputEstado = document.getElementById('cat-estado') as HTMLSelectElement;
+		const inputDescripcion = document.getElementById('cat-descripcion') as HTMLTextAreaElement;
+
+		function openModal(data: any = null, defaultParentId: string = '') {
+			if (data) {
+				modalTitle!.textContent = 'Editar Categoría / Subcategoría';
+				inputId.value = data.$id;
+				inputNombre.value = data.nombre || '';
+				inputParent.value = typeof data.parent_id === 'string' ? data.parent_id : (data.parent_id?.$id || '');
+				inputSlug.value = data.slug || '';
+				inputEstado.value = data.estado || 'activa';
+				inputDescripcion.value = data.descripcion || '';
+			} else {
+				modalTitle!.textContent = defaultParentId ? 'Nueva Subcategoría' : 'Nueva Categoría Principal';
+				inputId.value = '';
+				inputNombre.value = '';
+				inputParent.value = defaultParentId || '';
+				inputSlug.value = '';
+				inputEstado.value = 'activa';
+				inputDescripcion.value = '';
+			}
+			modal!.classList.remove('hidden');
+		}
+
+		function closeModal() {
+			modal!.classList.add('hidden');
+		}
+
+		btnNuevo?.addEventListener('click', () => openModal());
+		btnClose?.addEventListener('click', closeModal);
+		btnCancel?.addEventListener('click', closeModal);
+
+		document.querySelectorAll('.btn-nueva-subcat').forEach(btn => {
+			btn.addEventListener('click', (e) => {
+				const parentId = (e.currentTarget as HTMLElement).dataset.parentId || '';
+				openModal(null, parentId);
+			});
+		});
+
+		document.querySelectorAll('.btn-editar-cat').forEach(btn => {
+			btn.addEventListener('click', (e) => {
+				const data = JSON.parse((e.currentTarget as HTMLElement).dataset.cat || '{}');
+				openModal(data);
+			});
+		});
+
+		document.querySelectorAll('.btn-eliminar-cat').forEach(btn => {
+			btn.addEventListener('click', async (e) => {
+				const target = e.currentTarget as HTMLElement;
+				const id = target.dataset.id;
+				const nombre = target.dataset.nombre || 'esta categoría';
+				
+				if (!id || !confirm(`¿Estás seguro de eliminar la categoría "${nombre}"?`)) return;
+
+				const { data, error } = await actions.deleteCategory({ id });
+				if (error || !data?.success) {
+					alert(error?.message || 'Error al eliminar categoría');
+				} else {
+					window.location.reload();
+				}
+			});
+		});
+
+		formCat?.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			const btnSave = document.getElementById('btn-save-cat') as HTMLButtonElement;
+			btnSave.disabled = true;
+			btnSave.textContent = 'Guardando...';
+
+			const payload = {
+				id: inputId.value || undefined,
+				nombre: inputNombre.value,
+				parent_id: inputParent.value || null,
+				slug: inputSlug.value || undefined,
+				estado: inputEstado.value,
+				descripcion: inputDescripcion.value || undefined
+			};
+
+			const { data, error } = await actions.saveCategory(payload);
+			if (error || !data?.success) {
+				alert(error?.message || 'Error al guardar categoría');
+				btnSave.disabled = false;
+				btnSave.textContent = 'Guardar Categoría';
+			} else {
+				window.location.reload();
+			}
+		});
+	</script>
+</AdminLayout>

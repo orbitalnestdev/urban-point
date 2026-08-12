@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { actions } from 'astro:actions';
 import { AlertCircle, CheckCircle, Loader2, Banknote, FileText } from 'lucide-react';
 

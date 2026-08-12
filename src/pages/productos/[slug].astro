@@ -4,7 +4,6 @@ import Layout from '../../layouts/Layout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import AddToCartBtn from '../../components/shop/AddToCartBtn';
-import CartDrawer from '../../components/shop/CartDrawer';
 import { createAdminClient } from '../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
@@ -14,23 +13,12 @@ const { databases } = createAdminClient();
 
 let product: any = null;
 let category: any = null;
-let pickupPoints: any[] = [];
 let relatedProducts: any[] = [];
 let galleryImages: string[] = [];
 let barcode = '';
 
 try {
-	// 1. Fetch Pickup Points
-	const pickupRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-		Query.equal('estado', 'activo')
-	]);
-	pickupPoints = pickupRes.documents.map(p => ({
-		$id: p.$id,
-		nombre_comercial: p.nombre_comercial,
-		direccion: p.direccion
-	}));
-
-	// 2. Fetch Product by Slug
+	// 1. Fetch Product by Slug
 	const prodRes = await databases.listDocuments('urbanpoint', 'products', [
 		Query.equal('slug', slug as string),
 		Query.limit(1)

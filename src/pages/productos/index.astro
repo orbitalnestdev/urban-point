@@ -50,30 +50,10 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 						Encontrá productos para tu día a día, comprá online y elegí un punto UrbanPoint cercano para retirar tu pedido de forma simple y conveniente.
 					</p>
 
-					<a href="#products-grid" class="inline-flex items-center gap-2 px-6 py-3 bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold text-sm rounded-xl transition-all shadow-md mb-6">
+					<a href="#products-grid" class="inline-flex items-center gap-2 px-6 py-3 bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold text-sm rounded-xl transition-all shadow-md">
 						Explorar productos
 						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
 					</a>
-
-					<!-- Neighborhood Pickup Point Instant Checker -->
-					<div class="pt-4 border-t border-white/10 flex flex-col sm:flex-row items-center gap-3 max-w-xl">
-						<div class="relative w-full">
-							<input 
-								type="text" 
-								id="catalog-location-input" 
-								placeholder="Ingresá tu barrio (ej: Caballito, Devoto)..." 
-								class="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-xl text-white placeholder-slate-300 text-xs sm:text-sm focus:outline-none focus:bg-white/20 transition-all font-medium" 
-							/>
-							<svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#489243]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-						</div>
-						<button 
-							id="btn-check-catalog-location" 
-							class="w-full sm:w-auto px-5 py-2.5 bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-md shrink-0 whitespace-nowrap border border-[#489243]/30"
-						>
-							Ver Puntos Cercanos
-						</button>
-					</div>
-					<div id="catalog-location-result" class="hidden mt-3 p-3 rounded-xl bg-slate-800/90 border border-[#489243]/40 text-xs text-[#489243] font-semibold"></div>
 				</div>
 			</div>
 
@@ -339,24 +319,6 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 				filterAndSort();
 			});
 		});
-
-		// Neighborhood location checker
-		const catLocInput = document.getElementById('catalog-location-input') as HTMLInputElement;
-		const catLocBtn = document.getElementById('btn-check-catalog-location');
-		const catLocResult = document.getElementById('catalog-location-result');
-
-		if (catLocBtn && catLocInput && catLocResult) {
-			catLocBtn.addEventListener('click', () => {
-				const query = catLocInput.value.trim();
-				if (!query) {
-					catLocResult.innerHTML = "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' class='inline-block align-[-2px] shrink-0'><path d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg> Por favor ingresá un barrio o localidad.";
-					catLocResult.classList.remove('hidden');
-					return;
-				}
-				catLocResult.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="inline-block align-[-2px] shrink-0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ¡Punto de retiro activo verificado en <strong>${query}</strong>! Al comprar vas a poder seleccionar el Canillita / comercio más conveniente.`;
-				catLocResult.classList.remove('hidden');
-			});
-		}
 	});
 </script>
 	<Footer />

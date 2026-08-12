@@ -4,12 +4,14 @@ import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { Copy, QrCode } from 'lucide-react';
 import Pagination from '../../../components/admin/Pagination.astro';
+import { toSafeJson } from '../../../lib/safeJson';
 
 export const prerender = false;
 
 const { databases } = createAdminClient();
 let puntos: any[] = [];
 let referidos: any[] = [];
+let profiles: any[] = [];
 
 async function fetchAllDocs(coll: string, baseQueries: any[] = []) {
 	let docs: any[] = [];
@@ -28,18 +30,29 @@ async function fetchAllDocs(coll: string, baseQueries: any[] = []) {
 }
 
 try {
-	[puntos, referidos] = await Promise.all([
+	[puntos, referidos, profiles] = await Promise.all([
 		fetchAllDocs('pickup_points', [Query.orderDesc('$createdAt')]),
-		fetchAllDocs('referral_codes')
+		fetchAllDocs('referral_codes'),
+		fetchAllDocs('profiles')
 	]);
 } catch (e) {
 	console.error(e);
 }
 
+const profileMap: Record<string, any> = {};
+profiles.forEach(p => { profileMap[p.$id] = p; });
+
 const searchQuery = Astro.url.searchParams.get('q') || '';
 const estadoFilter = Astro.url.searchParams.get('estado') || 'todos';
 
-let allPuntos = [...puntos];
+let allPuntos = puntos.map(p => {
+	const profId = typeof p.profile_id === 'string' ? p.profile_id : p.profile_id?.$id;
+	return {
+		...p,
+		profileObj: profId ? profileMap[profId] : (typeof p.profile_id === 'object' ? p.profile_id : null)
+	};
+});
+
 let filteredPuntos = [...allPuntos];
 
 if (estadoFilter !== 'todos') {
@@ -136,6 +149,11 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 									<td class="p-4">
 										<p class="font-bold text-slate-900">{punto.nombre_comercial}</p>
 										<p class="text-xs text-slate-500">{punto.direccion}</p>
+										{punto.profileObj && (
+											<p class="text-[11px] font-semibold text-indigo-700 mt-0.5 flex items-center gap-1">
+												<span>👤 Titular:</span> <strong>{punto.profileObj.nombre || 'Canillita'}</strong> &bull; {punto.profileObj.email}
+											</p>
+										)}
 									</td>
 									<td class="p-4">
 										{punto.slug ? (
@@ -208,7 +226,7 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 										)}
 										<button 
 											class="btn-editar-punto text-indigo-600 hover:text-indigo-800 font-bold text-xs cursor-pointer"
-											data-punto={JSON.stringify(punto)}
+											data-punto={toSafeJson(punto)}
 										>
 											Editar
 										</button>
@@ -296,13 +314,14 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 			<form id="form-punto" class="space-y-4">
 				<input type="hidden" id="punto-id" />
 				
+				<!-- Sección 1: Datos Comerciales y Estado -->
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
-						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre Comercial</label>
-						<input type="text" id="punto-nombre" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre Comercial del Puesto</label>
+						<input type="text" id="punto-nombre" required placeholder="Ej: ADELINA25" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
 					</div>
 					<div>
-						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Estado</label>
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Estado del Punto</label>
 						<select id="punto-estado" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600 cursor-pointer">
 							<option value="activo">Activo</option>
 							<option value="pendiente">Pendiente</option>
@@ -312,53 +331,62 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 					</div>
 				</div>
 
+				<!-- Sección 2: Cuenta de Usuario del Canillita (Acceso a Portal /canillita) -->
+				<div class="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-4 space-y-3">
+					<div class="flex items-center justify-between">
+						<h4 class="text-xs font-black text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+							👤 Cuenta de Usuario Canillita (Portal /canillita)
+						</h4>
+						<span class="text-[10px] bg-indigo-200 text-indigo-800 font-bold px-2 py-0.5 rounded-full">Rol: Canillita</span>
+					</div>
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div>
+							<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre y Apellido del Titular</label>
+							<input type="text" id="punto-titular-nombre" placeholder="Ej: Juan Pérez" class="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+						</div>
+						<div>
+							<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Email de Acceso (Usuario)</label>
+							<input type="email" id="punto-email" placeholder="canillita@ejemplo.com" class="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+						</div>
+					</div>
+					<div>
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Contraseña de Acceso <span id="pwd-help-text" class="text-[10px] text-slate-500 font-normal">(Mín. 8 caracteres &bull; Opcional si solo edita el puesto)</span></label>
+						<input type="password" id="punto-password" placeholder="••••••••" class="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+					</div>
+				</div>
+
+				<!-- Sección 3: Ubicación y Contacto -->
 				<div>
-					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Dirección Completa</label>
-					<input type="text" id="punto-direccion" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Dirección Completa (Calle y Altura)</label>
+					<input type="text" id="punto-direccion" required placeholder="Ej: Jerónimo Salguero 420" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
 				</div>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
 						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Localidad / Barrio</label>
-						<input type="text" id="punto-localidad" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+						<input type="text" id="punto-localidad" required placeholder="Almagro" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
 					</div>
 					<div>
 						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Provincia</label>
-						<input type="text" id="punto-provincia" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+						<input type="text" id="punto-provincia" required placeholder="CABA" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
 					</div>
 				</div>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
-						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Slug de URL propia (ej: kiosco-san-martin)</label>
-						<input type="text" id="punto-slug" placeholder="kiosco-san-martin" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono outline-none focus:border-indigo-600" />
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">URL amigable (Slug de Nodo)</label>
+						<input type="text" id="punto-slug" placeholder="adelina25" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono outline-none focus:border-indigo-600" />
 					</div>
 					<div>
-						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Teléfono de Contacto</label>
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Teléfono / WhatsApp de Contacto</label>
 						<input type="text" id="punto-telefono" placeholder="(11) 2478-5603" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
-					</div>
-				</div>
-
-				<div>
-					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Dirección Completa</label>
-					<input type="text" id="punto-direccion" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
-				</div>
-
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<div>
-						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Localidad / Barrio</label>
-						<input type="text" id="punto-localidad" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
-					</div>
-					<div>
-						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Provincia</label>
-						<input type="text" id="punto-provincia" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
 					</div>
 				</div>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
 						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Horarios de Atención</label>
-						<input type="text" id="punto-horarios" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+						<input type="text" id="punto-horarios" required placeholder="Lunes a Sábado 08 a 20hs" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
 					</div>
 					<div>
 						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Comisión Personalizada % (Opcional)</label>
@@ -366,18 +394,31 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 					</div>
 				</div>
 
-				<div>
-					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Ubicación Geográfica (Arrastrá el marcador para cambiar lat/lng)</label>
-					<div id="modal-map" class="w-full h-56 rounded-2xl border border-slate-200 overflow-hidden mb-2"></div>
-					<div class="grid grid-cols-2 gap-4 text-xs font-mono text-slate-600">
-						<div>Lat: <span id="span-lat">-34.6037</span></div>
-						<div>Lng: <span id="span-lng">-58.3816</span></div>
+				<!-- Sección 4: Mapa Interactivo con Geocodificador -->
+				<div class="space-y-2 pt-2 border-t border-slate-200">
+					<div class="flex items-center justify-between">
+						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Ubicación Geográfica en Mapa Interactivo</label>
+						<span class="text-[11px] text-indigo-700 font-semibold">📍 Arrastrá el marcador o hacé clic en el mapa</span>
+					</div>
+					
+					<!-- Buscador en mapa -->
+					<div class="flex items-center gap-2">
+						<input type="text" id="map-search-input" placeholder="Buscar dirección en el mapa (ej: Jeronimo Salguero 420, CABA)..." class="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-600" />
+						<button type="button" id="btn-search-map" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shrink-0">
+							🔍 Ubicar en Mapa
+						</button>
+					</div>
+
+					<div id="modal-map" class="w-full h-60 rounded-2xl border-2 border-slate-200 overflow-hidden relative shadow-inner z-0"></div>
+					<div class="grid grid-cols-2 gap-4 text-xs font-mono text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+						<div>Latitud: <span id="span-lat" class="font-bold text-slate-900">-34.6037</span></div>
+						<div>Longitud: <span id="span-lng" class="font-bold text-slate-900">-58.3816</span></div>
 					</div>
 				</div>
 
 				<div class="flex justify-end gap-3 pt-4 border-t border-slate-200">
 					<button type="button" id="btn-cancel-modal" class="px-5 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 text-sm">Cancelar</button>
-					<button type="submit" id="btn-save-punto" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md text-sm cursor-pointer">Guardar Punto</button>
+					<button type="submit" id="btn-save-punto" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md text-sm cursor-pointer">Guardar Canillita y Punto</button>
 				</div>
 			</form>
 		</div>
@@ -405,6 +446,10 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 
 		const inputId = document.getElementById('punto-id') as HTMLInputElement;
 		const inputNombre = document.getElementById('punto-nombre') as HTMLInputElement;
+		const inputTitularNombre = document.getElementById('punto-titular-nombre') as HTMLInputElement;
+		const inputEmail = document.getElementById('punto-email') as HTMLInputElement;
+		const inputPassword = document.getElementById('punto-password') as HTMLInputElement;
+		const pwdHelpText = document.getElementById('pwd-help-text');
 		const inputSlug = document.getElementById('punto-slug') as HTMLInputElement;
 		const inputTelefono = document.getElementById('punto-telefono') as HTMLInputElement;
 		const inputEstado = document.getElementById('punto-estado') as HTMLSelectElement;
@@ -461,10 +506,15 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 
 			if (!map && typeof (window as any).L !== 'undefined') {
 				const L = (window as any).L;
-				map = L.map('modal-map').setView([lat, lng], 14);
-				L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+				map = L.map('modal-map').setView([lat, lng], 15);
+				L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+					maxZoom: 19,
+					attribution: '&copy; OpenStreetMap'
+				}).addTo(map);
 
 				marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+
+				// Arrastrar el pin actualiza coordenadas
 				marker.on('dragend', () => {
 					const pos = marker.getLatLng();
 					currentLat = pos.lat;
@@ -472,22 +522,62 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 					spanLat.textContent = pos.lat.toFixed(6);
 					spanLng.textContent = pos.lng.toFixed(6);
 				});
+
+				// Hacer clic en cualquier lugar del mapa coloca el pin allí
+				map.on('click', (e: any) => {
+					const pos = e.latlng;
+					marker.setLatLng(pos);
+					currentLat = pos.lat;
+					currentLng = pos.lng;
+					spanLat.textContent = pos.lat.toFixed(6);
+					spanLng.textContent = pos.lng.toFixed(6);
+				});
 			} else if (map && marker) {
-				map.setView([lat, lng], 14);
+				map.setView([lat, lng], 15);
 				marker.setLatLng([lat, lng]);
 			}
-			setTimeout(() => {
-				if (map) map.invalidateSize();
-			}, 200);
+
+			// Asegurar que Leaflet recalcule tamaño para evitar baldosas grises
+			setTimeout(() => { if (map) map.invalidateSize(); }, 150);
+			setTimeout(() => { if (map) map.invalidateSize(); }, 350);
 		}
+
+		// Geocodificador con OpenStreetMap Nominatim
+		document.getElementById('btn-search-map')?.addEventListener('click', async () => {
+			const searchInput = (document.getElementById('map-search-input') as HTMLInputElement)?.value.trim();
+			const address = searchInput || `${inputDireccion.value}, ${inputLocalidad.value}`;
+			if (!address) {
+				alert('Ingresá una dirección para buscar en el mapa.');
+				return;
+			}
+
+			try {
+				const query = encodeURIComponent(`${address}, Argentina`);
+				const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`);
+				const data = await res.json();
+				if (data && data.length > 0) {
+					const newLat = parseFloat(data[0].lat);
+					const newLng = parseFloat(data[0].lon);
+					initModalMap(newLat, newLng);
+				} else {
+					alert('No se encontró la dirección en el mapa. Podés hacer clic o arrastrar el marcador manualmente.');
+				}
+			} catch(err) {
+				console.error('Error buscando dirección:', err);
+			}
+		});
 
 		function openModal(data: any = null) {
 			if (data) {
-				modalTitle!.textContent = 'Editar Punto de Retiro';
+				modalTitle!.textContent = 'Editar Canillita y Punto de Retiro';
 				inputId.value = data.$id;
 				inputNombre.value = data.nombre_comercial || '';
+				inputTitularNombre.value = data.profileObj?.nombre || '';
+				inputEmail.value = data.profileObj?.email || '';
+				inputPassword.value = '';
+				if (pwdHelpText) pwdHelpText.textContent = '(Opcional: Dejar en blanco para mantener contraseña actual)';
 				inputSlug.value = data.slug || '';
-				inputTelefono.value = data.telefono || '';
+				inputTelefono.value = data.telefono || data.profileObj?.telefono || '';
 				inputEstado.value = data.estado || 'activo';
 				inputDireccion.value = data.direccion || '';
 				inputLocalidad.value = data.localidad || 'CABA';
@@ -496,9 +586,13 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 				inputComision.value = data.comision_pct !== undefined ? data.comision_pct : '';
 				initModalMap(data.lat || -34.6037, data.lng || -58.3816);
 			} else {
-				modalTitle!.textContent = 'Nuevo Punto de Retiro';
+				modalTitle!.textContent = 'Nuevo Canillita y Punto de Retiro';
 				inputId.value = '';
 				inputNombre.value = '';
+				inputTitularNombre.value = '';
+				inputEmail.value = '';
+				inputPassword.value = '';
+				if (pwdHelpText) pwdHelpText.textContent = '(Obligatoria al crear: Mínimo 8 caracteres)';
 				inputSlug.value = '';
 				inputTelefono.value = '';
 				inputEstado.value = 'activo';
@@ -557,9 +651,18 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 		formPunto?.addEventListener('submit', async (e) => {
 			e.preventDefault();
 			const id = inputId.value;
+			
+			if (!id && inputEmail.value && (!inputPassword.value || inputPassword.value.length < 8)) {
+				alert('Al crear un nuevo Canillita, la contraseña de acceso es obligatoria (mínimo 8 caracteres).');
+				return;
+			}
+
 			const payload = {
 				id: id || undefined,
 				nombre_comercial: inputNombre.value,
+				titular_nombre: inputTitularNombre.value || undefined,
+				email: inputEmail.value || undefined,
+				password: inputPassword.value || undefined,
 				slug: inputSlug.value || undefined,
 				direccion: inputDireccion.value,
 				localidad: inputLocalidad.value,
@@ -572,9 +675,18 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 				lng: currentLng
 			};
 
+			const btnSave = document.getElementById('btn-save-punto') as HTMLButtonElement;
+			btnSave.disabled = true;
+			btnSave.textContent = 'Guardando...';
+
 			const { data, error } = await actions.savePickupPoint(payload);
-			if (error || !data?.success) alert(error?.message || 'Error al guardar');
-			else window.location.reload();
+			if (error || !data?.success) {
+				alert(error?.message || 'Error al guardar el punto');
+				btnSave.disabled = false;
+				btnSave.textContent = 'Guardar Canillita y Punto';
+			} else {
+				window.location.reload();
+			}
 		});
 
 		document.querySelectorAll('.btn-copy-node-url').forEach(btn => {

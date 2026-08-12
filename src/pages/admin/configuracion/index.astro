@@ -277,6 +277,18 @@ if (Astro.request.method === 'POST') {
 								)}
 							</div>
 						</div>
+
+						<div class="pt-4 border-t border-slate-100 space-y-3 text-xs">
+							<h5 class="font-bold text-slate-900 uppercase tracking-wider text-[11px] text-slate-500">Métodos de Pago Visibles en el Checkout</h5>
+							<div class="flex items-center gap-3">
+								<input type="checkbox" name="mp_enabled" value="true" checked={settings.mp_enabled} id="chk-mp-enabled" class="w-4 h-4 text-emerald-600 rounded cursor-pointer" />
+								<label for="chk-mp-enabled" class="font-bold text-slate-800 cursor-pointer">Habilitar cobro por Mercado Pago</label>
+							</div>
+							<div class="flex items-center gap-3">
+								<input type="checkbox" name="transferencia_enabled" value="true" checked={settings.transferencia_enabled} id="chk-transf-enabled" class="w-4 h-4 text-emerald-600 rounded cursor-pointer" />
+								<label for="chk-transf-enabled" class="font-bold text-slate-800 cursor-pointer">Habilitar cobro por Transferencia / A Convenir en el Retiro</label>
+							</div>
+						</div>
 					</div>
 
 					{/* 7. SEO */}

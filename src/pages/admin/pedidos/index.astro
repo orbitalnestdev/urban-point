@@ -69,13 +69,28 @@ try {
 	let filtered = [...allOrders];
 
 	if (estadoFilter && estadoFilter !== 'todos') {
-		filtered = filtered.filter(o => o.estado === estadoFilter);
+		if (estadoFilter === 'pendiente_pago') {
+			filtered = filtered.filter(o => o.estado === 'pendiente_pago' || o.estado === 'pendiente' || o.estado === 'nuevo');
+		} else if (estadoFilter === 'pagado') {
+			filtered = filtered.filter(o => o.estado === 'pagado' || o.estado === 'confirmado');
+		} else if (estadoFilter === 'preparando') {
+			filtered = filtered.filter(o => o.estado === 'preparando' || o.estado === 'preparado');
+		} else if (estadoFilter === 'despachado') {
+			filtered = filtered.filter(o => o.estado === 'despachado' || o.estado === 'en_camino' || o.estado === 'en_transito' || o.estado === 'enviado' || o.estado === 'en_punto' || o.estado === 'listo' || o.estado === 'listo_retiro');
+		} else if (estadoFilter === 'entregado') {
+			filtered = filtered.filter(o => o.estado === 'entregado' || o.estado === 'retirado');
+		} else if (estadoFilter === 'cancelado') {
+			filtered = filtered.filter(o => o.estado === 'cancelado' || o.estado === 'reembolsado');
+		} else {
+			filtered = filtered.filter(o => o.estado === estadoFilter);
+		}
 	}
 
 	if (searchQuery.trim()) {
 		const q = searchQuery.toLowerCase();
 		filtered = filtered.filter(o => 
 			o.numero?.toString().toLowerCase().includes(q) ||
+			o.pickup_code_hash?.toLowerCase().includes(q) ||
 			o.customerProfile?.nombre?.toLowerCase().includes(q) ||
 			o.customerProfile?.email?.toLowerCase().includes(q) ||
 			o.pickupPoint?.nombre_comercial?.toLowerCase().includes(q) ||
@@ -99,12 +114,12 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 
 const counts = {
 	todos: allOrders.length,
-	pendiente_pago: allOrders.filter(o => o.estado === 'pendiente_pago' || o.estado === 'pendiente').length,
-	pagado: allOrders.filter(o => o.estado === 'pagado').length,
+	pendiente_pago: allOrders.filter(o => o.estado === 'pendiente_pago' || o.estado === 'pendiente' || o.estado === 'nuevo').length,
+	pagado: allOrders.filter(o => o.estado === 'pagado' || o.estado === 'confirmado').length,
 	preparando: allOrders.filter(o => o.estado === 'preparando' || o.estado === 'preparado').length,
-	despachado: allOrders.filter(o => o.estado === 'despachado' || o.estado === 'en_camino').length,
-	entregado: allOrders.filter(o => o.estado === 'entregado').length,
-	cancelado: allOrders.filter(o => o.estado === 'cancelado').length
+	despachado: allOrders.filter(o => o.estado === 'despachado' || o.estado === 'en_camino' || o.estado === 'en_transito' || o.estado === 'enviado' || o.estado === 'en_punto' || o.estado === 'listo' || o.estado === 'listo_retiro').length,
+	entregado: allOrders.filter(o => o.estado === 'entregado' || o.estado === 'retirado').length,
+	cancelado: allOrders.filter(o => o.estado === 'cancelado' || o.estado === 'reembolsado').length
 };
 
 const getStatusLabel = (estado: string) => {
@@ -283,6 +298,11 @@ const getStatusClass = (estado: string) => {
 											ORD-{o.numero || o.$id.substring(0, 6)}
 										</a>
 										<p class="text-[10px] text-slate-400 mt-0.5">{dateStr}</p>
+										{isRetiro && o.pickup_code_hash && (
+											<span class="inline-block mt-1 px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-300 font-mono font-black text-[10px] rounded tracking-wider" title="Código de Retiro">
+												CÓD: {o.pickup_code_hash}
+											</span>
+										)}
 									</td>
 
 									<td class="p-3.5">

@@ -10,7 +10,6 @@ import { parseActiveNodeCookie } from '../../lib/nodeSession';
 import { toSafeJson } from '../../lib/safeJson';
 
 let pickupPoints: any[] = [];
-let provincias: string[] = [];
 let activeNodeSession: any = null;
 
 try {
@@ -44,8 +43,6 @@ try {
     // el HTML de una página pública. profile_id es la clave que enlaza con
     // commission_ledger y payouts, y ninguno de los dos se usa en el cliente.
   }));
-
-  provincias = Array.from(new Set(pickupPoints.map(p => p.provincia))).sort();
 } catch (e) {
   console.error('Error cargando puntos de retiro para /checkout/retiro:', e);
 }

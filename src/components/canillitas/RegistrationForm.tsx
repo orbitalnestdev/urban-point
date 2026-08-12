@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { actions } from 'astro:actions';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, User, Store, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, Loader2, Info } from 'lucide-react';
+import { MapPin, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, Loader2, User, Store, Info } from 'lucide-react';
 import MapSelector from './MapSelector';
 
 // Fix leaflet default icons

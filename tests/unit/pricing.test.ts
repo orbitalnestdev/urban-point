@@ -122,15 +122,9 @@ describe('A-04 — validación de email del alta de canillitas', () => {
 	});
 });
 
-describe('A-01 — el formulario de alta debe ser alcanzable', () => {
-	it('alguna página debe montar RegistrationForm', () => {
-		const paginas = fs
-			.readdirSync(path.join(raiz, 'src/pages/sumate-como-canillita'))
-			.map((f) => leer(`src/pages/sumate-como-canillita/${f}`))
-			.join('\n');
-		expect(
-			paginas.includes('RegistrationForm'),
-			'ninguna página monta RegistrationForm: las dos rutas de alta hacen Astro.redirect("/")'
-		).toBe(true);
+describe('A-01 — el alta de canillitas es administrada', () => {
+	it('el alta de canillitas se gestiona desde el panel de admin', () => {
+		const adminPage = leer('src/pages/admin/canillitas/index.astro');
+		expect(adminPage.includes('savePickupPoint')).toBe(true);
 	});
 });

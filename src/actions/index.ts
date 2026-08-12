@@ -11,7 +11,7 @@ import {
 } from '../lib/orderStates';
 import { parseActiveNodeValue, NODE_COOKIE_NAME, REF_COOKIE_NAME } from '../lib/nodeSession';
 import { precioDeVentaCentavos } from '../lib/pricing';
-import { normalizarSlug, esSlugReservado, limpiarSlugNodo } from '../lib/slugs';
+import { esSlugReservado, limpiarSlugNodo } from '../lib/slugs';
 import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 
 
@@ -1626,6 +1626,9 @@ export const server = {
 		input: z.object({
 			id: z.string().optional(),
 			nombre_comercial: z.string().min(2),
+			titular_nombre: z.string().optional(),
+			email: z.string().optional(),
+			password: z.string().optional(),
 			slug: z.string().optional(),
 			direccion: z.string().min(3),
 			localidad: z.string().min(2),
@@ -1643,6 +1646,63 @@ export const server = {
 					throw new Error('Solo los administradores pueden gestionar puntos de retiro');
 				}
 
+				let profileId: string | undefined = undefined;
+
+				// Create or update linked Canillita user account & profile if email is provided
+				if (input.email && input.email.trim()) {
+					const cleanEmail = input.email.trim().toLowerCase();
+
+					const profileRes = await db.listDocuments('urbanpoint', 'profiles', [
+						Query.equal('email', cleanEmail),
+						Query.limit(1)
+					]);
+
+					if (profileRes.documents.length > 0) {
+						const existingProf = profileRes.documents[0];
+						profileId = existingProf.$id;
+
+						const profUpdates: any = { role: 'canillita' };
+						if (input.titular_nombre) profUpdates.nombre = input.titular_nombre;
+						if (input.telefono) profUpdates.telefono = input.telefono;
+
+						await db.updateDocument('urbanpoint', 'profiles', profileId, profUpdates);
+
+						if (input.password && input.password.length >= 8) {
+							try {
+								const { users } = createAdminClient();
+								await users.updatePassword(existingProf.user_id || profileId, input.password);
+							} catch (e: any) {
+								console.error("Error updating user password:", e.message);
+							}
+						}
+					} else {
+						const { users } = createAdminClient();
+						const pwd = input.password && input.password.length >= 8 ? input.password : 'Canillita2026!';
+						const name = input.titular_nombre || input.nombre_comercial;
+
+						const authUser = await users.create(ID.unique(), cleanEmail, undefined, pwd, name);
+
+						const newProf = await db.createDocument('urbanpoint', 'profiles', ID.unique(), {
+							user_id: authUser.$id,
+							nombre: name,
+							email: cleanEmail,
+							telefono: input.telefono || '',
+							role: 'canillita'
+						});
+						profileId = newProf.$id;
+
+						try {
+							const refCode = await generateUniqueReferralCode(name, '');
+							await db.createDocument('urbanpoint', 'referral_codes', ID.unique(), {
+								code: refCode,
+								owner_id: profileId,
+								active: true,
+								total_uses: 0
+							});
+						} catch (e: any) {}
+					}
+				}
+
 				const payload: any = {
 					nombre_comercial: input.nombre_comercial,
 					direccion: input.direccion,
@@ -1654,6 +1714,10 @@ export const server = {
 					lng: input.lng,
 					estado: input.estado || 'activo'
 				};
+
+				if (profileId) {
+					payload.profile_id = profileId;
+				}
 
 				let rawSlug = input.slug || (input.id ? undefined : input.nombre_comercial);
 				if (rawSlug) {
@@ -1703,6 +1767,66 @@ export const server = {
 					throw new Error('Solo los administradores pueden eliminar puntos de retiro');
 				}
 				await db.deleteDocument('urbanpoint', 'pickup_points', input.id);
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	saveCategory: defineAction({
+		accept: 'json',
+		input: z.object({
+			id: z.string().optional(),
+			nombre: z.string().min(2),
+			parent_id: z.string().optional().nullable(),
+			slug: z.string().optional(),
+			descripcion: z.string().optional(),
+			imagen_url: z.string().optional(),
+			estado: z.string().optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo los administradores pueden gestionar categorías');
+				}
+
+				const slugBase = input.slug || input.nombre;
+				const cleanSlug = slugBase.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+				const payload: any = {
+					nombre: input.nombre.trim(),
+					slug: cleanSlug || 'cat-' + Date.now(),
+					parent_id: input.parent_id || null,
+					descripcion: input.descripcion || '',
+					imagen_url: input.imagen_url || '',
+					estado: input.estado || 'activa'
+				};
+
+				if (input.id) {
+					const updated = await db.updateDocument('urbanpoint', 'categories', input.id, payload);
+					return { success: true, id: updated.$id };
+				} else {
+					const created = await db.createDocument('urbanpoint', 'categories', ID.unique(), payload);
+					return { success: true, id: created.$id };
+				}
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	deleteCategory: defineAction({
+		accept: 'json',
+		input: z.object({
+			id: z.string()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo los administradores pueden eliminar categorías');
+				}
+				await db.deleteDocument('urbanpoint', 'categories', input.id);
 				return { success: true };
 			} catch (error: any) {
 				return { success: false, error: error.message };

@@ -2,6 +2,11 @@
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import Logo from '../../components/Logo.astro';
+import { getSiteSettings } from '../../lib/server/settings';
+
+const settings = await getSiteSettings();
+const mpEnabled = settings.mp_enabled;
+const transferenciaEnabled = settings.transferencia_enabled;
 ---
 
 <Layout title="Pago y Confirmación | UrbanPoint Checkout">
@@ -81,20 +86,24 @@ import Logo from '../../components/Logo.astro';
             </h2>
             
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label class="relative flex flex-col p-5 border-2 border-[#2D5A27] bg-[#F2F7F3] rounded-2xl cursor-pointer hover:shadow-md transition-all">
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="font-extrabold text-slate-900 text-lg">Mercado Pago</span>
-                        <input type="radio" name="payment_method" value="mercadopago" class="w-5 h-5 text-[#2D5A27] focus:ring-[#2D5A27] border-slate-300" checked />
-                    </div>
-                    <span class="text-sm text-slate-600 leading-relaxed">Tarjetas de crédito, débito y dinero en cuenta. Acreditación instantánea.</span>
-                </label>
-                <label class="relative flex flex-col p-5 border-2 border-slate-100 hover:border-slate-300 bg-white rounded-2xl cursor-pointer hover:shadow-md transition-all">
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="font-extrabold text-slate-900 text-lg">A Convenir</span>
-                        <input type="radio" name="payment_method" value="a_convenir" class="w-5 h-5 text-[#2D5A27] focus:ring-[#2D5A27] border-slate-300" />
-                    </div>
-                    <span class="text-sm text-slate-600 leading-relaxed">Pagá en efectivo o mediante transferencia directamente al retirar tu pedido.</span>
-                </label>
+                {mpEnabled && (
+                    <label class={`relative flex flex-col p-5 border-2 ${mpEnabled ? 'border-[#2D5A27] bg-[#F2F7F3]' : 'border-slate-100 bg-white'} rounded-2xl cursor-pointer hover:shadow-md transition-all`}>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-extrabold text-slate-900 text-lg">Mercado Pago</span>
+                            <input type="radio" name="payment_method" value="mercadopago" class="w-5 h-5 text-[#2D5A27] focus:ring-[#2D5A27] border-slate-300" checked={mpEnabled} />
+                        </div>
+                        <span class="text-sm text-slate-600 leading-relaxed">Tarjetas de crédito, débito y dinero en cuenta. Acreditación instantánea.</span>
+                    </label>
+                )}
+                {transferenciaEnabled && (
+                    <label class={`relative flex flex-col p-5 border-2 ${!mpEnabled && transferenciaEnabled ? 'border-[#2D5A27] bg-[#F2F7F3]' : 'border-slate-100 bg-white'} rounded-2xl cursor-pointer hover:shadow-md transition-all`}>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-extrabold text-slate-900 text-lg">A Convenir / Transferencia</span>
+                            <input type="radio" name="payment_method" value="a_convenir" class="w-5 h-5 text-[#2D5A27] focus:ring-[#2D5A27] border-slate-300" checked={!mpEnabled && transferenciaEnabled} />
+                        </div>
+                        <span class="text-sm text-slate-600 leading-relaxed">Pagá en efectivo o mediante transferencia directamente al retirar tu pedido.</span>
+                    </label>
+                )}
             </div>
         </div>
 
@@ -240,9 +249,18 @@ import Logo from '../../components/Logo.astro';
             });
         });
 
-        // Initialize state based on store
-        const savedMethod = currentCheckout.paymentMethod || 'mercadopago';
-        const targetRadio = document.querySelector(`input[name="payment_method"][value="${savedMethod}"]`) as HTMLInputElement;
+        // Initialize state based on store or available radio buttons
+        const savedMethod = currentCheckout.paymentMethod;
+        const availableRadios = document.querySelectorAll('input[name="payment_method"]') as NodeListOf<HTMLInputElement>;
+        let targetRadio: HTMLInputElement | null = null;
+
+        if (savedMethod) {
+            targetRadio = document.querySelector(`input[name="payment_method"][value="${savedMethod}"]`) as HTMLInputElement;
+        }
+        if (!targetRadio && availableRadios.length > 0) {
+            targetRadio = availableRadios[0];
+        }
+
         if (targetRadio) {
             targetRadio.checked = true;
             targetRadio.dispatchEvent(new Event('change'));

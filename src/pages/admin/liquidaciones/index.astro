@@ -38,7 +38,20 @@ try {
   ]);
 
   // Aggregate pending balance by profile
-  const balanceMap: Record<string, { id: string; name: string; email: string; phone: string; code: string; balance: number; count: number }> = {};
+  const balanceMap: Record<string, {
+    id: string;
+    name: string;
+    commercial_name: string;
+    email: string;
+    phone: string;
+    code: string;
+    cbu: string;
+    alias: string;
+    banco: string;
+    titular: string;
+    balance: number;
+    count: number;
+  }> = {};
 
   for (const item of ledgerRes.documents) {
     const profileId = typeof item.profile_id === 'string' ? item.profile_id : item.profile_id?.$id;
@@ -48,15 +61,17 @@ try {
     totalPendienteCentavos += monto;
 
     if (!balanceMap[profileId]) {
-      const pName = typeof item.profile_id === 'object' ? item.profile_id?.nombre : 'Canillita';
-      const pEmail = typeof item.profile_id === 'object' ? item.profile_id?.email : '';
-      const pPhone = typeof item.profile_id === 'object' ? item.profile_id?.telefono : '';
       balanceMap[profileId] = {
         id: profileId,
-        name: pName || 'Canillita',
-        email: pEmail || '',
-        phone: pPhone || '',
+        name: 'Canillita',
+        commercial_name: '',
+        email: '',
+        phone: '',
         code: 'CANI-REF',
+        cbu: 'No informado',
+        alias: 'No informado',
+        banco: 'No especificado',
+        titular: 'No especificado',
         balance: 0,
         count: 0
       };
@@ -65,14 +80,49 @@ try {
     balanceMap[profileId].count += 1;
   }
 
-  // Fetch referral codes for display
-  const profiles = Object.keys(balanceMap);
-  if (profiles.length > 0) {
-    const refCodes = await databases.listDocuments('urbanpoint', 'referral_codes', [
-      Query.equal('owner_id', profiles),
-      Query.limit(500)
+  // Fetch profiles, pickup points, and referral codes for display & banking
+  const profileIds = Object.keys(balanceMap);
+  if (profileIds.length > 0) {
+    const [profilesRes, pointsRes, refCodesRes] = await Promise.all([
+      databases.listDocuments('urbanpoint', 'profiles', [
+        Query.equal('$id', profileIds),
+        Query.limit(500)
+      ]).catch(() => ({ documents: [] })),
+      databases.listDocuments('urbanpoint', 'pickup_points', [
+        Query.equal('profile_id', profileIds),
+        Query.limit(500)
+      ]).catch(() => ({ documents: [] })),
+      databases.listDocuments('urbanpoint', 'referral_codes', [
+        Query.equal('owner_id', profileIds),
+        Query.limit(500)
+      ]).catch(() => ({ documents: [] }))
     ]);
-    for (const ref of refCodes.documents) {
+
+    const profileDocMap: Record<string, any> = {};
+    (profilesRes.documents || []).forEach((p: any) => { profileDocMap[p.$id] = p; });
+
+    const pointDocMap: Record<string, any> = {};
+    (pointsRes.documents || []).forEach((pt: any) => {
+      const pId = typeof pt.profile_id === 'string' ? pt.profile_id : pt.profile_id?.$id;
+      if (pId) pointDocMap[pId] = pt;
+    });
+
+    for (const pId of profileIds) {
+      const prof = profileDocMap[pId];
+      const pt = pointDocMap[pId];
+      if (balanceMap[pId]) {
+        balanceMap[pId].name = prof?.nombre || pt?.nombre_comercial || 'Canillita';
+        balanceMap[pId].commercial_name = pt?.nombre_comercial || prof?.nombre || '';
+        balanceMap[pId].email = prof?.email || pt?.email || '';
+        balanceMap[pId].phone = prof?.telefono || pt?.telefono || '';
+        balanceMap[pId].cbu = pt?.cbu || pt?.cvu || prof?.cbu || prof?.cvu || 'No informado';
+        balanceMap[pId].alias = pt?.alias || prof?.alias || 'No informado';
+        balanceMap[pId].banco = pt?.banco || prof?.banco || 'No especificado';
+        balanceMap[pId].titular = pt?.titular_cuenta || prof?.titular_cuenta || prof?.nombre || 'No especificado';
+      }
+    }
+
+    for (const ref of (refCodesRes.documents || [])) {
       const oId = typeof ref.owner_id === 'string' ? ref.owner_id : ref.owner_id?.$id;
       if (oId && balanceMap[oId]) {
         balanceMap[oId].code = ref.code;
@@ -82,13 +132,45 @@ try {
 
   pendingBalances = Object.values(balanceMap);
 
-  // 2. Fetch past payouts history
+  // 2. Fetch past payouts history with beneficiary resolution
   const payoutQueries = [Query.orderDesc('$createdAt'), Query.limit(100)];
   if (periodoParam) {
     payoutQueries.unshift(Query.equal('periodo', periodoParam));
   }
   const payoutsRes = await databases.listDocuments('urbanpoint', 'payouts', payoutQueries);
-  pastPayouts = payoutsRes.documents;
+
+  const payoutProfileIds = Array.from(new Set((payoutsRes.documents || []).map((p: any) => typeof p.profile_id === 'string' ? p.profile_id : p.profile_id?.$id).filter(Boolean)));
+
+  const payoutProfileMap: Record<string, any> = {};
+  if (payoutProfileIds.length > 0) {
+    const [pRes, ptRes] = await Promise.all([
+      databases.listDocuments('urbanpoint', 'profiles', [
+        Query.equal('$id', payoutProfileIds),
+        Query.limit(500)
+      ]).catch(() => ({ documents: [] })),
+      databases.listDocuments('urbanpoint', 'pickup_points', [
+        Query.equal('profile_id', payoutProfileIds),
+        Query.limit(500)
+      ]).catch(() => ({ documents: [] }))
+    ]);
+    (pRes.documents || []).forEach((p: any) => { payoutProfileMap[p.$id] = p; });
+    (ptRes.documents || []).forEach((pt: any) => {
+      const pId = typeof pt.profile_id === 'string' ? pt.profile_id : pt.profile_id?.$id;
+      if (pId) payoutProfileMap[pId + '_pt'] = pt;
+    });
+  }
+
+  pastPayouts = (payoutsRes.documents || []).map((pay: any) => {
+    const profId = typeof pay.profile_id === 'string' ? pay.profile_id : pay.profile_id?.$id;
+    const prof = profId ? payoutProfileMap[profId] : null;
+    const pt = profId ? payoutProfileMap[profId + '_pt'] : null;
+    return {
+      ...pay,
+      beneficiaryName: pt?.nombre_comercial || prof?.nombre || 'Canillita',
+      contactInfo: prof?.email || prof?.telefono || ''
+    };
+  });
+
   totalLiquidadoCentavos = pastPayouts.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
 
   currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
@@ -152,7 +234,7 @@ try {
 						<table class="w-full text-left border-collapse text-xs">
 							<thead>
 								<tr class="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider h-[38px]">
-									<th class="px-4 py-2">Canillita / Titular</th>
+									<th class="px-4 py-2">Canillita / Comercio</th>
 									<th class="px-4 py-2 text-center">Código REF</th>
 									<th class="px-4 py-2 text-center">Contacto</th>
 									<th class="px-4 py-2 text-center">Órdenes</th>
@@ -164,8 +246,8 @@ try {
 								{pagedPendingBalances.map(p => (
 									<tr class="hover:bg-slate-50 transition-colors h-[42px]">
 										<td class="px-4 py-2">
-											<p class="font-bold text-slate-900">{p.name}</p>
-											<p class="text-[11px] text-slate-400 font-mono">{p.id}</p>
+											<p class="font-bold text-slate-900">{p.name} {p.commercial_name && p.commercial_name !== p.name ? `(${p.commercial_name})` : ''}</p>
+											<p class="text-[11px] text-slate-500 font-mono">CBU: {p.cbu}</p>
 										</td>
 										<td class="px-4 py-2 text-center">
 											<span class="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded text-[11px]">{p.code}</span>
@@ -184,7 +266,12 @@ try {
 												class="btn-liquidar-modal px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-all shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
 												data-profile={p.id}
 												data-name={p.name}
+												data-comercial={p.commercial_name}
 												data-balance={p.balance}
+												data-cbu={p.cbu}
+												data-alias={p.alias}
+												data-banco={p.banco}
+												data-titular={p.titular}
 												disabled={p.balance <= 0}
 											>
 												Liquidar
@@ -220,6 +307,7 @@ try {
 							<thead>
 								<tr class="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider h-[38px]">
 									<th class="px-4 py-2">Fecha</th>
+									<th class="px-4 py-2">Beneficiario</th>
 									<th class="px-4 py-2">Comprobante #</th>
 									<th class="px-4 py-2 text-center">Período</th>
 									<th class="px-4 py-2 text-center">Método</th>
@@ -232,6 +320,10 @@ try {
 									<tr class="hover:bg-slate-50 transition-colors h-[42px]">
 										<td class="px-4 py-2 text-slate-700 font-medium">
 											{new Date(pay.$createdAt).toLocaleString('es-AR')}
+										</td>
+										<td class="px-4 py-2 font-bold text-slate-900">
+											{pay.beneficiaryName}
+											{pay.contactInfo && <span class="block text-[10px] font-normal text-slate-400">{pay.contactInfo}</span>}
 										</td>
 										<td class="px-4 py-2 font-mono text-slate-900 font-bold">
 											{pay.comprobante || pay.$id.substring(0,10)}
@@ -279,12 +371,24 @@ try {
 				<input type="hidden" id="payout-balance-val" />
 				<input type="hidden" id="payout-idempotency" />
 
-				<div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
-					<p class="text-xs text-slate-500 font-medium">Canillita Beneficiario:</p>
-					<p id="payout-target-name" class="text-base font-bold text-slate-900"></p>
-					
-					<p class="text-xs text-slate-500 font-medium mt-3">Monto Total a Liquidar:</p>
-					<p id="payout-target-monto" class="text-2xl font-black text-emerald-600"></p>
+				<div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-3">
+					<div>
+						<p class="text-xs text-slate-500 font-medium">Canillita Beneficiario:</p>
+						<p id="payout-target-name" class="text-base font-bold text-slate-900"></p>
+					</div>
+
+					<div class="pt-2 border-t border-slate-200 text-xs space-y-1">
+						<p class="font-bold text-slate-700">Datos Bancarios para Transferencia:</p>
+						<p class="text-slate-600"><span class="font-semibold text-slate-800">Titular:</span> <span id="payout-target-titular" class="font-medium text-slate-900"></span></p>
+						<p class="text-slate-600"><span class="font-semibold text-slate-800">CBU / CVU:</span> <span id="payout-target-cbu" class="select-all font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded"></span></p>
+						<p class="text-slate-600"><span class="font-semibold text-slate-800">Alias:</span> <span id="payout-target-alias" class="select-all font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded"></span></p>
+						<p class="text-slate-600"><span class="font-semibold text-slate-800">Banco:</span> <span id="payout-target-banco" class="font-medium text-slate-900"></span></p>
+					</div>
+
+					<div class="pt-2 border-t border-slate-200">
+						<p class="text-xs text-slate-500 font-medium">Monto Total a Liquidar:</p>
+						<p id="payout-target-monto" class="text-2xl font-black text-emerald-600"></p>
+					</div>
 				</div>
 
 				<div>
@@ -316,6 +420,11 @@ try {
 		const formPayout = document.getElementById('form-payout') as HTMLFormElement;
 		const targetName = document.getElementById('payout-target-name')!;
 		const targetMonto = document.getElementById('payout-target-monto')!;
+		const targetTitular = document.getElementById('payout-target-titular')!;
+		const targetCbu = document.getElementById('payout-target-cbu')!;
+		const targetAlias = document.getElementById('payout-target-alias')!;
+		const targetBanco = document.getElementById('payout-target-banco')!;
+
 		const inputProfile = document.getElementById('payout-profile-id') as HTMLInputElement;
 		const inputBalance = document.getElementById('payout-balance-val') as HTMLInputElement;
 		const inputIdempotency = document.getElementById('payout-idempotency') as HTMLInputElement;
@@ -329,7 +438,12 @@ try {
 				const el = e.currentTarget as HTMLElement;
 				const profileId = el.dataset.profile || '';
 				const name = el.dataset.name || 'Canillita';
+				const comercial = el.dataset.comercial || '';
 				const balance = parseInt(el.dataset.balance || '0', 10);
+				const cbu = el.dataset.cbu || 'No informado';
+				const alias = el.dataset.alias || 'No informado';
+				const banco = el.dataset.banco || 'No especificado';
+				const titular = el.dataset.titular || name;
 
 				if (balance <= 0) {
 					alert('No se puede liquidar un saldo en $0.00.');
@@ -338,9 +452,14 @@ try {
 
 				inputProfile.value = profileId;
 				inputBalance.value = balance.toString();
-				targetName.textContent = name;
+				targetName.textContent = comercial && comercial !== name ? `${name} (${comercial})` : name;
 				targetMonto.textContent = formateador.format(balance / 100);
 				
+				if (targetTitular) targetTitular.textContent = titular;
+				if (targetCbu) targetCbu.textContent = cbu;
+				if (targetAlias) targetAlias.textContent = alias;
+				if (targetBanco) targetBanco.textContent = banco;
+
 				// Generate unique idempotency key
 				inputIdempotency.value = `IDEMP-${profileId}-${balance}-${Date.now()}`;
 				inputComprobante.value = `TR-${Math.floor(100000 + Math.random() * 900000)}`;

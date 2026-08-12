@@ -31,6 +31,7 @@ export interface SiteSettings {
     mp_public_key: string;
     mp_access_token: string;
     mp_enabled: boolean;
+    transferencia_enabled: boolean;
 
     notify_email_order_created: boolean;
     notify_email_order_ready: boolean;
@@ -73,6 +74,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     mp_public_key: 'APP_USR-7890123456789-TEST',
     mp_access_token: 'APP_USR-1234567890123-TEST',
     mp_enabled: true,
+    transferencia_enabled: true,
 
     notify_email_order_created: true,
     notify_email_order_ready: true,
@@ -125,6 +127,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
             mp_public_key: settingsMap.mp_public_key || DEFAULT_SETTINGS.mp_public_key,
             mp_access_token: settingsMap.mp_access_token || DEFAULT_SETTINGS.mp_access_token,
             mp_enabled: settingsMap.mp_enabled !== undefined ? settingsMap.mp_enabled === 'true' : DEFAULT_SETTINGS.mp_enabled,
+            transferencia_enabled: settingsMap.transferencia_enabled !== undefined ? settingsMap.transferencia_enabled === 'true' : DEFAULT_SETTINGS.transferencia_enabled,
 
             notify_email_order_created: settingsMap.notify_email_order_created !== undefined ? settingsMap.notify_email_order_created === 'true' : DEFAULT_SETTINGS.notify_email_order_created,
             notify_email_order_ready: settingsMap.notify_email_order_ready !== undefined ? settingsMap.notify_email_order_ready === 'true' : DEFAULT_SETTINGS.notify_email_order_ready,
