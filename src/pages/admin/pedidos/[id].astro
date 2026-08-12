@@ -2,6 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
+import { ETIQUETAS, type EstadoPedido } from '../../../lib/orderStates';
 
 export const prerender = false;
 
@@ -9,6 +10,7 @@ const { id } = Astro.params;
 const { databases } = createAdminClient();
 
 let order = null;
+let customer: any = null;
 let orderItems = [];
 let allProducts = [];
 
@@ -57,18 +59,45 @@ const totalUnidades = orderItems.reduce((acc, curr) => acc + (curr.cantidad || 1
 // Timeline items parsing or mock history
 let timelineEvents = [];
 try {
-	if (order.historial) {
-		timelineEvents = typeof order.historial === 'string' ? JSON.parse(order.historial) : order.historial;
+	// customer_id se guarda como string, así que hay que resolver el perfil:
+	// leer order.customer_id?.nombre daba siempre undefined y la ficha caía a
+	// datos de relleno con el nombre y los mails de otras personas.
+	const customerId = typeof order.customer_id === 'string' ? order.customer_id : order.customer_id?.$id;
+	if (customerId) {
+		try {
+			customer = await databases.getDocument('urbanpoint', 'profiles', customerId);
+		} catch (e) {
+			console.warn(`No se pudo resolver el cliente ${customerId} del pedido ${id}:`, e);
+		}
+	}
+
+	// Historial real de la orden (order_events), no eventos inventados.
+	try {
+		const eventsRes = await databases.listDocuments('urbanpoint', 'order_events', [
+			Query.equal('order_id', id as string),
+			Query.orderDesc('$createdAt'),
+			Query.limit(50)
+		]);
+		timelineEvents = eventsRes.documents.map((ev: any) => ({
+			tipo: 'Cambio de estado',
+			fecha: new Date(ev.$createdAt).toLocaleString('es-AR', {
+				day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+			}),
+			detalle: `${ETIQUETAS[ev.de_estado as EstadoPedido] || ev.de_estado} → ${ETIQUETAS[ev.a_estado as EstadoPedido] || ev.a_estado}`,
+			usuario: ev.motivo || ''
+		}));
+	} catch (e) {
+		console.warn(`No se pudo leer el historial del pedido ${id}:`, e);
 	}
 } catch (e) {
 	timelineEvents = [];
 }
 
-if (!Array.isArray(timelineEvents) || timelineEvents.length === 0) {
-	timelineEvents = [
-		{ tipo: 'Estado cambiado', fecha: 'mar 12:58', detalle: 'Nuevo → Confirmado', usuario: 'Ventalista' },
-		{ tipo: 'Estado cambiado', fecha: 'mar 12:58', detalle: 'Confirmado → Preparado', usuario: 'Ventalista' }
-	];
+// Sin eventos registrados la línea de tiempo queda vacía. Antes se rellenaba
+// con dos eventos inventados ("Ventalista"), que se mostraban como si fueran
+// historial real de este pedido.
+if (!Array.isArray(timelineEvents)) {
+	timelineEvents = [];
 }
 
 const isPaid = order.estado === 'pagado' || order.estado === 'entregado';
@@ -99,7 +128,7 @@ const isPaid = order.estado === 'pagado' || order.estado === 'entregado';
 					</span>
 				</div>
 				<p class="text-xs text-slate-400 font-medium mt-1">
-					20 de julio, 2026 a las 16:44 &bull; {orderItems.length} artículos &bull; {totalUnidades} unidades &bull; <strong class="text-slate-900">{formateador.format((order.total || 0) / 100)}</strong>
+					{new Date(order.$createdAt).toLocaleString('es-AR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} &bull; {orderItems.length} artículos &bull; {totalUnidades} unidades &bull; <strong class="text-slate-900">{formateador.format((order.total || 0) / 100)}</strong>
 				</p>
 			</div>
 
@@ -302,6 +331,9 @@ const isPaid = order.estado === 'pagado' || order.estado === 'entregado';
 					</div>
 
 					<div class="pt-4 border-t border-slate-100 space-y-4" id="timeline-list">
+						{timelineEvents.length === 0 && (
+							<p class="text-xs text-slate-400 font-medium">Todavía no hay movimientos registrados.</p>
+						)}
 						{timelineEvents.map(ev => (
 							<div class="flex items-start gap-3">
 								<div class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
@@ -313,7 +345,9 @@ const isPaid = order.estado === 'pagado' || order.estado === 'entregado';
 										<span class="text-[10px] text-slate-400">{ev.fecha}</span>
 									</div>
 									<p class="text-xs text-slate-600 font-medium mt-0.5">{ev.detalle}</p>
-									<p class="text-[10px] text-slate-400 mt-0.5">&amp; {ev.usuario || 'Ventalista'}</p>
+									{ev.usuario && (
+										<p class="text-[10px] text-slate-400 mt-0.5">{ev.usuario}</p>
+									)}
 								</div>
 							</div>
 						))}
@@ -330,22 +364,26 @@ const isPaid = order.estado === 'pagado' || order.estado === 'entregado';
 					<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Cliente</h3>
 					<div class="flex items-center gap-3">
 						<div class="w-10 h-10 rounded-full bg-purple-100 text-purple-700 font-bold text-sm flex items-center justify-center">
-							{order.customer_id?.nombre?.substring(0, 1) || 'B'}
+							{customer?.nombre?.substring(0, 1)?.toUpperCase() || '?'}
 						</div>
 						<div>
-							<p class="font-bold text-slate-900 text-sm">{order.customer_id?.nombre || 'Beyla'}</p>
-							<p class="text-[11px] text-slate-400 font-medium">Vendedor: {order.customer_id?.email || 'pmamone1@gmail.com'}</p>
+							<p class="font-bold text-slate-900 text-sm">{customer?.nombre || 'Compra como invitado'}</p>
+							{customer?.telefono && (
+								<p class="text-[11px] text-slate-400 font-medium">{customer.telefono}</p>
+							)}
 						</div>
 					</div>
-					<div class="text-xs text-slate-500 font-medium border-t border-slate-100 pt-3">
-						<p>{order.customer_id?.email || 'puntodiario.ar@gmail.com'}</p>
-					</div>
+					{customer?.email && (
+						<div class="text-xs text-slate-500 font-medium border-t border-slate-100 pt-3">
+							<p>{customer.email}</p>
+						</div>
+					)}
 				</div>
 
 				{/* Card Dirección de Envío */}
 				<div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-2">
 					<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Dirección de envío</h3>
-					<p class="font-bold text-slate-900 text-sm">{order.direccion_envio || 'Thames 2276'}</p>
+					<p class="font-bold text-slate-900 text-sm">{order.direccion_envio || 'Retiro en punto — sin envío a domicilio'}</p>
 				</div>
 
 				{/* Card Resumen */}
