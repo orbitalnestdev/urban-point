@@ -2,7 +2,7 @@ import { defineAction } from 'astro:actions';
 import { z } from 'astro:schema';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { Client, Databases, ID, Users, Query, Account } from 'node-appwrite';
-import { getClientProfile } from '../lib/server/auth';
+import { getClientProfile, requireRole } from '../lib/server/auth';
 
 
 import { resolverComisiones, cancelarOrdenYRestaurarStock } from '../lib/commissions';
@@ -112,6 +112,8 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
+				requireRole(ctx, 'admin');
+
 				const app = await db.getDocument('urbanpoint', 'canillita_applications', input.applicationId);
 				if (app.estado !== 'solicitado') throw new Error('La solicitud ya fue procesada.');
 
@@ -190,8 +192,10 @@ export const server = {
 			applicationId: z.string(),
 			motivo: z.string()
 		}),
-		handler: async (input) => {
+		handler: async (input, ctx) => {
 			try {
+				requireRole(ctx, 'admin');
+
 				await db.updateDocument('urbanpoint', 'canillita_applications', input.applicationId, {
 					estado: 'rechazado',
 					motivo_rechazo: input.motivo
@@ -905,8 +909,10 @@ export const server = {
 			canillitaId: z.string(),
 			productId: z.string()
 		}),
-		handler: async (input) => {
+		handler: async (input, ctx) => {
 			try {
+				requireRole(ctx, 'admin');
+
 				const product = await db.getDocument('urbanpoint', 'products', input.productId);
 				const categoryId = product.categoria_id ? (typeof product.categoria_id === 'string' ? product.categoria_id : product.categoria_id.$id) : null;
 
@@ -1148,6 +1154,8 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
+				requireRole(ctx, 'admin', 'gestion');
+
 				// 1. Fetch current order items
 				const currentItemsRes = await db.listDocuments('urbanpoint', 'order_items', [
 					Query.equal('order_id', input.orderId)
@@ -1207,6 +1215,8 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
+				requireRole(ctx, 'admin', 'gestion');
+
 				const slug = input.nombre
 					.toLowerCase()
 					.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -1264,6 +1274,8 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
+				requireRole(ctx, 'admin', 'gestion');
+
 				const finalState = input.estado === 'inactivo' ? 'pausado' : input.estado;
 				const updateData: any = {
 					nombre: input.nombre,
@@ -1312,6 +1324,8 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
+				requireRole(ctx, 'admin', 'gestion');
+
 				for (const id of input.ids) {
 					if (input.accion === 'eliminar') {
 						await db.deleteDocument('urbanpoint', 'products', id);
@@ -1341,6 +1355,8 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
+				requireRole(ctx, 'admin', 'gestion');
+
 				await db.deleteDocument('urbanpoint', 'products', input.id);
 				return { success: true };
 			} catch (error: any) {
@@ -1356,6 +1372,8 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
+				requireRole(ctx, 'admin', 'gestion');
+
 				const original = await db.getDocument('urbanpoint', 'products', input.id);
 				const newSku = 'SKU-' + Math.floor(100000 + Math.random() * 900000);
 				const newSlug = original.slug + '-copia-' + Math.floor(Math.random() * 1000);
