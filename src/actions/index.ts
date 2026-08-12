@@ -775,14 +775,20 @@ export const server = {
 				const mp = new MercadoPagoConfig({ accessToken: mpAccessToken, options: { timeout: 5000 } });
 				const preference = new Preference(mp);
 
+				const baseUrl = (process.env.PUBLIC_SITE_URL || ctx.url.origin).replace(/\/+$/, '');
+
 				const result = await preference.create({
 					body: {
 						items: prefItems,
 						external_reference: orderDoc.$id,
+						// El host sale del request, con PUBLIC_SITE_URL como
+						// override. Estaba fijo en http://localhost:4321, así que
+						// en producción Mercado Pago devolvía al comprador a una
+						// dirección inexistente después de pagar.
 						back_urls: {
-							success: 'http://localhost:4321/checkout/success',
-							failure: 'http://localhost:4321/checkout/failure',
-							pending: 'http://localhost:4321/checkout/pending'
+							success: `${baseUrl}/checkout/success?order_id=${orderDoc.$id}`,
+							failure: `${baseUrl}/checkout/failure?order_id=${orderDoc.$id}`,
+							pending: `${baseUrl}/checkout/pending?order_id=${orderDoc.$id}`
 						},
 						auto_return: 'approved'
 					}

@@ -3,7 +3,47 @@ import { getSiteSettings } from '../lib/server/settings';
 
 const settings = await getSiteSettings();
 const whatsappNumber = (settings.whatsapp_number || '').replace(/\D/g, '');
-const isEnabled = settings.whatsapp_enabled && whatsappNumber.length > 0;
+
+/**
+ * Horario de atención. [B-03]
+ *
+ * whatsapp_schedule_start y whatsapp_schedule_end se editan y se guardan desde
+ * /admin/configuracion, pero el componente no los leía: el botón se mostraba
+ * las 24 horas y la configuración no tenía ningún efecto.
+ */
+function dentroDelHorario(desde?: string, hasta?: string): boolean {
+	if (!desde || !hasta) return true;
+
+	const aMinutos = (hhmm: string) => {
+		const [h, m] = hhmm.split(':').map(Number);
+		if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+		return h * 60 + m;
+	};
+
+	const inicio = aMinutos(desde);
+	const fin = aMinutos(hasta);
+	if (inicio === null || fin === null) return true;
+
+	// Hora local del negocio, no la del servidor.
+	const ahoraStr = new Date().toLocaleTimeString('es-AR', {
+		timeZone: settings.timezone || 'America/Argentina/Buenos_Aires',
+		hour12: false,
+		hour: '2-digit',
+		minute: '2-digit'
+	});
+	const ahora = aMinutos(ahoraStr);
+	if (ahora === null) return true;
+
+	// Contempla franjas que cruzan la medianoche (ej. 20:00 a 02:00).
+	return inicio <= fin ? ahora >= inicio && ahora < fin : ahora >= inicio || ahora < fin;
+}
+
+const enHorario = dentroDelHorario(
+	settings.whatsapp_schedule_start,
+	settings.whatsapp_schedule_end
+);
+
+const isEnabled = settings.whatsapp_enabled && whatsappNumber.length > 0 && enHorario;
 const posClass = settings.whatsapp_position === 'left' ? 'left-6' : 'right-6';
 const targetUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(settings.whatsapp_message || '¡Hola! Quisiera hacer una consulta.')}`;
 ---
