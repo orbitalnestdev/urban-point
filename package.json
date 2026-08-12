@@ -10,7 +10,9 @@
     "build": "astro check --minimumFailingSeverity error && astro build",
     "start": "node ./dist/server/entry.mjs",
     "preview": "astro preview",
-    "test": "node --test tests/*.test.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:legacy": "node --test tests/*.test.ts",
     "astro": "astro"
   },
   "dependencies": {
@@ -39,6 +41,7 @@
     "@astrojs/check": "^0.9.4",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^22.10.10",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.7"
   }
 }
