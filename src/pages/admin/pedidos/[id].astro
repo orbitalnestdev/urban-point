@@ -608,9 +608,11 @@ const isPaid = order.estado === 'pagado' || order.estado === 'entregado';
 		const payload = {
 			orderId,
 			items: orderItems.map((i: any) => ({
-				product_id: i.product_id,
+				product_id: typeof i.product_id === 'string' ? i.product_id : (i.product_id?.$id || null),
 				cantidad: i.cantidad,
-				precio_unitario_centavos: i.precio_unitario_centavos || i.precio_unitario || 0
+				precio_unitario_centavos: i.precio_unitario_centavos || i.precio_unitario || 0,
+				nombre_snapshot: i.nombre_snapshot || i.nombre || 'Producto',
+				sku_snapshot: i.sku_snapshot || i.sku || 'SKU-N/A'
 			}))
 		};
 

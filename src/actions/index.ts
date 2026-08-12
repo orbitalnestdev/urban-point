@@ -1189,9 +1189,11 @@ export const server = {
 		input: z.object({
 			orderId: z.string(),
 			items: z.array(z.object({
-				product_id: z.string(),
+				product_id: z.string().nullable().optional(),
 				cantidad: z.number().min(1),
-				precio_unitario_centavos: z.number().min(0)
+				precio_unitario_centavos: z.number().min(0),
+				nombre_snapshot: z.string().optional(),
+				sku_snapshot: z.string().optional()
 			}))
 		}),
 		handler: async (input, ctx) => {
@@ -1211,24 +1213,40 @@ export const server = {
 				// 3. Create new items and calculate total
 				let newSubtotal = 0;
 				for (const newItem of input.items) {
-					let prodSnapshot = { nombre: 'Producto', sku: 'SKU-N/A' };
-					try {
-						const prod = await db.getDocument('urbanpoint', 'products', newItem.product_id);
-						prodSnapshot = { nombre: prod.nombre, sku: prod.sku };
-					} catch(e) {}
+					let prodSnapshot = { 
+						nombre: newItem.nombre_snapshot || 'Producto', 
+						sku: newItem.sku_snapshot || 'SKU-N/A' 
+					};
+
+					const cleanProdId = newItem.product_id ? newItem.product_id.trim() : null;
+
+					if (cleanProdId) {
+						try {
+							const prod = await db.getDocument('urbanpoint', 'products', cleanProdId);
+							prodSnapshot = { 
+								nombre: prod.nombre || prodSnapshot.nombre, 
+								sku: prod.sku || prodSnapshot.sku 
+							};
+						} catch(e) {}
+					}
 
 					const subtotal_centavos = newItem.cantidad * newItem.precio_unitario_centavos;
 					newSubtotal += subtotal_centavos;
 
-					await db.createDocument('urbanpoint', 'order_items', ID.unique(), {
+					const docPayload: any = {
 						order_id: input.orderId,
-						product_id: newItem.product_id,
 						cantidad: newItem.cantidad,
 						precio_unitario: newItem.precio_unitario_centavos,
 						subtotal: subtotal_centavos,
 						nombre_snapshot: prodSnapshot.nombre,
 						sku_snapshot: prodSnapshot.sku
-					});
+					};
+
+					if (cleanProdId) {
+						docPayload.product_id = cleanProdId;
+					}
+
+					await db.createDocument('urbanpoint', 'order_items', ID.unique(), docPayload);
 				}
 
 				// 4. Update order total
