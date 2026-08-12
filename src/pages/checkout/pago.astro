@@ -120,7 +120,6 @@ import Logo from '../../components/Logo.astro';
   <script>
     import { cartItems, checkoutData, referralCode } from '../../store/cart';
     import { actions } from 'astro:actions';
-    import { Client, Databases } from 'appwrite';
 
     const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 
@@ -190,13 +189,13 @@ import Logo from '../../components/Logo.astro';
             }
 
             try {
-                const client = new Client()
-                    .setEndpoint('https://aw.orbitalnest.net/v1')
-                    .setProject('6a6a5321001439f06817');
-                const databases = new Databases(client);
+                // Se consulta al backend propio, que devuelve solo campos públicos.
+                // La colección pickup_points no se expone al SDK del navegador
+                // porque contiene CBU, condición fiscal y profile_id.
+                const res = await fetch(`/api/pickup-points?id=${encodeURIComponent(currentCheckout.pickupPointId)}`);
+                if (!res.ok) throw new Error('Punto de retiro no disponible');
+                const point = await res.json();
 
-                const point = await databases.getDocument('urbanpoint', 'pickup_points', currentCheckout.pickupPointId);
-                
                 if (pointDetailsEl) {
                     pointDetailsEl.innerHTML = `
                         <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-[#2D5A27] shrink-0 border border-[#D4E5D6] shadow-sm">
