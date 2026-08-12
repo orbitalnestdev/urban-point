@@ -3,6 +3,11 @@ import { z } from 'astro:schema';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { Client, Databases, ID, Users, Query, Account } from 'node-appwrite';
 import { getClientProfile, requireRole } from '../lib/server/auth';
+import {
+	normalizarEstadoPedido,
+	esTransicionValida,
+	type EstadoPedido
+} from '../lib/orderStates';
 
 
 import { resolverComisiones, cancelarOrdenYRestaurarStock } from '../lib/commissions';
@@ -32,6 +37,32 @@ const users = new Proxy({} as Users, {
 		return typeof val === 'function' ? val.bind(instance) : val;
 	}
 });
+
+/**
+ * Deja rastro de cada cambio de estado. Antes sólo deliverOrder registraba
+ * eventos, así que las transiciones hechas desde el admin no quedaban
+ * auditadas y el timeline de la ficha mostraba datos mock.
+ */
+async function registrarEventoOrden(
+	orderId: string,
+	deEstado: string,
+	aEstado: string,
+	actorProfileId: string,
+	motivo?: string
+) {
+	try {
+		await db.createDocument('urbanpoint', 'order_events', ID.unique(), {
+			order_id: orderId,
+			de_estado: deEstado,
+			a_estado: aEstado,
+			actor_id: actorProfileId,
+			motivo: motivo || `Cambio de estado: ${deEstado} -> ${aEstado}`
+		});
+	} catch (e) {
+		// La auditoría no debe tumbar la operación, pero sí tiene que verse.
+		console.error(`No se pudo registrar el evento de la orden ${orderId}:`, e);
+	}
+}
 
 async function generateUniqueReferralCode(nombre: string, apellido: string): Promise<string> {
 	const initial = nombre.trim().substring(0, 1).toUpperCase().replace(/[^A-Z]/g, 'X') || 'C';
@@ -1104,29 +1135,32 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
-				const stateMap: Record<string, string> = {
-					nuevo: 'pendiente_pago',
-					pendiente: 'pendiente_pago',
-					pendiente_pago: 'pendiente_pago',
-					confirmado: 'pagado',
-					pagado: 'pagado',
-					preparado: 'preparando',
-					preparando: 'preparando',
-					enviado: 'despachado',
-					en_camino: 'despachado',
-					despachado: 'despachado',
-					entregado: 'entregado',
-					retirado: 'entregado',
-					cancelado: 'cancelado'
-				};
+				const actor = requireRole(ctx, 'admin', 'gestion');
 
-				const targetState = stateMap[input.nuevoEstado] || input.nuevoEstado;
+				const targetState = normalizarEstadoPedido(input.nuevoEstado);
+				if (!targetState) {
+					throw new Error(`Estado desconocido: "${input.nuevoEstado}".`);
+				}
+
+				const order = await db.getDocument('urbanpoint', 'orders', input.orderId);
+				const estadoActual = order.estado as EstadoPedido;
+
+				if (estadoActual === targetState) {
+					return { success: true, sinCambios: true };
+				}
+
+				if (!esTransicionValida(estadoActual, targetState)) {
+					throw new Error(
+						`No se puede pasar de "${estadoActual}" a "${targetState}".`
+					);
+				}
 
 				if (targetState === 'cancelado') {
 					await cancelarOrdenYRestaurarStock(input.orderId);
 				} else if (targetState === 'pagado') {
 					await db.updateDocument('urbanpoint', 'orders', input.orderId, {
-						estado: 'pagado'
+						estado: 'pagado',
+						paid_at: new Date().toISOString()
 					});
 					await resolverComisiones(input.orderId);
 				} else {
@@ -1134,6 +1168,8 @@ export const server = {
 						estado: targetState
 					});
 				}
+
+				await registrarEventoOrden(input.orderId, estadoActual, targetState, actor.profileId);
 
 				return { success: true };
 			} catch (error: any) {
