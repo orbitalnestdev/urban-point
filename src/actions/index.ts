@@ -19,6 +19,7 @@ import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones } 
 
 import { createAdminClient } from '../lib/server/appwrite';
 import { env } from '../lib/server/env';
+import { obtenerTokenVendedorValido } from '../lib/server/mercadopagoOAuth';
 
 const client = new Proxy({} as Client, {
 	get(_target, prop: keyof Client) {
@@ -767,7 +768,16 @@ export const server = {
 					return { success: true, init_point: `/checkout/success?order_id=${orderDoc.$id}` };
 				}
 
-				const mpAccessToken = env('MP_ACCESS_TOKEN');
+				let mpAccessToken: string | null = null;
+
+				if (finalPickupPointId) {
+					mpAccessToken = await obtenerTokenVendedorValido(finalPickupPointId);
+				}
+
+				if (!mpAccessToken) {
+					mpAccessToken = env('MP_ACCESS_TOKEN');
+				}
+
 				if (!mpAccessToken) {
 					// Fallback to fake checkout if no token
 					return { success: true, init_point: 'https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=TEST-123' };
@@ -803,6 +813,49 @@ export const server = {
 				return { success: true, init_point: result.sandbox_init_point || result.init_point };
 			} catch (error: any) {
 				console.error("Checkout Error:", error);
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	disconnectMercadoPago: defineAction({
+		accept: 'json',
+		input: z.object({
+			pickupPointId: z.string().optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || (ctx.locals.user.role !== 'canillita' && ctx.locals.user.role !== 'admin')) {
+					throw new Error('No autorizado');
+				}
+
+				let pointId = input.pickupPointId;
+				if (!pointId) {
+					const points = await db.listDocuments('urbanpoint', 'pickup_points', [
+						Query.equal('profile_id', ctx.locals.user.profileId),
+						Query.limit(1)
+					]);
+					if (points.documents.length > 0) {
+						pointId = points.documents[0].$id;
+					}
+				}
+
+				if (!pointId) {
+					throw new Error('No se encontró el punto de retiro a desvincular.');
+				}
+
+				await db.updateDocument('urbanpoint', 'pickup_points', pointId, {
+					mp_user_id: '',
+					mp_access_token: '',
+					mp_refresh_token: '',
+					mp_public_key: '',
+					mp_token_expires_at: '',
+					mp_connected_at: '',
+					mp_status: 'desconectado'
+				});
+
+				return { success: true };
+			} catch (error: any) {
 				return { success: false, error: error.message };
 			}
 		}

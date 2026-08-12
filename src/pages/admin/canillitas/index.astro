@@ -3,6 +3,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { Copy, QrCode } from 'lucide-react';
+import Pagination from '../../../components/admin/Pagination.astro';
 
 export const prerender = false;
 
@@ -35,9 +36,35 @@ try {
 	console.error(e);
 }
 
-const activeCount = puntos.filter(p => p.estado === 'activo').length;
-const pendingCount = puntos.filter(p => p.estado === 'pendiente').length;
-const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
+const searchQuery = Astro.url.searchParams.get('q') || '';
+const estadoFilter = Astro.url.searchParams.get('estado') || 'todos';
+
+let allPuntos = [...puntos];
+let filteredPuntos = [...allPuntos];
+
+if (estadoFilter !== 'todos') {
+	filteredPuntos = filteredPuntos.filter(p => p.estado === estadoFilter);
+}
+if (searchQuery.trim()) {
+	const q = searchQuery.toLowerCase();
+	filteredPuntos = filteredPuntos.filter(p =>
+		p.nombre_comercial?.toLowerCase().includes(q) ||
+		p.direccion?.toLowerCase().includes(q) ||
+		p.slug?.toLowerCase().includes(q) ||
+		p.localidad?.toLowerCase().includes(q)
+	);
+}
+
+const currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
+const pageSize = 25;
+const totalFiltered = filteredPuntos.length;
+const totalPages = Math.ceil(totalFiltered / pageSize) || 1;
+const pagedPuntos = filteredPuntos.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+puntos = pagedPuntos;
+
+const activeCount = allPuntos.filter(p => p.estado === 'activo').length;
+const pendingCount = allPuntos.filter(p => p.estado === 'pendiente').length;
+const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 ---
 
 <AdminLayout title="Red de Retiro y Canillitas">
@@ -208,9 +235,16 @@ const suspendedCount = puntos.filter(p => p.estado === 'suspendido').length;
 							<tr>
 								<td colspan="7" class="p-8 text-center text-slate-500">No hay puntos de retiro registrados.</td>
 							</tr>
-						)}
-					</tbody>
 				</table>
+
+				<Pagination 
+					currentPage={currentPage} 
+					totalPages={totalPages} 
+					totalItems={totalFiltered} 
+					pageSize={pageSize} 
+					searchParams={Astro.url.searchParams} 
+					baseUrl="/admin/canillitas" 
+				/>
 			</div>
 		</div>
 	</main>

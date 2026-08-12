@@ -1,0 +1,89 @@
+---
+interface Props {
+	currentPage: number;
+	totalPages: number;
+	totalItems: number;
+	pageSize: number;
+	searchParams: URLSearchParams;
+	baseUrl: string;
+}
+
+const { currentPage, totalPages, totalItems, pageSize, searchParams, baseUrl } = Astro.props;
+
+if (totalPages <= 1) return null;
+
+const startItem = Math.min((currentPage - 1) * pageSize + 1, totalItems);
+const endItem = Math.min(currentPage * pageSize, totalItems);
+
+function createPageUrl(page: number): string {
+	const params = new URLSearchParams(searchParams.toString());
+	params.set('page', page.toString());
+	return `${baseUrl}?${params.toString()}`;
+}
+
+// Generate array of page numbers to show
+const pages: number[] = [];
+const delta = 2; // number of pages around current page
+for (let i = 1; i <= totalPages; i++) {
+	if (i === 1 || i === totalPages || (i >= currentPage - delta && i <= currentPage + delta)) {
+		pages.push(i);
+	}
+}
+---
+
+<div class="px-6 py-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 font-sans text-xs">
+	<div class="text-slate-500 font-medium">
+		Mostrando <strong class="text-slate-900">{startItem}-{endItem}</strong> de <strong class="text-slate-900">{totalItems}</strong> registros &bull; Página <strong class="text-slate-900">{currentPage}</strong> de {totalPages}
+	</div>
+
+	<div class="flex items-center gap-1.5 flex-wrap justify-center">
+		{/* Botón Anterior */}
+		{currentPage > 1 ? (
+			<a
+				href={createPageUrl(currentPage - 1)}
+				class="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-xl transition-colors shadow-xs flex items-center gap-1"
+			>
+				&laquo; Anterior
+			</a>
+		) : (
+			<span class="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-300 font-bold rounded-xl cursor-not-allowed">
+				&laquo; Anterior
+			</span>
+		)}
+
+		{/* Números de Página */}
+		{pages.map((p, idx) => {
+			const prevPage = pages[idx - 1];
+			const showEllipsis = prevPage && p - prevPage > 1;
+			return (
+				<>
+					{showEllipsis && <span class="px-2 py-1 text-slate-400 font-bold">...</span>}
+					<a
+						href={createPageUrl(p)}
+						class={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+							p === currentPage
+								? 'bg-slate-900 text-white shadow-xs'
+								: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+						}`}
+					>
+						{p}
+					</a>
+				</>
+			);
+		})}
+
+		{/* Botón Siguiente */}
+		{currentPage < totalPages ? (
+			<a
+				href={createPageUrl(currentPage + 1)}
+				class="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-xl transition-colors shadow-xs flex items-center gap-1"
+			>
+				Siguiente &raquo;
+			</a>
+		) : (
+			<span class="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-300 font-bold rounded-xl cursor-not-allowed">
+				Siguiente &raquo;
+			</span>
+		)}
+	</div>
+</div>

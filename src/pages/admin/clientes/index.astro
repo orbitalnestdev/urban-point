@@ -3,6 +3,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { Users, RefreshCw, CreditCard } from 'lucide-react';
+import Pagination from '../../../components/admin/Pagination.astro';
 
 export const prerender = false;
 
@@ -15,35 +16,49 @@ let allProfiles = [];
 let totalGastadoGeneralCentavos = 0;
 let clientesRecurrentesCount = 0;
 
+async function fetchAllDocs(coll: string, baseQueries: any[] = []) {
+	let docs: any[] = [];
+	let offset = 0;
+	while (true) {
+		const res = await databases.listDocuments('urbanpoint', coll, [
+			...baseQueries,
+			Query.limit(100),
+			Query.offset(offset)
+		]);
+		docs.push(...res.documents);
+		if (res.documents.length < 100) break;
+		offset += 100;
+	}
+	return docs;
+}
+
+let currentPage = 1;
+let pageSize = 25;
+let totalFiltered = 0;
+let totalPages = 1;
+
 try {
-	const res = await databases.listDocuments('urbanpoint', 'profiles', [
-		Query.notEqual('role', 'admin'),
-		Query.orderDesc('$createdAt'),
-		Query.limit(200)
+	const [rawProfiles, rawOrders] = await Promise.all([
+		fetchAllDocs('profiles', [Query.notEqual('role', 'admin'), Query.orderDesc('$createdAt')]),
+		fetchAllDocs('orders')
 	]);
-	
-	const rawProfiles = res.documents;
 
-	allProfiles = await Promise.all(rawProfiles.map(async (p) => {
-		let totalOrdersCount = 0;
-		let totalSpentCentavos = 0;
-		let lastOrderDate = null;
-		let referredBy = null;
+	const ordersByCustomer: Record<string, any[]> = {};
+	for (const o of rawOrders) {
+		if (o.customer_id) {
+			if (!ordersByCustomer[o.customer_id]) ordersByCustomer[o.customer_id] = [];
+			ordersByCustomer[o.customer_id].push(o);
+		}
+	}
 
-		try {
-			const ordersRes = await databases.listDocuments('urbanpoint', 'orders', [
-				Query.equal('customer_id', p.$id),
-				Query.limit(100)
-			]);
-			totalOrdersCount = ordersRes.documents.length;
-			totalSpentCentavos = ordersRes.documents
-				.filter(o => o.estado !== 'cancelado')
-				.reduce((acc, curr) => acc + (curr.total || 0), 0);
-			
-			if (ordersRes.documents.length > 0) {
-				lastOrderDate = ordersRes.documents[0].$createdAt;
-			}
-		} catch (e) {}
+	allProfiles = rawProfiles.map((p) => {
+		const customerOrders = ordersByCustomer[p.$id] || [];
+		const totalOrdersCount = customerOrders.length;
+		const totalSpentCentavos = customerOrders
+			.filter(o => o.estado !== 'cancelado')
+			.reduce((acc, curr) => acc + (curr.total || 0), 0);
+		
+		const lastOrderDate = customerOrders.length > 0 ? customerOrders[0].$createdAt : null;
 
 		return {
 			...p,
@@ -51,7 +66,7 @@ try {
 			totalSpentCentavos,
 			lastOrderDate
 		};
-	}));
+	});
 
 	const clientesOnly = allProfiles.filter(p => p.role === 'cliente');
 	totalGastadoGeneralCentavos = clientesOnly.reduce((acc, c) => acc + c.totalSpentCentavos, 0);
@@ -70,7 +85,11 @@ try {
 		);
 	}
 
-	clientes = filtered;
+	totalFiltered = filtered.length;
+	currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
+	totalPages = Math.ceil(totalFiltered / pageSize) || 1;
+	clientes = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
 } catch (e) {
 	console.error("Error loading clientes:", e);
 }
@@ -242,10 +261,17 @@ const gastoPromedioCentavos = totalClientesCount > 0 ? Math.round(totalGastadoGe
 								No se encontraron clientes registrados.
 							</td>
 						</tr>
-					)}
-				</tbody>
-			</table>
-		</div>
+				</table>
+
+				<Pagination 
+					currentPage={currentPage} 
+					totalPages={totalPages} 
+					totalItems={totalFiltered} 
+					pageSize={pageSize} 
+					searchParams={Astro.url.searchParams} 
+					baseUrl="/admin/clientes" 
+				/>
+			</div>
 
 	</main>
 </AdminLayout>

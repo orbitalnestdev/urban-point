@@ -3,6 +3,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { ShoppingCart, Clock, PackageCheck, CheckCircle2, Store, Truck } from 'lucide-react';
+import Pagination from '../../../components/admin/Pagination.astro';
 
 export const prerender = false;
 
@@ -75,9 +76,14 @@ try {
 			o.pickupPoint?.nombre_comercial?.toLowerCase().includes(q) ||
 			o.canillitaProfile?.nombre?.toLowerCase().includes(q)
 		);
-	}
-
 	orders = filtered;
+
+	const currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
+	const pageSize = 25;
+	const totalFiltered = filtered.length;
+	const totalPages = Math.ceil(totalFiltered / pageSize) || 1;
+	const pagedOrders = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+	orders = pagedOrders;
 
 } catch (e) {
 	console.error("Error loading orders page:", e);
@@ -354,8 +360,16 @@ const getStatusClass = (estado: string) => {
 								</td>
 							</tr>
 						)}
-					</tbody>
 				</table>
+
+				<Pagination 
+					currentPage={currentPage} 
+					totalPages={totalPages} 
+					totalItems={totalFiltered} 
+					pageSize={pageSize} 
+					searchParams={Astro.url.searchParams} 
+					baseUrl="/admin/pedidos" 
+				/>
 			</div>
 		</div>
 

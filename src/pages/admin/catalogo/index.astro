@@ -4,6 +4,7 @@ import NewProductModal from '../../../components/admin/NewProductModal.tsx';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { FileEdit, AlertTriangle, Image as ImageIcon, CheckCircle, Package, PauseCircle, DollarSign, ExternalLink, Check } from 'lucide-react';
+import Pagination from '../../../components/admin/Pagination.astro';
 
 export const prerender = false;
 
@@ -436,58 +437,14 @@ const paginationItems = filteredPages.map((p, index) => ({
 			</div>
 
 			{/* Componente de Paginación Optimizado - 30 por página */}
-			{totalPages > 1 && (
-				<div class="px-4 py-3 bg-slate-50 border-t border-slate-200 rounded-b-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-					<div class="text-xs text-slate-500 font-medium">
-						Mostrando <span class="font-bold text-slate-900">{totalFiltered > 0 ? startIndex + 1 : 0}</span> a <span class="font-bold text-slate-900">{endIndex}</span> de <span class="font-bold text-slate-900">{totalFiltered}</span> productos
-					</div>
-
-					<div class="flex items-center gap-1.5 overflow-x-auto">
-						{/* Botón Anterior */}
-						<a 
-							href={validPage > 1 ? getPageUrl(validPage - 1) : '#'} 
-							class={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
-								validPage > 1 
-									? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs' 
-									: 'bg-slate-100 text-slate-400 cursor-not-allowed pointer-events-none'
-							}`}
-						>
-							&larr; Anterior
-						</a>
-
-						{/* Números de página */}
-						{paginationItems.map((item) => (
-							<Fragment key={item.page}>
-								{item.showEllipsisBefore && (
-									<span class="px-1.5 py-1 text-slate-400 text-xs font-bold">...</span>
-								)}
-								<a 
-									href={getPageUrl(item.page)} 
-									class={`w-8 h-8 rounded-xl text-xs font-bold flex items-center justify-center transition-all ${
-										item.page === validPage 
-											? 'bg-slate-900 text-white shadow-sm' 
-											: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-									}`}
-								>
-									{item.page}
-								</a>
-							</Fragment>
-						))}
-
-						{/* Botón Siguiente */}
-						<a 
-							href={validPage < totalPages ? getPageUrl(validPage + 1) : '#'} 
-							class={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
-								validPage < totalPages 
-									? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs' 
-									: 'bg-slate-100 text-slate-400 cursor-not-allowed pointer-events-none'
-							}`}
-						>
-							Siguiente &rarr;
-						</a>
-					</div>
-				</div>
-			)}
+			<Pagination 
+				currentPage={validPage} 
+				totalPages={totalPages} 
+				totalItems={totalFiltered} 
+				pageSize={ITEMS_PER_PAGE} 
+				searchParams={Astro.url.searchParams} 
+				baseUrl="/admin/catalogo" 
+			/>
 		</div>
 
 		{/* Quick Edit Drawer Ampliado y Mejorado */}
