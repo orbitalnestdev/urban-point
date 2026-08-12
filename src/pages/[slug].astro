@@ -55,7 +55,7 @@ try {
     localidad: activeNode.localidad,
     horarios: activeNode.horarios,
     canillitaId: canillitaProfileId,
-    telefono: activeNode.telefono || '(11) 2478-5603'
+    telefono: activeNode.telefono || ''
   };
 
   // Set HTTP Cookie for 30 days session persistence by default
@@ -558,7 +558,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 				localidad: activeNode.localidad,
 				horarios: activeNode.horarios,
 				canillitaId: typeof activeNode.profile_id === 'string' ? activeNode.profile_id : activeNode.profile_id?.$id,
-				telefono: activeNode.telefono || '(11) 2478-5603'
+				telefono: activeNode.telefono || ''
 			})};
 			try {
 				localStorage.setItem('up_active_node', JSON.stringify(activeNode));

@@ -38,9 +38,10 @@ try {
     lat: p.lat,
     lng: p.lng,
     horarios: p.horarios,
-    telefono: p.telefono || '(11) 2478-5603',
-    condicion_fiscal: p.condicion_fiscal || '',
-    canillitaId: typeof p.profile_id === 'string' ? p.profile_id : p.profile_id?.$id
+    telefono: p.telefono || ''
+    // No se serializan profile_id ni condicion_fiscal: este JSON se embebe en
+    // el HTML de una página pública. profile_id es la clave que enlaza con
+    // commission_ledger y payouts, y ninguno de los dos se usa en el cliente.
   }));
 
   provincias = Array.from(new Set(pickupPoints.map(p => p.provincia))).sort();
