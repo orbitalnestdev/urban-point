@@ -1,6 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { Client, Account, Query } from 'node-appwrite';
 import { createAdminClient } from './lib/server/appwrite';
+import { REF_COOKIE_NAME, REF_COOKIE_MAX_AGE } from './lib/nodeSession';
 
 const DEFAULT_ENDPOINT = 'https://aw.orbitalnest.net/v1';
 const DEFAULT_PROJECT_ID = '6a6a5321001439f06817';
@@ -8,13 +9,26 @@ const DEFAULT_PROJECT_ID = '6a6a5321001439f06817';
 export const onRequest = defineMiddleware(async (context, next) => {
 	const { pathname } = context.url;
 
-	// Bloque 1 — Rastreo de Código de Referido en URL (?ref=CODIGO)
+	// Atribución por código de referido (?ref=CODIGO).
+	//
+	// POLÍTICA: last-touch con ventana de 30 días. El último canillita que
+	// trajo al comprador se queda la venta, tanto si llegó por ?ref= como si
+	// entró por la página de un punto (que escribe la misma cookie).
+	//
+	// Fuente única y del lado del servidor. Antes el código viajaba además por
+	// localStorage y por una cookie legible desde JS, y el checkout lo tomaba
+	// de ahí: cualquiera podía atribuirse la venta escribiendo el código de
+	// otro canillita. Y convivían dos criterios opuestos —el referido era
+	// first-touch y el nodo last-touch—, así que entrar por A y después por B
+	// hacía que A cobrara el referido y B el fee de logística.
 	const refParam = context.url.searchParams.get('ref');
 	if (refParam && refParam.trim()) {
-		context.cookies.set('up_ref_code', refParam.trim(), {
+		context.cookies.set(REF_COOKIE_NAME, refParam.trim(), {
 			path: '/',
-			maxAge: 30 * 24 * 60 * 60, // 30 días ventana de atribución por defecto
-			httpOnly: false
+			maxAge: REF_COOKIE_MAX_AGE,
+			httpOnly: true,
+			secure: import.meta.env.PROD,
+			sameSite: 'lax'
 		});
 	}
 

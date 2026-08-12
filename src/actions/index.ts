@@ -9,7 +9,7 @@ import {
 	puedeEntregarse,
 	type EstadoPedido
 } from '../lib/orderStates';
-import { parseActiveNodeValue, NODE_COOKIE_NAME } from '../lib/nodeSession';
+import { parseActiveNodeValue, NODE_COOKIE_NAME, REF_COOKIE_NAME } from '../lib/nodeSession';
 import { precioDeVentaCentavos } from '../lib/pricing';
 import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 
@@ -592,7 +592,8 @@ export const server = {
 			fulfillment: z.enum(['retiro', 'envio']).optional(),
 			direccionEnvio: z.string().optional(),
 			costoEnvio: z.number().optional(),
-			referralCode: z.string().optional(),
+			// referralCode se quitó a propósito: la atribución se resuelve en el
+			// servidor desde la cookie, no con lo que informe el cliente.
 			paymentMethod: z.string().optional()
 		}),
 		handler: async (input, ctx) => {
@@ -607,9 +608,16 @@ export const server = {
 
 				let referralCodeId = null;
 				let resolvedCanillitaId = null;
-				if (input.referralCode) {
+
+				// El código sale SIEMPRE de la cookie httpOnly que escribe el
+				// servidor (middleware ante ?ref=, o /[slug] al entrar por la
+				// página de un punto). Lo que mande el cliente se ignora: antes
+				// venía de localStorage y permitía atribuirse la venta de otro.
+				const refCode = ctx.cookies.get(REF_COOKIE_NAME)?.value?.trim();
+
+				if (refCode) {
 					const codeRes = await db.listDocuments('urbanpoint', 'referral_codes', [
-						Query.equal('code', input.referralCode),
+						Query.equal('code', refCode),
 						Query.equal('activo', true),
 						Query.limit(1)
 					]);

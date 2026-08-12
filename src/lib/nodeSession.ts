@@ -13,6 +13,13 @@ export const NODE_COOKIE_NAME = 'up_active_node';
 export const NODE_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days in seconds
 
 /**
+ * Cookie del código de referido activo. Fuente única de la atribución.
+ * Política: last-touch, ventana de 30 días. Ver src/middleware.ts.
+ */
+export const REF_COOKIE_NAME = 'up_ref';
+export const REF_COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
+
+/**
  * Serializa el nodo activo para guardarlo como VALOR de cookie. [C-02]
  *
  * Devuelve JSON plano, no un header Set-Cookie. Astro.cookies.set() ya se

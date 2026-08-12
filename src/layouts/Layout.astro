@@ -40,30 +40,18 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
 		<FloatingWhatsApp />
 		
 		<script>
-			import { referralCode } from '../store/cart';
-			
-			// Detectar parametro ref en la URL o recuperar de cookie
-			const urlParams = new URLSearchParams(window.location.search);
-			const ref = urlParams.get('ref');
-			
-			if (ref) {
-				// Guardar el código en el store (y localStorage) y cookie de 30 días
-				referralCode.setKey('code', ref);
-				document.cookie = "up_ref=" + encodeURIComponent(ref) + "; path=/; max-age=" + (30*24*60*60) + "; SameSite=Lax";
-				
-				// Limpiar la URL para que no quede fea
-				const url = new URL(window.location.href);
+			// El código de referido lo persiste el middleware en una cookie
+			// httpOnly (ver src/middleware.ts). Acá sólo se limpia la URL.
+			//
+			// Antes este script guardaba el código en localStorage y sólo lo
+			// copiaba de la cookie cuando el store estaba vacío, imponiendo un
+			// criterio first-touch que contradecía al last-touch de la página
+			// del nodo: entrar por A y después por B hacía que A cobrara el
+			// referido y B el fee de logística.
+			const url = new URL(window.location.href);
+			if (url.searchParams.has('ref')) {
 				url.searchParams.delete('ref');
 				window.history.replaceState({}, '', url);
-			} else {
-				// Si no vino en la URL, intentar recuperar de cookie si no está seteado en store
-				const match = document.cookie.match(/(?:^|; )up_ref=([^;]*)/);
-				if (match && match[1]) {
-					const cookieRef = decodeURIComponent(match[1]);
-					if (!referralCode.get().code) {
-						referralCode.setKey('code', cookieRef);
-					}
-				}
 			}
 		</script>
 	</body>

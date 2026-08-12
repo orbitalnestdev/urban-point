@@ -118,7 +118,7 @@ import Logo from '../../components/Logo.astro';
   </main>
 
   <script>
-    import { cartItems, checkoutData, referralCode } from '../../store/cart';
+    import { cartItems, checkoutData } from '../../store/cart';
     import { actions } from 'astro:actions';
 
     const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
@@ -257,7 +257,6 @@ import Logo from '../../components/Logo.astro';
                 try {
                     const finalCheckout = checkoutData.get();
                     const payload = items.map(i => ({ productId: i.id, cantidad: i.cantidad }));
-                    const refCode = referralCode.get().code;
 
                     const { data, error } = await actions.createCheckout({
                         items: payload,
@@ -265,7 +264,6 @@ import Logo from '../../components/Logo.astro';
                         pickupPointId: finalCheckout.pickupPointId,
                         direccionEnvio: finalCheckout.direccionEnvio,
                         costoEnvio: finalCheckout.costoEnvio ? Number(finalCheckout.costoEnvio) : undefined,
-                        referralCode: refCode,
                         paymentMethod: finalCheckout.paymentMethod
                     });
 

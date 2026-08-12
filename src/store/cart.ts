@@ -19,15 +19,9 @@ export const cartItems = persistentMap<Record<string, CartItem>>(
 	}
 );
 
-// Store the referral code separately
-export const referralCode = persistentMap<Record<string, string>>(
-	'urbanpoint_ref:',
-	{},
-	{
-		encode: JSON.stringify,
-		decode: JSON.parse
-	}
-);
+// El código de referido ya no vive en localStorage: se resuelve en el servidor
+// desde una cookie httpOnly. Guardarlo acá lo hacía manipulable, y era la vía
+// por la que un comprador podía atribuirse la venta a cualquier canillita.
 
 // Store checkout preferences (pickup point, payment method)
 export const checkoutData = persistentMap<Record<string, any>>(

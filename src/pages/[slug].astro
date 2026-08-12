@@ -8,7 +8,7 @@ import AddToCartBtn from '../components/shop/AddToCartBtn';
 import { getCachedCatalog } from '../lib/server/catalogCache';
 import { createAdminClient } from '../lib/server/appwrite';
 import { Query } from 'node-appwrite';
-import { serializeActiveNodeCookie } from '../lib/nodeSession';
+import { serializeActiveNodeCookie, REF_COOKIE_NAME, REF_COOKIE_MAX_AGE } from '../lib/nodeSession';
 import { precioDeVentaCentavos, precioListaCentavos } from '../lib/pricing';
 
 const reservedSlugs = new Set([
@@ -74,9 +74,13 @@ try {
         Query.limit(1)
       ]);
       if (refCodeRes.documents.length > 0) {
-        Astro.cookies.set('up_ref', refCodeRes.documents[0].code, {
+        // Last-touch: entrar a la página de un punto reatribuye la venta a ese
+        // canillita, igual que un ?ref=. Ver la política en src/middleware.ts.
+        Astro.cookies.set(REF_COOKIE_NAME, refCodeRes.documents[0].code, {
           path: '/',
-          maxAge: 30 * 24 * 60 * 60,
+          maxAge: REF_COOKIE_MAX_AGE,
+          httpOnly: true,
+          secure: import.meta.env.PROD,
           sameSite: 'lax'
         });
       }
