@@ -20,6 +20,41 @@
 
 ---
 
+## Estado de corrección (Fase 2, en curso)
+
+Rama `fix/auditoria-fase-2`. Un hallazgo por commit, en orden de severidad.
+
+| ID | Estado | Commit |
+|---|---|---|
+| C-07 API key hardcodeada | Código corregido — **falta rotar la clave** | `0b4f86d` |
+| C-01 Colecciones públicas | Código corregido — **falta correr el script** | `2878fdf` |
+| C-09 Actions sin autorización | Corregido | `dc61fc1` |
+| C-04 Estado de pedido sin control | Corregido | `c3262df` |
+| C-05 Webhook sin firma | Corregido — **falta `MP_WEBHOOK_SECRET`** | `5b56dad` |
+| A-02 Reversa de comisiones rota | Corregido | `0f20294` |
+| C-02 Atribución de nodo rota | Corregido | `a67edfa` |
+| C-03 Precio promocional no cobrado | Corregido | `9f64b52` |
+| M-10 Precios inventados en el front | Corregido | `9f64b52` |
+| A-04 Escapes rotos en el alta | Corregido | `196f0d7` |
+| A-01 Formulario de alta inalcanzable | Corregido | `6ce5300` |
+| C-08 IDOR del código de retiro | Corregido | `01ab717` |
+| **C-06 `precio_promocional` en float** | **Pendiente: requiere migrar la base** | — |
+
+Suite: **51 de 52 tests en verde**. El único rojo es C-06, que no se puede
+cerrar desde el código.
+
+### Acciones que dependen de vos (no las puedo hacer yo)
+
+1. **Rotar la API key de Appwrite** y definir `APPWRITE_API_KEY` en Dokploy.
+   El código ya no tiene fallback: sin esa variable el servidor no arranca.
+   Es deliberado — antes degradaba a una clave del repositorio.
+2. **Definir `MP_WEBHOOK_SECRET`** con el secreto del webhook de Mercado Pago.
+   Sin él, el webhook responde 503 en vez de aceptar eventos sin firmar.
+3. **Correr `scripts/secure_perms.ts`** contra producción para cerrar los
+   permisos. Primero con `--dry-run`.
+
+---
+
 ## Tabla de hallazgos
 
 Ordenados por severidad. `[V]` = verificado ejecutando. `[C]` = verificado leyendo código. `[NV]` = no verificado (se indica por qué).
