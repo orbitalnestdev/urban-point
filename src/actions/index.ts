@@ -782,7 +782,7 @@ export const server = {
 				ctx.cookies.set('up_session', 'dev_mock_admin_session', {
 					path: '/',
 					httpOnly: true,
-					secure: false,
+					secure: import.meta.env.PROD,
 					sameSite: 'lax',
 					maxAge: 60 * 60 * 24 * 30
 				});
@@ -803,7 +803,7 @@ export const server = {
 				ctx.cookies.set('up_session', session.secret, {
 					path: '/',
 					httpOnly: true,
-					secure: false, // Forzado a false temporalmente para evitar problemas de localhost/http
+					secure: import.meta.env.PROD,
 					sameSite: 'lax',
 					maxAge: 60 * 60 * 24 * 30
 				});

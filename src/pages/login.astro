@@ -67,8 +67,17 @@ if (Astro.request.method === 'POST') {
 			}
 
 			// 1. Crear usuario en Auth
-			const newUser = await users.create(ID.unique(), email, undefined, password, `${nombre} ${apellido}`);
-			
+			let newUser;
+			try {
+				newUser = await users.create(ID.unique(), email, undefined, password, `${nombre} ${apellido}`);
+			} catch (e: any) {
+				// El error de Appwrite ("A user with the same email already
+				// exists") se mostraba tal cual, lo que permitía averiguar qué
+				// direcciones están registradas. Mensaje genérico.
+				console.warn(`Registro fallido para ${email}:`, e?.message);
+				throw new Error('No pudimos crear la cuenta. Verificá los datos e intentá de nuevo.');
+			}
+
 			// 2. Crear Perfil
 			await databases.createDocument('urbanpoint', 'profiles', ID.unique(), {
 				user_id: newUser.$id,
@@ -92,8 +101,11 @@ if (Astro.request.method === 'POST') {
 			});
 
 			if (!res.ok) {
+				// No se reenvía el mensaje del proveedor: puede distinguir entre
+				// "no existe el usuario" y "contraseña incorrecta".
 				const errorData = await res.json().catch(() => ({}));
-				throw new Error(errorData.message || 'Error al iniciar sesión. Verificá tus credenciales.');
+				console.warn(`Login fallido para ${email}:`, errorData?.message);
+				throw new Error('Email o contraseña incorrectos.');
 			}
 
 			const fallbackHeader = res.headers.get('x-fallback-cookies');
@@ -107,7 +119,7 @@ if (Astro.request.method === 'POST') {
 			Astro.cookies.set('up_session', sessionSecret, {
 				path: '/',
 				httpOnly: true,
-				secure: false,
+				secure: import.meta.env.PROD,
 				sameSite: 'lax',
 				maxAge: 60 * 60 * 24 * 30
 			});
@@ -130,7 +142,10 @@ if (Astro.request.method === 'POST') {
 				
 				return Astro.redirect(finalUrl);
 			} catch (dbErr) {
-				if (email === 'azcurraely@gmail.com') return Astro.redirect('/admin');
+				// Sin el perfil no se puede saber el rol: se manda a la home del
+				// cliente y el middleware resuelve el acceso real en la próxima
+				// navegación. Antes había un email de admin hardcodeado acá.
+				console.error('No se pudo resolver el perfil tras el login:', dbErr);
 				return Astro.redirect(targetRedirect || '/mi-cuenta');
 			}
 		}
