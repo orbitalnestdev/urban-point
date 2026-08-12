@@ -731,7 +731,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 			const performSearch = () => {
 				const query = locationInput.value.trim().toLowerCase();
 				if (!query) {
-					resultBox.innerHTML = "⚠️ Por favor ingresá un barrio o localidad para verificar (ej: Palermo, Belgrano, Almagro).";
+					resultBox.innerHTML = "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' class='inline-block align-[-2px] shrink-0'><path d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg> Por favor ingresá un barrio o localidad para verificar (ej: Palermo, Belgrano, Almagro).";
 					resultBox.classList.remove('hidden');
 					return;
 				}
@@ -744,18 +744,18 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 				);
 
 				if (matches.length > 0) {
-					let html = `<div class="space-y-2"><p class="text-[#2D5A27] font-extrabold flex items-center gap-1">✅ ¡Encontramos ${matches.length} punto(s) UrbanPoint en tu zona!</p><div class="space-y-2 max-h-56 overflow-y-auto pr-1">`;
+					let html = `<div class="space-y-2"><p class="text-[#2D5A27] font-extrabold flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-[-2px] shrink-0"><polyline points="20 6 9 17 4 12"/></svg> ¡Encontramos ${matches.length} punto(s) UrbanPoint en tu zona!</p><div class="space-y-2 max-h-56 overflow-y-auto pr-1">`;
 					matches.forEach((m: any) => {
 						html += `<div class="p-2.5 bg-white rounded-xl border border-[#D4E5D6] text-xs text-slate-800 shadow-xs">
 							<strong class="text-[#2D5A27] block text-xs">${m.nombre_comercial}</strong>
-							<span class="text-slate-600 block mt-0.5 font-medium">📍 ${m.direccion} — ${m.localidad}</span>
-							<span class="text-[11px] text-slate-500 block mt-0.5">🕒 ${m.horarios || 'Horarios de atención regulares'}</span>
+							<span class="text-slate-600 block mt-0.5 font-medium"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="inline-block align-[-2px] shrink-0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${m.direccion} — ${m.localidad}</span>
+							<span class="text-[11px] text-slate-500 block mt-0.5"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="inline-block align-[-2px] shrink-0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${m.horarios || 'Horarios de atención regulares'}</span>
 						</div>`;
 					});
 					html += `</div></div>`;
 					resultBox.innerHTML = html;
 				} else {
-					resultBox.innerHTML = `<div><p class="font-bold text-amber-800">📍 No encontramos un punto exacto para "${locationInput.value.trim()}".</p><p class="text-slate-600 mt-1">¡Contamos con ${allPoints.length} puntos activos en CABA y GBA! Al realizar tu compra vas a poder elegir el punto más conveniente.</p></div>`;
+					resultBox.innerHTML = `<div><p class="font-bold text-amber-800"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="inline-block align-[-2px] shrink-0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> No encontramos un punto exacto para "${locationInput.value.trim()}".</p><p class="text-slate-600 mt-1">¡Contamos con ${allPoints.length} puntos activos en CABA y GBA! Al realizar tu compra vas a poder elegir el punto más conveniente.</p></div>`;
 				}
 				resultBox.classList.remove('hidden');
 			};
