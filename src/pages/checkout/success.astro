@@ -2,6 +2,8 @@
 import Layout from '../../layouts/Layout.astro';
 import { Query } from 'node-appwrite';
 import { createAdminClient } from '../../lib/server/appwrite';
+import { getClientProfile } from '../../lib/server/auth';
+import { tieneAccesoAPedido } from '../../lib/server/orderAccess';
 
 export const prerender = false;
 
@@ -14,15 +16,40 @@ let order = null;
 const { databases: db } = createAdminClient();
 
 try {
+	let candidato = null;
+
 	if (orderId) {
-		order = await db.getDocument('urbanpoint', 'orders', orderId);
+		candidato = await db.getDocument('urbanpoint', 'orders', orderId);
 	} else if (preferenceId) {
 		const res = await db.listDocuments('urbanpoint', 'orders', [
 			Query.equal('mp_preference_id', preferenceId),
 			Query.limit(1)
 		]);
 		if (res.documents.length > 0) {
-			order = res.documents[0];
+			candidato = res.documents[0];
+		}
+	}
+
+	// El código de retiro es la credencial con la que el canillita entrega la
+	// mercadería: sólo puede verlo quien hizo la compra. Antes bastaba con
+	// pasar un order_id por la URL, así que enumerando ids se podía retirar
+	// el pedido de otra persona.
+	if (candidato) {
+		const desdeEsteNavegador = tieneAccesoAPedido(Astro.cookies, candidato.$id);
+
+		let esElComprador = false;
+		if (!desdeEsteNavegador) {
+			const profile = await getClientProfile(Astro.cookies);
+			const dueño = typeof candidato.customer_id === 'string'
+				? candidato.customer_id
+				: candidato.customer_id?.$id;
+			esElComprador = Boolean(profile && dueño && profile.$id === dueño);
+		}
+
+		if (desdeEsteNavegador || esElComprador) {
+			order = candidato;
+		} else {
+			console.warn(`Acceso denegado al pedido ${candidato.$id} desde /checkout/success.`);
 		}
 	}
 } catch (e) {
@@ -35,6 +62,7 @@ try {
 		<div class="w-20 h-20 bg-[#F2F7F3] text-[#2D5A27] rounded-full flex items-center justify-center mb-6 shadow-lg shadow-[#2D5A27]/20 border border-[#D4E5D6]">
 			<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
 		</div>
+		{order && <span id="order-confirmado" data-order={order.$id} class="hidden"></span>}
 		<h1 class="text-4xl font-extrabold text-slate-900 mb-4">¡Pedido exitoso!</h1>
 		<p class="text-lg text-slate-600 max-w-md mx-auto mb-8">
 			Tu pedido ha sido procesado correctamente y ya está siendo preparado.
@@ -75,6 +103,10 @@ try {
 
 <script>
 	import { clearCart } from '../../store/cart';
-	// Limpiamos el carrito local ya que la compra fue exitosa
-	clearCart();
+	// Sólo se vacía si efectivamente se resolvió un pedido de este comprador.
+	// Antes se limpiaba siempre, así que entrar a /checkout/success sin
+	// parámetros borraba el carrito de cualquiera.
+	if (document.getElementById('order-confirmado')) {
+		clearCart();
+	}
 </script>

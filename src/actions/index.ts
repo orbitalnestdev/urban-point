@@ -10,6 +10,7 @@ import {
 } from '../lib/orderStates';
 import { parseActiveNodeValue, NODE_COOKIE_NAME } from '../lib/nodeSession';
 import { precioDeVentaCentavos } from '../lib/pricing';
+import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 
 
 import { resolverComisiones, cancelarOrdenYRestaurarStock } from '../lib/commissions';
@@ -719,6 +720,10 @@ export const server = {
 				}
 
 				const orderDoc = await db.createDocument('urbanpoint', 'orders', ID.unique(), orderPayload);
+
+				// Habilita a este navegador a ver el pedido y su código de retiro,
+				// también si la compra fue como invitado.
+				otorgarAccesoAPedido(ctx.cookies, orderDoc.$id);
 
 				// Create the Order Items
 				for (const oi of orderItemsData) {
