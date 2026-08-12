@@ -1254,14 +1254,18 @@ export const server = {
 		accept: 'json',
 		input: z.object({
 			id: z.string(),
-			nombre: z.string().min(2),
+			// Actualización PARCIAL: sólo se escriben los campos informados.
+			// nombre, precio y stock eran obligatorios, así que cualquier
+			// llamador que quisiera cambiar un solo campo tenía que reenviar el
+			// producto entero — y los dos que había mandaban valores inventados.
+			nombre: z.string().min(2).optional(),
 			descripcion: z.string().optional(),
-			precio: z.number().min(0),
+			precio: z.number().min(0).optional(),
 			precio_promocional: z.number().min(0).optional(),
 			precio_distribuidor: z.number().min(0).optional(),
 			precio_canillita: z.number().min(0).optional(),
 			costo: z.number().min(0).optional(),
-			stock: z.number().min(0),
+			stock: z.number().min(0).optional(),
 			stock_maximo: z.number().min(0).optional(),
 			nivel_reorden: z.number().min(0).optional(),
 			tiempo_reposicion: z.number().min(0).optional(),
@@ -1271,7 +1275,7 @@ export const server = {
 			tramos_cantidad: z.string().optional(),
 			galeria_urls: z.string().optional(),
 			portada_url: z.string().optional(),
-			estado: z.enum(['activo', 'borrador', 'pausado', 'inactivo']),
+			estado: z.enum(['activo', 'borrador', 'pausado', 'inactivo']).optional(),
 			categoria_id: z.string().optional().nullable(),
 			destacado: z.boolean().optional(),
 			es_nuevo_manual: z.boolean().optional().nullable(),
@@ -1281,14 +1285,20 @@ export const server = {
 			try {
 				requireRole(ctx, 'admin', 'gestion');
 
-				const finalState = input.estado === 'inactivo' ? 'pausado' : input.estado;
-				const updateData: any = {
-					nombre: input.nombre,
-					descripcion: input.descripcion || '',
-					precio: input.precio,
-					stock: input.stock,
-					estado: finalState
-				};
+				// Sólo se escriben los campos informados. Antes se forzaban
+				// siempre nombre, descripcion, precio, stock y estado: cambiar el
+				// estado desde el desplegable de la tabla renombraba el producto
+				// a "Producto" con precio $1 y stock 0, y guardar desde el panel
+				// rápido vaciaba la descripción.
+				const updateData: any = {};
+
+				if (input.nombre !== undefined) updateData.nombre = input.nombre;
+				if (input.descripcion !== undefined) updateData.descripcion = input.descripcion;
+				if (input.precio !== undefined) updateData.precio = input.precio;
+				if (input.stock !== undefined) updateData.stock = input.stock;
+				if (input.estado !== undefined) {
+					updateData.estado = input.estado === 'inactivo' ? 'pausado' : input.estado;
+				}
 
 				if (input.precio_promocional !== undefined) updateData.precio_promocional = input.precio_promocional;
 				if (input.precio_distribuidor !== undefined) updateData.precio_distribuidor = input.precio_distribuidor;

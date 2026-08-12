@@ -785,9 +785,13 @@ const paginationItems = filteredPages.map((p, index) => ({
 		btnSaveQe.disabled = true;
 		btnSaveQe.innerText = 'Guardando...';
 
+		// No se envía descripcion: el panel rápido no la edita, y mandarla
+		// vacía la borraba en cada guardado.
+		const nombreEditado = document.getElementById('qe-nombre')?.innerText?.trim();
+
 		const { data, error } = await actions.updateProduct({
 			id: currentProductId,
-			nombre: document.getElementById('qe-nombre')?.innerText || 'Producto',
+			...(nombreEditado ? { nombre: nombreEditado } : {}),
 			precio: precioCents,
 			stock: stockVal,
 			estado: estado as any,
@@ -817,11 +821,10 @@ const paginationItems = filteredPages.map((p, index) => ({
 			if (!id) return;
 			target.disabled = true;
 
+			// Sólo el estado: mandar nombre/precio/stock acá sobrescribía el
+			// producto con valores inventados.
 			const { data, error } = await actions.updateProduct({
 				id,
-				nombre: 'Producto',
-				precio: 100,
-				stock: 0,
 				estado: newEstado as any
 			});
 
