@@ -9,6 +9,7 @@ import {
 	type EstadoPedido
 } from '../lib/orderStates';
 import { parseActiveNodeValue, NODE_COOKIE_NAME } from '../lib/nodeSession';
+import { precioDeVentaCentavos } from '../lib/pricing';
 
 
 import { resolverComisiones, cancelarOrdenYRestaurarStock } from '../lib/commissions';
@@ -645,25 +646,30 @@ export const server = {
 					if (p.estado !== 'activo' || p.stock < item.cantidad) {
 						throw new Error(`El producto ${p.nombre} no está disponible o no hay stock suficiente.`);
 					}
-					
+
+					// Mismo precio que ve el cliente en la vitrina, incluida la
+					// promoción. El precio siempre sale de la base, nunca del cliente.
+					const unitarioCentavos = precioDeVentaCentavos(p as any);
+					const subtotalCentavos = unitarioCentavos * item.cantidad;
+
 					prefItems.push({
 						id: p.$id,
 						title: p.nombre,
 						quantity: item.cantidad,
-						unit_price: p.precio / 100, // MP uses standard currency, not cents
+						unit_price: unitarioCentavos / 100, // MP espera moneda, no centavos
 						currency_id: 'ARS'
 					});
-					
+
 					orderItemsData.push({
 						product_id: p.$id,
 						sku_snapshot: p.sku || 'SKU-GEN',
 						nombre_snapshot: p.nombre,
-						precio_unitario: p.precio,
+						precio_unitario: unitarioCentavos,
 						cantidad: item.cantidad,
-						subtotal: p.precio * item.cantidad
+						subtotal: subtotalCentavos
 					});
-					
-					totalCentavos += p.precio * item.cantidad;
+
+					totalCentavos += subtotalCentavos;
 				}
 
 				const costoEnvio = input.costoEnvio || 0;

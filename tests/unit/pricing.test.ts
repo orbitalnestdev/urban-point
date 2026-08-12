@@ -36,13 +36,35 @@ describe('C-03 — el checkout debe cobrar el precio promocional que se muestra'
 		expect(precioDeVenta({ precio: 1000000, precio_promocional: 1200000 })).toBe(1000000);
 	});
 
-	it('createCheckout debe considerar precio_promocional al armar el total', () => {
+	it('createCheckout debe derivar el precio de la misma función que la vitrina', () => {
 		const src = leer('src/actions/index.ts');
 		const handler = src.slice(src.indexOf('createCheckout:'), src.indexOf('auth_login:'));
 		expect(
-			handler.includes('precio_promocional'),
-			'createCheckout ignora precio_promocional: cobra p.precio aunque la ficha muestre la promo'
+			handler.includes('precioDeVentaCentavos'),
+			'createCheckout no usa precioDeVentaCentavos: puede cobrar algo distinto a lo publicado'
 		).toBe(true);
+		expect(
+			/unit_price:\s*p\.precio\b/.test(handler),
+			'createCheckout todavía manda p.precio crudo a Mercado Pago'
+		).toBe(false);
+	});
+
+	it('ninguna página de vitrina debe calcular el precio a mano', () => {
+		const vistas = [
+			'src/pages/index.astro',
+			'src/pages/[slug].astro',
+			'src/pages/productos/index.astro',
+			'src/pages/productos/[slug].astro'
+		];
+		for (const vista of vistas) {
+			const src = leer(vista);
+			expect(
+				src.includes('precioDeVentaCentavos'),
+				`${vista} no usa el módulo de precios compartido`
+			).toBe(true);
+			// El precio de lista tachado era precio * 1.25, inventado en el front.
+			expect(/\*\s*1\.25/.test(src), `${vista} sigue inventando el precio de lista`).toBe(false);
+		}
 	});
 });
 

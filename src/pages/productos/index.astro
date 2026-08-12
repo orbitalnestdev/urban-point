@@ -6,6 +6,7 @@ import Footer from '../../components/Footer.astro';
 import AddToCartBtn from '../../components/shop/AddToCartBtn';
 import CartDrawer from '../../components/shop/CartDrawer';
 import { getCachedCatalog } from '../../lib/server/catalogCache';
+import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
 
 let products: any[] = [];
 let categories: any[] = [];
@@ -137,16 +138,10 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 			) : (
 				<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" id="products-grid">
 					{products.map((prod) => {
-						let precioMinorista = prod.precio / 100;
-						let precioLista = Math.round(precioMinorista * 1.25);
+						const precioMinorista = precioDeVentaCentavos(prod) / 100;
+						const listaCentavos = precioListaCentavos(prod);
+						const precioLista = listaCentavos === null ? null : listaCentavos / 100;
 						const catId = typeof prod.categoria_id === 'object' ? prod.categoria_id?.$id : prod.categoria_id;
-
-						let hasPromo = false;
-						if (prod.precio_promocional && prod.precio_promocional > 0) {
-							precioLista = precioMinorista;
-							precioMinorista = prod.precio_promocional / 100;
-							hasPromo = true;
-						}
 
 						return (
 							<div 
@@ -195,9 +190,11 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 											<span class="text-2xl font-black text-slate-900 tracking-tight leading-none">
 												{formateador.format(precioMinorista)}
 											</span>
-											<span class="text-xs text-slate-400 line-through font-medium">
-												{formateador.format(precioLista)}
-											</span>
+											{precioLista !== null && (
+												<span class="text-xs text-slate-400 line-through font-medium">
+													{formateador.format(precioLista)}
+												</span>
+											)}
 										</div>
 										
 										<p class="text-xs font-bold text-[#2D5A27] flex items-center gap-1 mt-1">

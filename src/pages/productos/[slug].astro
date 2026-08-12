@@ -7,6 +7,7 @@ import AddToCartBtn from '../../components/shop/AddToCartBtn';
 import CartDrawer from '../../components/shop/CartDrawer';
 import { createAdminClient } from '../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
+import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
 
 const { slug } = Astro.params;
 const { databases } = createAdminClient();
@@ -89,15 +90,9 @@ try {
 }
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
-let precioMinorista = product.precio / 100;
-let precioLista = Math.round(precioMinorista * 1.25);
-
-if (product.precio_promocional && product.precio_promocional > 0) {
-	precioLista = precioMinorista;
-	precioMinorista = product.precio_promocional / 100;
-}
-
-const precioTransferencia = Math.round(precioMinorista * 0.80);
+const precioMinorista = precioDeVentaCentavos(product) / 100;
+const listaCentavos = precioListaCentavos(product);
+const precioLista = listaCentavos === null ? null : listaCentavos / 100;
 const cuotaMonto = Math.round(precioMinorista / 3);
 ---
 
@@ -192,9 +187,11 @@ const cuotaMonto = Math.round(precioMinorista / 3);
 									<span class="text-4xl font-black text-slate-900 tracking-tight">
 										{formateador.format(precioMinorista)}
 									</span>
-									<span class="text-base text-slate-400 line-through font-medium">
-										{formateador.format(precioLista)}
-									</span>
+									{precioLista !== null && (
+										<span class="text-base text-slate-400 line-through font-medium">
+											{formateador.format(precioLista)}
+										</span>
+									)}
 								</div>
 
 								<div class="space-y-1.5 pt-2 border-t border-slate-200/60">
@@ -281,13 +278,10 @@ const cuotaMonto = Math.round(precioMinorista / 3);
 					</h2>
 					<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
 						{relatedProducts.map((rel) => {
-							let relPrecio = rel.precio / 100;
-							let relPrecioLista = Math.round(relPrecio * 1.25);
+							const relPrecio = precioDeVentaCentavos(rel) / 100;
+							const relListaCentavos = precioListaCentavos(rel);
+							const relPrecioLista = relListaCentavos === null ? null : relListaCentavos / 100;
 							
-							if (rel.precio_promocional && rel.precio_promocional > 0) {
-								relPrecioLista = relPrecio;
-								relPrecio = rel.precio_promocional / 100;
-							}
 							return (
 								<div class="prod-item group bg-white rounded-3xl border border-slate-200/70 p-5 shadow-sm hover:shadow-2xl hover:border-[#2D5A27]/40 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between relative overflow-hidden">
 									<div>
@@ -316,9 +310,11 @@ const cuotaMonto = Math.round(precioMinorista / 3);
 											<span class="text-xl font-black text-slate-900 leading-none">
 												{formateador.format(relPrecio)}
 											</span>
-											<span class="text-xs text-slate-400 line-through font-medium">
-												{formateador.format(relPrecioLista)}
-											</span>
+											{relPrecioLista !== null && (
+												<span class="text-xs text-slate-400 line-through font-medium">
+													{formateador.format(relPrecioLista)}
+												</span>
+											)}
 										</div>
 									</div>
 									<div class="pt-3 border-t border-slate-100 mt-2">

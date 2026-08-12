@@ -9,6 +9,7 @@ import { getCachedCatalog } from '../lib/server/catalogCache';
 import { createAdminClient } from '../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { serializeActiveNodeCookie } from '../lib/nodeSession';
+import { precioDeVentaCentavos, precioListaCentavos } from '../lib/pricing';
 
 const reservedSlugs = new Set([
   'tienda', 'carrito', 'checkout', 'pago', 'retiro', 'success', 'mi-cuenta',
@@ -310,8 +311,9 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 
 				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="product-grid">
 					{featuredProducts.map((prod) => {
-						const precioMinorista = prod.precio / 100;
-						const precioLista = Math.round(precioMinorista * 1.25);
+						const precioMinorista = precioDeVentaCentavos(prod) / 100;
+						const listaCentavos = precioListaCentavos(prod);
+						const precioLista = listaCentavos === null ? null : listaCentavos / 100;
 
 						return (
 							<div 
@@ -351,9 +353,11 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 											<span class="text-2xl font-black text-slate-900 tracking-tight leading-none">
 												{formateador.format(precioMinorista)}
 											</span>
-											<span class="text-xs text-slate-400 line-through font-medium">
-												{formateador.format(precioLista)}
-											</span>
+											{precioLista !== null && (
+												<span class="text-xs text-slate-400 line-through font-medium">
+													{formateador.format(precioLista)}
+												</span>
+											)}
 										</div>
 										
 										<p class="text-xs font-bold text-[#2D5A27] flex items-center gap-1 mt-1">
