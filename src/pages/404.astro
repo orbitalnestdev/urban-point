@@ -1,0 +1,49 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+export const prerender = false;
+
+// /[slug] hace Astro.rewrite('/404') para los puntos inexistentes, pausados o
+// con slug reservado, pero esta página no existía. [B-06]
+Astro.response.status = 404;
+---
+
+<Layout title="Página no encontrada | UrbanPoint">
+	<Header />
+
+	<main class="min-h-[60vh] flex flex-col items-center justify-center px-6 py-20 text-center">
+		<div class="w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-6">
+			<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+				<circle cx="11" cy="11" r="8"></circle>
+				<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+			</svg>
+		</div>
+
+		<p class="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-2">Error 404</p>
+		<h1 class="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-3">
+			No encontramos esta página
+		</h1>
+		<p class="text-slate-500 max-w-md mb-8 leading-relaxed">
+			Puede que el enlace esté mal escrito, o que el punto de retiro que buscás ya no esté disponible.
+		</p>
+
+		<div class="flex flex-col sm:flex-row gap-3">
+			<a
+				href="/productos"
+				class="px-6 py-3.5 bg-[#2D5A27] hover:bg-[#23471F] text-white font-bold rounded-2xl transition-colors shadow-sm"
+			>
+				Ir a la tienda
+			</a>
+			<a
+				href="/puntos-de-retiro"
+				class="px-6 py-3.5 bg-white border-2 border-slate-200 hover:border-[#2D5A27] hover:text-[#2D5A27] text-slate-700 font-bold rounded-2xl transition-colors"
+			>
+				Ver puntos de retiro
+			</a>
+		</div>
+	</main>
+
+	<Footer />
+</Layout>

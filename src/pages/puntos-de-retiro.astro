@@ -25,17 +25,30 @@ try {
     offset += 100;
   }
 
-  pickupPoints = rawDocs.map(p => ({
+  // Sólo puntos con coordenadas usables. Antes se listaban igual y el mapa
+  // los descartaba en silencio: la tarjeta aparecía en el listado y contaba
+  // en el total, pero "Ver en mapa" no hacía nada porque no había marcador.
+  const tieneCoordenadas = (p: any) =>
+    Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)) &&
+    Number(p.lat) !== 0 && Number(p.lng) !== 0;
+
+  const sinCoordenadas = rawDocs.filter(p => !tieneCoordenadas(p));
+  if (sinCoordenadas.length > 0) {
+    console.warn(`${sinCoordenadas.length} punto(s) activos sin coordenadas quedaron fuera del mapa.`);
+  }
+
+  pickupPoints = rawDocs.filter(tieneCoordenadas).map(p => ({
     id: p.$id,
     nombre: p.nombre_comercial,
     direccion: p.direccion,
     localidad: p.localidad,
     provincia: p.provincia || 'CABA',
-    lat: p.lat,
-    lng: p.lng,
+    lat: Number(p.lat),
+    lng: Number(p.lng),
     horarios: p.horarios,
     telefono: p.telefono || '',
-    condicion_fiscal: p.condicion_fiscal || ''
+    slug: p.slug || ''
+    // condicion_fiscal no se publica: es dato interno del canillita.
   }));
 
   provincias = Array.from(new Set(pickupPoints.map(p => p.provincia))).sort();

@@ -11,18 +11,13 @@ import { Query } from 'node-appwrite';
 import { serializeActiveNodeCookie, REF_COOKIE_NAME, REF_COOKIE_MAX_AGE } from '../lib/nodeSession';
 import { precioDeVentaCentavos, precioListaCentavos } from '../lib/pricing';
 import { toSafeJson } from '../lib/safeJson';
-
-const reservedSlugs = new Set([
-  'tienda', 'carrito', 'checkout', 'pago', 'retiro', 'success', 'mi-cuenta',
-  'contacto', 'admin', 'canillita', 'puntos-de-retiro', 'login', 'registro',
-  'api', 'productos', 'ingresar', 'nosotros', 'ayuda', 'terminos', 'privacidad',
-  'comisiones', 'favicon.ico', 'robots.txt', 'sumate-como-canillita', 'puntos', 'sitemap.xml'
-]);
+import { esSlugReservado } from '../lib/slugs';
 
 const rawSlug = Astro.params.slug || '';
 
-// Reject if reserved, contains period, or starts with underscore
-if (reservedSlugs.has(rawSlug.toLowerCase()) || rawSlug.includes('.') || rawSlug.startsWith('_')) {
+// La lista de rutas reservadas vive en src/lib/slugs.ts: estaba duplicada acá
+// y en savePickupPoint, así que agregar una ruta obligaba a tocar dos archivos.
+if (esSlugReservado(rawSlug)) {
   return Astro.rewrite('/404');
 }
 

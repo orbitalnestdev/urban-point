@@ -11,6 +11,7 @@ import {
 } from '../lib/orderStates';
 import { parseActiveNodeValue, NODE_COOKIE_NAME, REF_COOKIE_NAME } from '../lib/nodeSession';
 import { precioDeVentaCentavos } from '../lib/pricing';
+import { normalizarSlug, esSlugReservado } from '../lib/slugs';
 import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 
 
@@ -88,6 +89,29 @@ async function registrarEventoOrden(
 		// La auditoría no debe tumbar la operación, pero sí tiene que verse.
 		console.error(`No se pudo registrar el evento de la orden ${orderId}:`, e);
 	}
+}
+
+/**
+ * Genera un slug único para la página propia del punto de retiro.
+ *
+ * Evita los slugs reservados del sitio y las colisiones con puntos ya
+ * existentes, agregando un sufijo numérico cuando hace falta.
+ */
+async function generarSlugPunto(nombreComercial: string): Promise<string> {
+	const base = normalizarSlug(nombreComercial) || 'punto';
+
+	for (let intento = 0; intento < 25; intento++) {
+		const candidato = intento === 0 ? base : `${base}-${intento + 1}`;
+		if (esSlugReservado(candidato)) continue;
+
+		const existentes = await db.listDocuments('urbanpoint', 'pickup_points', [
+			Query.equal('slug', candidato),
+			Query.limit(1)
+		]);
+		if (existentes.documents.length === 0) return candidato;
+	}
+
+	return `${base}-${Date.now().toString().slice(-5)}`;
 }
 
 async function generateUniqueReferralCode(nombre: string, apellido: string): Promise<string> {
@@ -207,9 +231,15 @@ export const server = {
 					});
 				}
 
-				// 3. Crear Punto de Retiro (estado: activo) con toda la información completa
+				// 3. Crear Punto de Retiro (estado: activo) con toda la información
+				// completa. El slug es lo que le da su página propia en el sitio:
+				// sin él, /[slug] no matchea y el canillita aprobado se quedaba
+				// sin página hasta que un admin se la cargara a mano.
+				const slugPunto = await generarSlugPunto(app.nombre_comercial);
+
 				const pickupPoint = await db.createDocument('urbanpoint', 'pickup_points', ID.unique(), {
 					profile_id: profile.$id,
+					slug: slugPunto,
 					nombre_comercial: app.nombre_comercial,
 					direccion: app.direccion,
 					localidad: app.localidad || 'CABA',
@@ -1561,13 +1591,6 @@ export const server = {
 					throw new Error('Solo los administradores pueden gestionar puntos de retiro');
 				}
 
-				const reservedSlugs = new Set([
-					'tienda', 'carrito', 'checkout', 'pago', 'retiro', 'success', 'mi-cuenta',
-					'contacto', 'admin', 'canillita', 'puntos-de-retiro', 'login', 'registro',
-					'api', 'productos', 'ingresar', 'nosotros', 'ayuda', 'terminos', 'privacidad',
-					'comisiones', 'favicon.ico', 'robots.txt', 'sumate-como-canillita', 'puntos', 'sitemap.xml'
-				]);
-
 				const payload: any = {
 					nombre_comercial: input.nombre_comercial,
 					direccion: input.direccion,
@@ -1582,8 +1605,8 @@ export const server = {
 
 				let rawSlug = input.slug || (input.id ? undefined : input.nombre_comercial);
 				if (rawSlug) {
-					const cleanSlug = rawSlug.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-					if (reservedSlugs.has(cleanSlug)) {
+					const cleanSlug = normalizarSlug(rawSlug);
+					if (esSlugReservado(cleanSlug)) {
 						throw new Error(`El slug "${cleanSlug}" es una ruta reservada del sistema.`);
 					}
 
