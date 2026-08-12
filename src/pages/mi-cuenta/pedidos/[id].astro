@@ -18,8 +18,12 @@ try {
 	const { databases } = createAdminClient();
 	order = await databases.getDocument('urbanpoint', 'orders', id as string);
 	
+	// Denegar por defecto. El guard anterior era `if (orderCustId && ...)`, así
+	// que un pedido de invitado (customer_id nulo) no disparaba la condición y
+	// quedaba visible para cualquier cliente logueado que probara su id,
+	// incluido el código de retiro.
 	const orderCustId = typeof order.customer_id === 'string' ? order.customer_id : order.customer_id?.$id;
-	if (orderCustId && orderCustId !== profile.$id) {
+	if (!orderCustId || orderCustId !== profile.$id) {
 		return Astro.redirect('/mi-cuenta/pedidos');
 	}
 
