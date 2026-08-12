@@ -125,9 +125,9 @@ export async function resolverComisiones(orderId: string) {
 				}
 			}
 
-			// Devengo 2: Referido (Anti-fraude: Validar que no sea autoreferido ni la misma persona)
+			// Devengo 2: Referido (Anti-fraude: Validar que no sea autoreferido del mismo comprador)
 			const isSelfReferral = customerProfileId && customerProfileId === referrerProfileId;
-			if (referrerProfileId && referrerProfileId !== pickupProfileId && !isSelfReferral) {
+			if (referrerProfileId && !isSelfReferral) {
 				const rule = await evaluateCommissionRule(db, referrerProfileId, categoryId);
 				if (rule) {
 					const cents = calculateAmount(baseCents, rule);

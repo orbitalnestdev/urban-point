@@ -1532,7 +1532,7 @@ export const server = {
 					'tienda', 'carrito', 'checkout', 'pago', 'retiro', 'success', 'mi-cuenta',
 					'contacto', 'admin', 'canillita', 'puntos-de-retiro', 'login', 'registro',
 					'api', 'productos', 'ingresar', 'nosotros', 'ayuda', 'terminos', 'privacidad',
-					'comisiones', 'favicon.ico', 'robots.txt'
+					'comisiones', 'favicon.ico', 'robots.txt', 'sumate-como-canillita', 'puntos', 'sitemap.xml'
 				]);
 
 				const payload: any = {
