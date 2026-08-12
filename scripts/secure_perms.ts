@@ -16,7 +16,8 @@
  */
 import { Client, Databases } from 'node-appwrite';
 import { config } from 'dotenv';
-config({ path: '.env.local' });
+// .env.local primero si existe, con .env como respaldo.
+config({ path: ['.env.local', '.env'] });
 
 const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
 const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
