@@ -52,7 +52,28 @@ Rama `fix/auditoria-fase-2`. Un hallazgo por commit, en orden de severidad.
 | M-17 XSS almacenado en `<script>` | Corregido | `ae817b3` |
 | M-11 / M-12 Mapa y slug del punto | Corregido | `1c2a383` |
 | B-01 … B-06 Deuda y cosmética | Corregido | `55a870b`, `1c2a383`, `872d124` |
-| **C-06 `precio_promocional` en float** | **Pendiente: requiere migrar la base** | — |
+| **M-18 Tienda vacía sin avisar** (hallazgo nuevo) | Corregido | `4763700` |
+| C-07 causa raíz: el `.env` no se leía | Corregido | `aa6f518` |
+| C-01 Permisos **aplicados en la base** | Ejecutado y verificado | `334b8b9` |
+| C-06 `precio_promocional` en float | Migrado | ver más abajo |
+
+### M-18 — Hallazgo nuevo, detectado al ejecutar el proyecto
+
+Con el backend caído, la tienda respondía **HTTP 200 mostrando "No hay
+productos disponibles"**. El cliente no veía una falla: veía una tienda vacía,
+indistinguible de un catálogo sin stock. Es el mismo patrón que la auditoría
+marcó en el panel de solicitudes, pero en la vitrina pública.
+
+No lo detecté leyendo el código: apareció recién al correr la app sin
+credenciales. Es el argumento a favor de ejecutar y no solo revisar.
+
+### La causa raíz de la API key hardcodeada
+
+Al ejecutar el proyecto se descubrió por qué existía la clave en el
+repositorio: **Astro carga el `.env` en `import.meta.env`, no en
+`process.env`**, y todo el código leía sólo `process.env`. En desarrollo el
+`.env` nunca se aplicaba, así que hardcodear la clave era el parche a un bug
+de configuración, no a un problema de permisos de Appwrite.
 
 **Todos los hallazgos están cerrados salvo C-06**, que no se puede resolver
 desde el código. Suite: **83 de 84 tests en verde**; el único rojo es

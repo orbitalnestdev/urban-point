@@ -69,12 +69,31 @@ describe('C-03 — el checkout debe cobrar el precio promocional que se muestra'
 });
 
 describe('C-06 — el dinero no puede vivir en punto flotante', () => {
-	it('precio_promocional debe declararse como atributo entero, no float', () => {
-		const src = leer('add_precio_promocional.js');
-		expect(
-			src.includes('createIntegerAttribute'),
-			'precio_promocional se declara con createFloatAttribute (double en la base real)'
-		).toBe(true);
+	it('ningún script del repo crea precio_promocional como float', () => {
+		// El atributo se migró a integer en la base (ver
+		// scripts/migrate_precio_promocional.ts). Este test evita que vuelva a
+		// aparecer un script que lo recree como double y revierta la migración.
+		const dirs = ['scripts', '.'];
+		const culpables: string[] = [];
+
+		for (const dir of dirs) {
+			for (const archivo of fs.readdirSync(path.join(raiz, dir))) {
+				if (!/\.(ts|js|mjs)$/.test(archivo)) continue;
+				const ruta = path.join(raiz, dir, archivo);
+				if (!fs.statSync(ruta).isFile()) continue;
+				const src = fs.readFileSync(ruta, 'utf8');
+				if (src.includes('createFloatAttribute') && src.includes('precio_promocional')) {
+					culpables.push(path.join(dir, archivo));
+				}
+			}
+		}
+
+		expect(culpables, `crean precio_promocional como float: ${culpables.join(', ')}`).toEqual([]);
+	});
+
+	it('la migración deja el atributo como entero', () => {
+		const src = leer('scripts/migrate_precio_promocional.ts');
+		expect(src.includes('createIntegerAttribute')).toBe(true);
 	});
 });
 
