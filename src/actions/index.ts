@@ -18,6 +18,7 @@ import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones } from '../lib/commissions';
 
 import { createAdminClient } from '../lib/server/appwrite';
+import { env } from '../lib/server/env';
 
 const client = new Proxy({} as Client, {
 	get(_target, prop: keyof Client) {
@@ -766,7 +767,7 @@ export const server = {
 					return { success: true, init_point: `/checkout/success?order_id=${orderDoc.$id}` };
 				}
 
-				const mpAccessToken = process.env.MP_ACCESS_TOKEN;
+				const mpAccessToken = env('MP_ACCESS_TOKEN');
 				if (!mpAccessToken) {
 					// Fallback to fake checkout if no token
 					return { success: true, init_point: 'https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=TEST-123' };
@@ -775,7 +776,7 @@ export const server = {
 				const mp = new MercadoPagoConfig({ accessToken: mpAccessToken, options: { timeout: 5000 } });
 				const preference = new Preference(mp);
 
-				const baseUrl = (process.env.PUBLIC_SITE_URL || ctx.url.origin).replace(/\/+$/, '');
+				const baseUrl = (env('PUBLIC_SITE_URL') || ctx.url.origin).replace(/\/+$/, '');
 
 				const result = await preference.create({
 					body: {

@@ -1,9 +1,5 @@
 import { Client, Databases, Users, Storage, Account } from 'node-appwrite';
-
-const DEFAULT_ENDPOINT = 'https://aw.orbitalnest.net/v1';
-const DEFAULT_PROJECT_ID = '6a6a5321001439f06817';
-
-const clean = (val?: string) => (val || '').replace(/^["']|["']$/g, '').trim();
+import { env, appwriteEndpoint, appwriteProjectId } from './env';
 
 let singletonClient: Client | null = null;
 let singletonDatabases: Databases | null = null;
@@ -13,11 +9,9 @@ let singletonAccount: Account | null = null;
 
 function getSingletonClient(): Client {
     if (!singletonClient) {
-        const rawEndpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
-        const rawProjectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
-        const endpoint = clean(rawEndpoint) || DEFAULT_ENDPOINT;
-        const projectId = clean(rawProjectId) || DEFAULT_PROJECT_ID;
-        const apiKey = clean(process.env.APPWRITE_API_KEY);
+        const endpoint = appwriteEndpoint();
+        const projectId = appwriteProjectId();
+        const apiKey = env('APPWRITE_API_KEY');
 
         // Sin API key el cliente admin no puede autorizar nada. Fallar acá, de
         // forma ruidosa, es preferible a arrancar y devolver 500 en cada request

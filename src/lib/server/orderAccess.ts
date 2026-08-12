@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { env } from './env';
 
 /**
  * Permiso de lectura de un pedido para compradores no logueados. [C-08]
@@ -23,7 +24,7 @@ const MAX_PEDIDOS = 20;
  * pueda faltar en el deploy y tirar abajo el checkout.
  */
 function claveDeFirma(): string {
-	const base = process.env.ORDER_ACCESS_SECRET || process.env.APPWRITE_API_KEY;
+	const base = env('ORDER_ACCESS_SECRET', 'APPWRITE_API_KEY');
 	if (!base) {
 		throw new Error('No hay secreto disponible para firmar el acceso a pedidos.');
 	}

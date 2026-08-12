@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import crypto from 'node:crypto';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import { createAdminClient } from '../../../lib/server/appwrite';
+import { env } from '../../../lib/server/env';
 import {
 	resolverComisiones,
 	cancelarOrdenYRestaurarStock,
@@ -63,7 +64,7 @@ export const POST: APIRoute = async ({ request }) => {
 			return new Response('OK', { status: 200 });
 		}
 
-		const secret = process.env.MP_WEBHOOK_SECRET;
+		const secret = env('MP_WEBHOOK_SECRET');
 		if (!secret) {
 			// Fail closed. Antes, si faltaba la variable, el handler aceptaba que
 			// el paymentId fuera directamente el orderId y regalaba pedidos.
@@ -76,7 +77,7 @@ export const POST: APIRoute = async ({ request }) => {
 			return new Response('Firma inválida', { status: 401 });
 		}
 
-		const mpToken = process.env.MP_ACCESS_TOKEN;
+		const mpToken = env('MP_ACCESS_TOKEN');
 		if (!mpToken) {
 			console.error('MP_ACCESS_TOKEN no configurado: no se puede consultar el pago.');
 			return new Response('Pasarela no configurada', { status: 503 });
