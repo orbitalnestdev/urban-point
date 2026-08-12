@@ -60,7 +60,7 @@ export default function RegistrationForm() {
         setError('El teléfono debe tener al menos 8 números.');
         return;
       }
-      if (!/^\\S+@\\S+\\.\\S+$/.test(formData.email)) {
+      if (!/^\S+@\S+\.\S+$/.test(formData.email)) {
         setError('El email ingresado no es válido.');
         return;
       }

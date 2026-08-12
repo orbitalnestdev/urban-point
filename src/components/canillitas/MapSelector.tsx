@@ -17,11 +17,11 @@ export default function MapSelector({ lat, lng, onChange }: MapSelectorProps) {
 
   const performReverseGeocoding = async (lat: number, lng: number) => {
     try {
-        const res = await fetch(`https://photon.komoot.io/reverse?lon=\${lng}&lat=\${lat}`);
+        const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
         const data = await res.json();
         if (data && data.features && data.features.length > 0) {
             const props = data.features[0].properties;
-            const direccion = props.street ? `\${props.street} \${props.housenumber || ''}`.trim() : (props.name || '');
+            const direccion = props.street ? `${props.street} ${props.housenumber || ''}`.trim() : (props.name || '');
             const localidad = props.district || props.city || '';
             const provincia = props.state || '';
             return { direccion, localidad, provincia };
@@ -95,13 +95,13 @@ export default function MapSelector({ lat, lng, onChange }: MapSelectorProps) {
     
     setIsSearching(true);
     try {
-      const res = await fetch(`https://photon.komoot.io/api/?q=\${encodeURIComponent(searchQuery + ', Argentina')}&limit=1`);
+      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery + ', Argentina')}&limit=1`);
       const data = await res.json();
       if (data && data.features && data.features.length > 0) {
         const newLng = parseFloat(data.features[0].geometry.coordinates[0]);
         const newLat = parseFloat(data.features[0].geometry.coordinates[1]);
         const props = data.features[0].properties;
-        const direccion = props.street ? `\${props.street} \${props.housenumber || ''}`.trim() : (props.name || '');
+        const direccion = props.street ? `${props.street} ${props.housenumber || ''}`.trim() : (props.name || '');
         const localidad = props.district || props.city || '';
         const provincia = props.state || '';
         
