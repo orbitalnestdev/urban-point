@@ -737,11 +737,15 @@ const paginationItems = filteredPages.map((p, index) => ({
 		});
 	});
 
+	// Criterio: tap en la tarjeta -> edición rápida (el drawer de arriba);
+	// botón "Editar" -> editor completo. Los dos abrían el mismo drawer, así
+	// que al editor completo sólo se llegaba desde adentro del panel.
 	document.querySelectorAll('.btn-open-drawer').forEach(btn => {
 		btn.addEventListener('click', (e) => {
 			e.stopPropagation();
 			const tr = (e.currentTarget as HTMLElement).closest('.tr-product') as HTMLElement;
-			if (tr) openPanel(tr.dataset);
+			const id = tr?.dataset.id;
+			if (id) window.location.href = `/admin/catalogo/${id}`;
 		});
 	});
 
@@ -909,13 +913,11 @@ const paginationItems = filteredPages.map((p, index) => ({
 	// Single Export CSV Action
 	document.getElementById('btn-export-csv')?.addEventListener('click', async () => {
 		const res = await fetch('/api/products-raw.json');
-		if (res.ok) {
-			const data = await res.json();
-			exportProductsCsv(data);
-		} else {
-			alert('Exportando productos...');
-			window.location.reload();
+		if (!res.ok) {
+			alert('No se pudo exportar el catálogo. Intentá de nuevo.');
+			return;
 		}
+		exportProductsCsv(await res.json());
 	});
 
 	// New Product Action
