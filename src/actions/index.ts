@@ -11,7 +11,7 @@ import {
 } from '../lib/orderStates';
 import { parseActiveNodeValue, NODE_COOKIE_NAME, REF_COOKIE_NAME } from '../lib/nodeSession';
 import { precioDeVentaCentavos } from '../lib/pricing';
-import { normalizarSlug, esSlugReservado } from '../lib/slugs';
+import { normalizarSlug, esSlugReservado, limpiarSlugNodo } from '../lib/slugs';
 import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 
 
@@ -19,7 +19,8 @@ import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones } 
 
 import { createAdminClient } from '../lib/server/appwrite';
 import { env } from '../lib/server/env';
-import { obtenerTokenVendedorValido } from '../lib/server/mercadopagoOAuth';
+import { saveSiteSetting } from '../lib/server/settings';
+import { obtenerTokenPlataformaValido } from '../lib/server/mercadopagoOAuth';
 
 const client = new Proxy({} as Client, {
 	get(_target, prop: keyof Client) {
@@ -100,7 +101,7 @@ async function registrarEventoOrden(
  * existentes, agregando un sufijo numérico cuando hace falta.
  */
 async function generarSlugPunto(nombreComercial: string): Promise<string> {
-	const base = normalizarSlug(nombreComercial) || 'punto';
+	const base = limpiarSlugNodo(nombreComercial);
 
 	for (let intento = 0; intento < 25; intento++) {
 		const candidato = intento === 0 ? base : `${base}-${intento + 1}`;
@@ -768,15 +769,7 @@ export const server = {
 					return { success: true, init_point: `/checkout/success?order_id=${orderDoc.$id}` };
 				}
 
-				let mpAccessToken: string | null = null;
-
-				if (finalPickupPointId) {
-					mpAccessToken = await obtenerTokenVendedorValido(finalPickupPointId);
-				}
-
-				if (!mpAccessToken) {
-					mpAccessToken = env('MP_ACCESS_TOKEN');
-				}
+				const mpAccessToken = await obtenerTokenPlataformaValido();
 
 				if (!mpAccessToken) {
 					// Fallback to fake checkout if no token
@@ -820,39 +813,20 @@ export const server = {
 
 	disconnectMercadoPago: defineAction({
 		accept: 'json',
-		input: z.object({
-			pickupPointId: z.string().optional()
-		}),
-		handler: async (input, ctx) => {
+		input: z.object({}),
+		handler: async (_input, ctx) => {
 			try {
-				if (!ctx.locals.user || (ctx.locals.user.role !== 'canillita' && ctx.locals.user.role !== 'admin')) {
-					throw new Error('No autorizado');
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo el administrador puede desvincular Mercado Pago.');
 				}
 
-				let pointId = input.pickupPointId;
-				if (!pointId) {
-					const points = await db.listDocuments('urbanpoint', 'pickup_points', [
-						Query.equal('profile_id', ctx.locals.user.profileId),
-						Query.limit(1)
-					]);
-					if (points.documents.length > 0) {
-						pointId = points.documents[0].$id;
-					}
-				}
-
-				if (!pointId) {
-					throw new Error('No se encontró el punto de retiro a desvincular.');
-				}
-
-				await db.updateDocument('urbanpoint', 'pickup_points', pointId, {
-					mp_user_id: '',
-					mp_access_token: '',
-					mp_refresh_token: '',
-					mp_public_key: '',
-					mp_token_expires_at: '',
-					mp_connected_at: '',
-					mp_status: 'desconectado'
-				});
+				await saveSiteSetting('mp_user_id', '');
+				await saveSiteSetting('mp_access_token', '');
+				await saveSiteSetting('mp_refresh_token', '');
+				await saveSiteSetting('mp_public_key', '');
+				await saveSiteSetting('mp_token_expires_at', '');
+				await saveSiteSetting('mp_connected_at', '');
+				await saveSiteSetting('mp_status', 'desconectado');
 
 				return { success: true };
 			} catch (error: any) {
@@ -1683,7 +1657,7 @@ export const server = {
 
 				let rawSlug = input.slug || (input.id ? undefined : input.nombre_comercial);
 				if (rawSlug) {
-					const cleanSlug = normalizarSlug(rawSlug);
+					const cleanSlug = limpiarSlugNodo(rawSlug);
 					if (esSlugReservado(cleanSlug)) {
 						throw new Error(`El slug "${cleanSlug}" es una ruta reservada del sistema.`);
 					}

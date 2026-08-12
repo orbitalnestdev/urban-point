@@ -13,6 +13,11 @@ const estadoFilter = Astro.url.searchParams.get('estado') || 'todos';
 const { databases } = createAdminClient();
 let orders = [];
 let allOrders = [];
+let currentPage = 1;
+let pageSize = 25;
+let totalFiltered = 0;
+let totalPages = 1;
+let pagedOrders = [];
 
 try {
 	const [resOrders, resProfiles, resPoints] = await Promise.all([
@@ -76,13 +81,14 @@ try {
 			o.pickupPoint?.nombre_comercial?.toLowerCase().includes(q) ||
 			o.canillitaProfile?.nombre?.toLowerCase().includes(q)
 		);
+	}
 	orders = filtered;
 
-	const currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
-	const pageSize = 25;
-	const totalFiltered = filtered.length;
-	const totalPages = Math.ceil(totalFiltered / pageSize) || 1;
-	const pagedOrders = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+	currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
+	pageSize = 25;
+	totalFiltered = filtered.length;
+	totalPages = Math.ceil(totalFiltered / pageSize) || 1;
+	pagedOrders = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 	orders = pagedOrders;
 
 } catch (e) {
@@ -360,6 +366,7 @@ const getStatusClass = (estado: string) => {
 								</td>
 							</tr>
 						)}
+					</tbody>
 				</table>
 
 				<Pagination 

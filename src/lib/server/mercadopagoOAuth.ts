@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { createAdminClient } from './appwrite';
 import { env } from './env';
+import { getSiteSettings, saveSiteSetting } from './settings';
 
 export interface MPOAuthTokens {
 	access_token: string;
@@ -14,7 +15,8 @@ export interface MPOAuthTokens {
 
 export interface MPStatePayload {
 	profileId: string;
-	pointId: string;
+	scopeTarget: string; // 'admin' | 'point'
+	pointId?: string;
 	timestamp: number;
 	nonce: string;
 }
@@ -27,9 +29,10 @@ function getSecretKey(): string {
 /**
  * Genera un state firmado HMAC para prevenir CSRF durante el flujo OAuth.
  */
-export function generarStateOAuth(profileId: string, pointId: string): string {
+export function generarStateOAuth(profileId: string, scopeTarget: string = 'admin', pointId?: string): string {
 	const payload: MPStatePayload = {
 		profileId,
+		scopeTarget,
 		pointId,
 		timestamp: Date.now(),
 		nonce: crypto.randomBytes(16).toString('hex')
@@ -100,7 +103,7 @@ export function obtenerUrlAutorizacionMP(state: string, redirectUri: string): st
 }
 
 /**
- * Intercambia el authorization_code por las credenciales OAuth del vendedor.
+ * Intercambia el authorization_code por las credenciales OAuth.
  */
 export async function intercambiarCodigoPorTokens(
 	code: string,
@@ -139,7 +142,7 @@ export async function intercambiarCodigoPorTokens(
 }
 
 /**
- * Refresca el access_token utilizando el refresh_token del vendedor.
+ * Refresca el access_token utilizando el refresh_token.
  */
 export async function refrescarTokenMP(refreshToken: string): Promise<MPOAuthTokens> {
 	const clientId = env('MP_CLIENT_ID');
@@ -174,8 +177,51 @@ export async function refrescarTokenMP(refreshToken: string): Promise<MPOAuthTok
 }
 
 /**
+ * Obtiene el access_token válido de Mercado Pago para la tienda/plataforma administrada.
+ * Si está próximo a expirar (o expirado), lo renueva automáticamente mediante refresh_token.
+ */
+export async function obtenerTokenPlataformaValido(): Promise<string | null> {
+	try {
+		const settings = await getSiteSettings();
+		const settingsMap = settings as unknown as Record<string, any>;
+		const mpStatus = settingsMap.mp_status;
+		const mpAccessToken = settingsMap.mp_access_token || settings.mp_access_token;
+		const mpRefreshToken = settingsMap.mp_refresh_token;
+		const mpExpiresAtStr = settingsMap.mp_token_expires_at;
+
+		if (mpStatus === 'conectado' && mpAccessToken) {
+			const expiresAt = mpExpiresAtStr ? new Date(mpExpiresAtStr).getTime() : 0;
+			const now = Date.now();
+			const marginMs = 60 * 60 * 1000;
+
+			if (expiresAt > 0 && expiresAt - now < marginMs && mpRefreshToken) {
+				console.log('Renovando access_token OAuth de Mercado Pago para la tienda...');
+				const nuevosTokens = await refrescarTokenMP(mpRefreshToken);
+				const nuevoExpiresAt = new Date(now + nuevosTokens.expires_in * 1000).toISOString();
+
+				await saveSiteSetting('mp_access_token', nuevosTokens.access_token);
+				await saveSiteSetting('mp_refresh_token', nuevosTokens.refresh_token);
+				await saveSiteSetting('mp_token_expires_at', nuevoExpiresAt);
+				if (nuevosTokens.public_key) {
+					await saveSiteSetting('mp_public_key', nuevosTokens.public_key);
+				}
+				await saveSiteSetting('mp_status', 'conectado');
+
+				return nuevosTokens.access_token;
+			}
+
+			return mpAccessToken;
+		}
+
+		return env('MP_ACCESS_TOKEN') || null;
+	} catch (error) {
+		console.error('Error al obtener token de Mercado Pago de la plataforma:', error);
+		return env('MP_ACCESS_TOKEN') || null;
+	}
+}
+
+/**
  * Obtiene el access_token válido de Mercado Pago para un punto de retiro.
- * Si está próximo a expirar (o expirado), lo renueva automáticamente.
  */
 export async function obtenerTokenVendedorValido(pointId: string): Promise<string | null> {
 	const { databases: db } = createAdminClient();
@@ -189,7 +235,6 @@ export async function obtenerTokenVendedorValido(pointId: string): Promise<strin
 
 		const expiresAt = point.mp_token_expires_at ? new Date(point.mp_token_expires_at).getTime() : 0;
 		const now = Date.now();
-		// Renovar si falta menos de 1 hora para expirar (3.600.000 ms)
 		const marginMs = 60 * 60 * 1000;
 
 		if (expiresAt > 0 && expiresAt - now < marginMs && point.mp_refresh_token) {

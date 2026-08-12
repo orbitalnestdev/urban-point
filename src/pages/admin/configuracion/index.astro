@@ -9,6 +9,11 @@ let settings = await getSiteSettings();
 let successMessage = '';
 let errorMessage = '';
 
+const mpStatusParam = Astro.url.searchParams.get('mp');
+const mpErrorParam = Astro.url.searchParams.get('mp_error');
+const settingsMap = settings as unknown as Record<string, any>;
+const isMpConnected = settingsMap.mp_status === 'conectado';
+
 if (Astro.request.method === 'POST') {
 	try {
 		const formData = await Astro.request.formData();
@@ -203,9 +208,80 @@ if (Astro.request.method === 'POST') {
 						</div>
 					</div>
 
-					{/* 6. SEO */}
+					{/* 6. Pagos & Mercado Pago (OAuth) */}
+					<div id="sec-pagos" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
+						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">6. Pagos & Integración Mercado Pago OAuth</h3>
+
+						{mpStatusParam === 'conectado' && (
+							<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl text-xs font-bold flex items-center gap-2">
+								<CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+								<span>¡La cuenta de Mercado Pago de la tienda se vinculó exitosamente mediante OAuth!</span>
+							</div>
+						)}
+
+						{mpErrorParam && (
+							<div class="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl text-xs font-bold flex items-center gap-2">
+								<AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+								<span>Error al conectar con Mercado Pago: {mpErrorParam === 'cancelado' ? 'Autorización cancelada por el usuario.' : mpErrorParam}</span>
+							</div>
+						)}
+
+						<div class="bg-gradient-to-br from-sky-900 to-indigo-950 text-white rounded-2xl p-6 border border-sky-800 flex flex-col md:flex-row md:items-center justify-between gap-6">
+							<div class="space-y-2 max-w-xl">
+								<div class="flex items-center gap-2 text-sky-300 font-bold text-xs uppercase tracking-widest">
+									<CreditCard className="w-4 h-4 text-sky-300" />
+									Flujo OAuth Oficial Mercado Pago Argentina
+								</div>
+								<h4 class="text-xl font-black">Cuenta Principal de Recaudación</h4>
+								<p class="text-sky-100 text-xs leading-relaxed">
+									Conectá la cuenta oficial de Mercado Pago de la tienda otorgando permisos sin necesidad de ingresar ni exponer Access Tokens o secretos manualmente.
+								</p>
+							</div>
+
+							<div class="shrink-0 flex flex-col items-start md:items-end gap-3 bg-white/10 p-4 rounded-xl border border-white/10 backdrop-blur-md">
+								{isMpConnected ? (
+									<>
+										<div class="flex items-center gap-2 text-emerald-400 font-extrabold text-xs">
+											<span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+											Cuenta OAuth Conectada
+										</div>
+										<div class="text-xs text-sky-200 font-mono">
+											Collector ID: <span class="text-white font-bold">{settingsMap.mp_user_id || 'Activo'}</span>
+										</div>
+										{settingsMap.mp_connected_at && (
+											<div class="text-[11px] text-sky-300">
+												Conectado: {new Date(settingsMap.mp_connected_at).toLocaleDateString('es-AR')}
+											</div>
+										)}
+										<button
+											type="button"
+											id="btn-admin-desconectar-mp"
+											class="mt-2 text-xs font-bold text-rose-300 hover:text-rose-100 underline cursor-pointer transition-colors"
+										>
+											Desconectar cuenta Mercado Pago
+										</button>
+									</>
+								) : (
+									<>
+										<div class="flex items-center gap-2 text-amber-300 font-bold text-xs">
+											<span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+											Sin cuenta OAuth vinculada
+										</div>
+										<a
+											href="/api/auth/mercadopago/connect"
+											class="px-5 py-2.5 bg-[#009EE3] hover:bg-[#0089C7] text-white font-black text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 text-center"
+										>
+											Conectar Mercado Pago con OAuth
+										</a>
+									</>
+								)}
+							</div>
+						</div>
+					</div>
+
+					{/* 7. SEO */}
 					<div id="sec-seo" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">6. SEO & Configuración de Buscadores</h3>
+						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">7. SEO & Configuración de Buscadores</h3>
 						<div class="grid grid-cols-1 gap-4 text-xs">
 							<div>
 								<label class="block font-bold text-slate-900 mb-1">Título SEO Principal</label>
@@ -223,4 +299,32 @@ if (Astro.request.method === 'POST') {
 		</form>
 
 	</main>
+
+	<script>
+		import { actions } from 'astro:actions';
+
+		document.getElementById('btn-admin-desconectar-mp')?.addEventListener('click', async (e) => {
+			const btn = e.currentTarget as HTMLButtonElement;
+			if (!confirm('¿Confirmás que querés desvincular la cuenta de Mercado Pago de la tienda?')) return;
+
+			btn.disabled = true;
+			btn.innerText = 'Desconectando...';
+
+			try {
+				const { data, error } = await actions.disconnectMercadoPago({});
+				if (error || !data?.success) {
+					alert(error?.message || 'Error al desvincular cuenta.');
+					btn.disabled = false;
+					btn.innerText = 'Desconectar cuenta Mercado Pago';
+				} else {
+					alert('Cuenta de Mercado Pago desvinculada exitosamente.');
+					window.location.href = '/admin/configuracion#sec-pagos';
+				}
+			} catch (err) {
+				alert('Error de conexión');
+				btn.disabled = false;
+				btn.innerText = 'Desconectar cuenta Mercado Pago';
+			}
+		});
+	</script>
 </AdminLayout>

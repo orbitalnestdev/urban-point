@@ -19,6 +19,14 @@ let pendingBalances: any[] = [];
 let pastPayouts: any[] = [];
 let totalPendienteCentavos = 0;
 let totalLiquidadoCentavos = 0;
+let currentPage = 1;
+let pageSize = 25;
+let totalPendingItems = 0;
+let totalPendingPages = 1;
+let pagedPendingBalances: any[] = [];
+let totalPayoutItems = 0;
+let totalPayoutPages = 1;
+let pagedPastPayouts: any[] = [];
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
@@ -83,16 +91,16 @@ try {
   pastPayouts = payoutsRes.documents;
   totalLiquidadoCentavos = pastPayouts.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
 
-  const currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
-  const pageSize = 25;
+  currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
+  pageSize = 25;
 
-  const totalPendingItems = pendingBalances.length;
-  const totalPendingPages = Math.ceil(totalPendingItems / pageSize) || 1;
-  const pagedPendingBalances = pendingBalances.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  totalPendingItems = pendingBalances.length;
+  totalPendingPages = Math.ceil(totalPendingItems / pageSize) || 1;
+  pagedPendingBalances = pendingBalances.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const totalPayoutItems = pastPayouts.length;
-  const totalPayoutPages = Math.ceil(totalPayoutItems / pageSize) || 1;
-  const pagedPastPayouts = pastPayouts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  totalPayoutItems = pastPayouts.length;
+  totalPayoutPages = Math.ceil(totalPayoutItems / pageSize) || 1;
+  pagedPastPayouts = pastPayouts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
 } catch (e) {
   console.error("Error loading liquidaciones:", e);

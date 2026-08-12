@@ -24,18 +24,19 @@ describe('Mercado Pago OAuth Module', () => {
 			const profileId = 'profile_123';
 			const pointId = 'point_456';
 
-			const state = generarStateOAuth(profileId, pointId);
+			const state = generarStateOAuth(profileId, 'admin', pointId);
 			expect(typeof state).toBe('string');
 			expect(state.length).toBeGreaterThan(20);
 
 			const payload = validarStateOAuth(state);
 			expect(payload).not.toBeNull();
 			expect(payload?.profileId).toBe(profileId);
+			expect(payload?.scopeTarget).toBe('admin');
 			expect(payload?.pointId).toBe(pointId);
 		});
 
 		it('debe rechazar un state alterado o con firma HMAC no válida', () => {
-			const state = generarStateOAuth('profile_123', 'point_456');
+			const state = generarStateOAuth('profile_123', 'admin', 'point_456');
 			const stateTampered = state.slice(0, -4) + 'XXXX';
 
 			const payload = validarStateOAuth(stateTampered);
