@@ -25,11 +25,16 @@ export const getCachedCatalog = async () => {
   try {
     const { databases } = createAdminClient();
 
+    cache.degradado = false;
+
     try {
       const pRes = await databases.listDocuments('urbanpoint', 'products', [Query.limit(100)]);
       cache.products = pRes.documents.filter((p: any) => p.estado === 'activo' || !p.estado);
     } catch (e: any) {
       console.error('[Cache] Error fetching products:', e.message);
+      // Marcar la degradación: si no, un fallo del backend se ve exactamente
+      // igual que un catálogo vacío y la tienda queda muda.
+      cache.degradado = true;
       if (!cache.products) cache.products = [];
     }
 
@@ -56,6 +61,7 @@ export const getCachedCatalog = async () => {
     cache.lastFetch = now;
   } catch (err: any) {
     console.error('[Cache] Fatal Appwrite connection error:', err.message);
+    cache.degradado = true;
     if (!cache.products) cache.products = [];
     if (!cache.categories) cache.categories = [];
     if (!cache.pickupPoints) cache.pickupPoints = [];
