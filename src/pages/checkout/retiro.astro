@@ -7,6 +7,7 @@ import { createAdminClient } from '../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 
 import { parseActiveNodeCookie } from '../../lib/nodeSession';
+import { toSafeJson } from '../../lib/safeJson';
 
 let pickupPoints: any[] = [];
 let provincias: string[] = [];
@@ -211,7 +212,7 @@ try {
     }
   </style>
 
-  <script type="application/json" id="pickup-points-json" set:html={JSON.stringify(pickupPoints)} />
+  <script type="application/json" id="pickup-points-json" set:html={toSafeJson(pickupPoints)} />
   <script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
   <script>

@@ -10,6 +10,7 @@ import { createAdminClient } from '../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { serializeActiveNodeCookie, REF_COOKIE_NAME, REF_COOKIE_MAX_AGE } from '../lib/nodeSession';
 import { precioDeVentaCentavos, precioListaCentavos } from '../lib/pricing';
+import { toSafeJson } from '../lib/safeJson';
 
 const reservedSlugs = new Set([
   'tienda', 'carrito', 'checkout', 'pago', 'retiro', 'success', 'mi-cuenta',
@@ -554,7 +555,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 	<!-- Client-side localStorage backup for active node -->
 	<script is:inline set:html={`
 		(function() {
-			const activeNode = ${JSON.stringify({
+			const activeNode = ${toSafeJson({
 				id: activeNode.$id,
 				nombre: activeNode.nombre_comercial,
 				slug: activeNode.slug,

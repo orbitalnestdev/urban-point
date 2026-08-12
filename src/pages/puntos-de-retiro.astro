@@ -5,6 +5,7 @@ import Layout from '../layouts/Layout.astro';
 import Header from '../components/Header.astro';
 import { createAdminClient } from '../lib/server/appwrite';
 import { Query } from 'node-appwrite';
+import { toSafeJson } from '../lib/safeJson';
 
 let pickupPoints: any[] = [];
 let provincias: string[] = [];
@@ -257,7 +258,7 @@ try {
   </style>
 
   <!-- Embed Data for Client JS -->
-  <script type="application/json" id="pickup-points-json" set:html={JSON.stringify(pickupPoints)} />
+  <script type="application/json" id="pickup-points-json" set:html={toSafeJson(pickupPoints)} />
 
   <!-- Leaflet JS CDN -->
   <script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
