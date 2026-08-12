@@ -3,6 +3,7 @@ import ClientLayout from '../../../layouts/ClientLayout.astro';
 import { getClientProfile } from '../../../lib/server/auth';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
+import { ETIQUETAS, puedeEntregarse, type EstadoPedido } from '../../../lib/orderStates';
 
 export const prerender = false;
 
@@ -45,16 +46,24 @@ try {
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 
+// Los estados salen del vocabulario canónico (src/lib/orderStates.ts). Antes
+// se renderizaban 'en_transito' y 'listo_retiro', que no existen en el enum.
+const COLOR_ESTADO: Record<string, string> = {
+	pendiente_pago: 'bg-amber-100 text-amber-800',
+	pagado: 'bg-blue-100 text-blue-800',
+	preparando: 'bg-blue-100 text-blue-800',
+	despachado: 'bg-purple-100 text-purple-800',
+	en_punto: 'bg-emerald-100 text-[#2D5A27]',
+	entregado: 'bg-slate-200 text-slate-700',
+	retirado: 'bg-slate-200 text-slate-700',
+	cancelado: 'bg-red-100 text-red-800',
+	reembolsado: 'bg-rose-100 text-rose-800'
+};
+
 const getStatusBadge = (status: string) => {
-	switch(status) {
-		case 'pendiente_pago': return '<span class="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-full">Pendiente de Pago</span>';
-		case 'pagado': return '<span class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1.5 rounded-full">Procesando</span>';
-		case 'en_transito': return '<span class="bg-purple-100 text-purple-800 text-xs font-bold px-3 py-1.5 rounded-full">En Camino</span>';
-		case 'listo_retiro': return '<span class="bg-emerald-100 text-[#2D5A27] text-xs font-bold px-3 py-1.5 rounded-full">¡Listo para Retirar!</span>';
-		case 'entregado': return '<span class="bg-slate-200 text-slate-700 text-xs font-bold px-3 py-1.5 rounded-full">Entregado</span>';
-		case 'cancelado': return '<span class="bg-red-100 text-red-800 text-xs font-bold px-3 py-1.5 rounded-full">Cancelado</span>';
-		default: return `<span class="bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1.5 rounded-full">${status}</span>`;
-	}
+	const color = COLOR_ESTADO[status] || 'bg-slate-100 text-slate-600';
+	const texto = ETIQUETAS[status as EstadoPedido] || status;
+	return `<span class="${color} text-xs font-bold px-3 py-1.5 rounded-full">${texto}</span>`;
 };
 ---
 
@@ -106,7 +115,9 @@ const getStatusBadge = (status: string) => {
 		
 		<!-- Sidebar / QR Code -->
 		<div class="space-y-6">
-			{order.estado === 'listo_retiro' && (
+			{/* El bloque estaba condicionado a 'listo_retiro', un estado que no
+			    existe en el enum: el cliente nunca llegaba a ver su código. */}
+			{order.fulfillment === 'retiro' && order.pickup_code_hash && puedeEntregarse(order.estado) && (
 				<div class="bg-[#2D5A27] rounded-3xl p-6 text-white text-center shadow-lg shadow-[#2D5A27]/20 border border-white/10 relative overflow-hidden">
 					<div class="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -translate-y-16 translate-x-16"></div>
 					

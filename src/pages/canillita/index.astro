@@ -190,7 +190,8 @@ const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCod
 					</div>
 					<div class="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl text-xs font-bold">
 						<a href="?estado=todos" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'todos' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'}`}>Todos</a>
-						<a href="?estado=listo" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'listo' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600'}`}>Listos / Pagados</a>
+						<a href="?estado=en_punto" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'en_punto' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600'}`}>Listos para retirar</a>
+						<a href="?estado=pagado" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'pagado' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600'}`}>Pagados</a>
 						<a href="?estado=entregado" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'entregado' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600'}`}>Entregados</a>
 					</div>
 				</div>

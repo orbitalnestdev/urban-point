@@ -55,8 +55,11 @@ const salesMonthCentavos = orders
 
 // Actionable metrics
 const nuevosSinConfirmar = orders.filter(o => o.estado === 'pendiente_pago' || o.estado === 'pendiente').length;
-const listosParaRetiro = orders.filter(o => o.estado === 'listo' || o.estado === 'preparado').length;
-const sinRetirarStale = orders.filter(o => (o.estado === 'listo' || o.estado === 'preparado') && (now.getTime() - new Date(o.$createdAt).getTime()) > SEVEN_DAYS_MS).length;
+// 'listo' y 'preparado' no existen en el enum de orders: estas dos métricas
+// daban siempre 0. Los estados reales son 'en_punto' y 'preparando'.
+const esperandoRetiro = (o: any) => o.estado === 'en_punto' || o.estado === 'preparando';
+const listosParaRetiro = orders.filter(esperandoRetiro).length;
+const sinRetirarStale = orders.filter(o => esperandoRetiro(o) && (now.getTime() - new Date(o.$createdAt).getTime()) > SEVEN_DAYS_MS).length;
 
 const sinStockCount = products.filter(p => p.stock === 0).length;
 const stockCriticoCount = products.filter(p => p.stock > 0 && p.stock <= 5).length;
