@@ -1,9 +1,9 @@
 # Estado de los tests
 
-> **Actualizado tras la Fase 2.** La suite pasó de 24 a **84 tests, con 83 en
-> verde**. El único rojo es C-06 (`precio_promocional` declarado como `double`
-> en Appwrite), que no se puede cerrar desde el código: requiere migrar el
-> atributo.
+> **Actualizado tras la Fase 2.** La suite pasó de 24 a **85 tests, con 85 en
+> verde**. C-06 se cerró migrando el atributo `precio_promocional` de `double`
+> a `integer` en la base, con respaldo verificado de los 1541 productos.
+
 >
 > Archivos por área: `commissions`, `orderStates`, `pricing`, `pricingModule`,
 > `nodeSession`, `payouts`, `atribucion`, `updateProduct` y `safeJson`.

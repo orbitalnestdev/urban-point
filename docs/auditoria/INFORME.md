@@ -75,9 +75,28 @@ repositorio: **Astro carga el `.env` en `import.meta.env`, no en
 `.env` nunca se aplicaba, así que hardcodear la clave era el parche a un bug
 de configuración, no a un problema de permisos de Appwrite.
 
-**Todos los hallazgos están cerrados salvo C-06**, que no se puede resolver
-desde el código. Suite: **83 de 84 tests en verde**; el único rojo es
-justamente C-06. `astro check` sin errores, build OK, `npm audit` en 0.
+**Los 41 hallazgos están cerrados.** Suite: **85 de 85 tests en verde**,
+`astro check` sin errores, build OK, `npm audit` en 0 vulnerabilidades.
+
+### Acciones ya ejecutadas contra la base
+
+- **Permisos cerrados.** Se quitó `read("any")` de las 6 colecciones expuestas.
+  Reverificado con la misma prueba anónima que abrió la auditoría: las 13
+  colecciones responden "not authorized" sin API key.
+- **`precio_promocional` migrado** de `double` a `integer`. Los 1541 productos
+  coinciden con el respaldo, 0 diferencias. Respaldo en
+  `docs/auditoria/backups/`.
+
+### Lo único que falta para producción
+
+**Rotar la API key de Appwrite.** Sigue siendo la misma que estuvo en 15
+commits del repositorio. El código ya no la contiene, pero la clave en sí
+está quemada: hay que generar una nueva en la consola de Appwrite y cargarla
+como `APPWRITE_API_KEY` en Dokploy. Sin esa variable el servidor no arranca,
+que es el comportamiento buscado.
+
+Además, para que el checkout con Mercado Pago funcione hacen falta
+`MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET`.
 
 ### Lo que sigue sin verificarse
 
@@ -85,13 +104,19 @@ Cerrar el hallazgo no equivale a haberlo probado en vivo. Sigue pendiente:
 
 - **El webhook real de Mercado Pago.** La firma se implementó y hay un script
   para probarla (`scripts/simulate-webhook.ts`), pero **no se ejecutó contra el
-  sandbox**: hace falta `MP_WEBHOOK_SECRET` y un pago real.
+  sandbox**: hace falta `MP_WEBHOOK_SECRET` y un pago real. **Ningún checkout
+  se completó de punta a punta.**
 - **Condiciones de carrera de stock.** El descuento sigue siendo `get` + `update`
   sin transacción ni control optimista (`src/lib/commissions.ts`): dos compras
-  simultáneas del último producto probablemente sobrevendan. No se corrigió.
+  simultáneas del último producto probablemente sobrevendan. **No se corrigió.**
 - **Los pedidos históricos.** Los 19 pedidos existentes siguen con
   `pickup_point_id` y `origin_node_id` en null. El fix de C-02 no es retroactivo.
 - **Los E2E de Playwright**, por las razones documentadas en `tests.md`.
+
+Lo verificado en vivo fue la vitrina: catálogo, mapa, páginas de nodo, la
+cookie de atribución y el cierre de permisos. El flujo de compra y comisiones
+está corregido y cubierto por tests unitarios, pero **no ejecutado con un pago
+real**.
 
 ### Política de atribución adoptada (A-06)
 
