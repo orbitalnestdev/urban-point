@@ -14,65 +14,51 @@ let orders = [];
 let allOrders = [];
 
 try {
-	const res = await databases.listDocuments('urbanpoint', 'orders', [
-		Query.orderDesc('$createdAt'),
-		Query.limit(200)
+	const [resOrders, resProfiles, resPoints] = await Promise.all([
+		databases.listDocuments('urbanpoint', 'orders', [
+			Query.orderDesc('$createdAt'),
+			Query.limit(200)
+		]),
+		databases.listDocuments('urbanpoint', 'profiles', [
+			Query.limit(1000)
+		]).catch(() => ({ documents: [] })),
+		databases.listDocuments('urbanpoint', 'pickup_points', [
+			Query.limit(1000)
+		]).catch(() => ({ documents: [] }))
 	]);
-	const rawOrders = res.documents;
 
-	// Populate profiles, pickup points, item counts and commissions
-	allOrders = await Promise.all(rawOrders.map(async (o) => {
-		let customerProfile = null;
+	const rawOrders = resOrders.documents;
+
+	const profileMap: Record<string, any> = {};
+	(resProfiles.documents || []).forEach((p: any) => { 
+		profileMap[p.$id] = p; 
+		if (p.user_id) profileMap[p.user_id] = p; 
+	});
+
+	const pointMap: Record<string, any> = {};
+	(resPoints.documents || []).forEach((p: any) => { 
+		pointMap[p.$id] = p; 
+	});
+
+	allOrders = rawOrders.map((o) => {
 		const custId = typeof o.customer_id === 'string' ? o.customer_id : o.customer_id?.$id;
-		if (custId) {
-			try {
-				customerProfile = await databases.getDocument('urbanpoint', 'profiles', custId);
-			} catch (e) {}
-		}
+		const customerProfile = custId ? profileMap[custId] : null;
 
-		let pickupPoint = null;
 		const ptId = typeof o.pickup_point_id === 'string' ? o.pickup_point_id : o.pickup_point_id?.$id;
-		if (ptId) {
-			try {
-				pickupPoint = await databases.getDocument('urbanpoint', 'pickup_points', ptId);
-			} catch (e) {}
-		}
+		const pickupPoint = ptId ? pointMap[ptId] : null;
 
-		let canillitaProfile = null;
 		const canId = o.canillita_id || (pickupPoint ? (typeof pickupPoint.profile_id === 'string' ? pickupPoint.profile_id : pickupPoint.profile_id?.$id) : null);
-		if (canId) {
-			try {
-				canillitaProfile = await databases.getDocument('urbanpoint', 'profiles', canId);
-			} catch (e) {}
-		}
-
-		let totalItemsCount = 0;
-		try {
-			const itemsRes = await databases.listDocuments('urbanpoint', 'order_items', [
-				Query.equal('order_id', o.$id),
-				Query.limit(100)
-			]);
-			totalItemsCount = itemsRes.documents.reduce((acc, curr) => acc + (curr.cantidad || 1), 0);
-		} catch (e) {}
-
-		let comisionCentavos = 0;
-		try {
-			const ledgersRes = await databases.listDocuments('urbanpoint', 'commission_ledger', [
-				Query.equal('order_id', o.$id),
-				Query.limit(10)
-			]);
-			comisionCentavos = ledgersRes.documents.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
-		} catch (e) {}
+		const canillitaProfile = canId ? profileMap[canId] : null;
 
 		return {
 			...o,
 			customerProfile,
 			pickupPoint,
 			canillitaProfile,
-			totalItems: totalItemsCount,
-			comisionCentavos
+			totalItems: o.items_count || 1,
+			comisionCentavos: o.comision_total_centavos || 0
 		};
-	}));
+	});
 
 	let filtered = [...allOrders];
 

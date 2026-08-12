@@ -3,6 +3,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { ETIQUETAS, type EstadoPedido } from '../../../lib/orderStates';
+import { toSafeJson } from '../../../lib/safeJson';
 
 export const prerender = false;
 
@@ -13,19 +14,41 @@ let order = null;
 let customer: any = null;
 let orderItems = [];
 let allProducts = [];
+let timelineEvents = [];
 
 try {
-	order = await databases.getDocument('urbanpoint', 'orders', id as string);
-	
-	const itemsRes = await databases.listDocuments('urbanpoint', 'order_items', [
-		Query.equal('order_id', id as string)
+	const [orderDoc, itemsRes, prodRes, eventsRes] = await Promise.all([
+		databases.getDocument('urbanpoint', 'orders', id as string),
+		databases.listDocuments('urbanpoint', 'order_items', [
+			Query.equal('order_id', id as string)
+		]),
+		databases.listDocuments('urbanpoint', 'products', [
+			Query.limit(200)
+		]),
+		databases.listDocuments('urbanpoint', 'order_events', [
+			Query.equal('order_id', id as string),
+			Query.orderDesc('$createdAt'),
+			Query.limit(50)
+		]).catch(() => ({ documents: [] }))
 	]);
-	orderItems = itemsRes.documents;
 
-	const prodRes = await databases.listDocuments('urbanpoint', 'products', [
-		Query.limit(100)
-	]);
+	order = orderDoc;
+	orderItems = itemsRes.documents;
 	allProducts = prodRes.documents;
+
+	const customerId = typeof order.customer_id === 'string' ? order.customer_id : order.customer_id?.$id;
+	if (customerId) {
+		customer = await databases.getDocument('urbanpoint', 'profiles', customerId).catch(() => null);
+	}
+
+	timelineEvents = (eventsRes.documents || []).map((ev: any) => ({
+		tipo: 'Cambio de estado',
+		fecha: new Date(ev.$createdAt).toLocaleString('es-AR', {
+			day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+		}),
+		detalle: `${ETIQUETAS[ev.de_estado as EstadoPedido] || ev.de_estado} → ${ETIQUETAS[ev.a_estado as EstadoPedido] || ev.a_estado}`,
+		usuario: ev.motivo || ''
+	}));
 } catch (e) {
 	console.error(e);
 	return Astro.redirect('/admin/pedidos');
@@ -34,7 +57,7 @@ try {
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
 // Stepper index calculation (1 to 5)
-const getStepperIndex = (estado) => {
+const getStepperIndex = (estado: string) => {
 	switch(estado) {
 		case 'pendiente':
 		case 'pendiente_pago':
@@ -45,10 +68,15 @@ const getStepperIndex = (estado) => {
 		case 'preparado': return 3;
 		case 'despachado':
 		case 'en_camino':
-		case 'enviado': return 4;
+		case 'en_transito':
+		case 'enviado':
+		case 'en_punto':
+		case 'listo':
+		case 'listo_retiro': return 4;
 		case 'entregado':
 		case 'retirado': return 5;
-		case 'cancelado': return -1;
+		case 'cancelado':
+		case 'reembolsado': return -1;
 		default: return 1;
 	}
 };
@@ -56,46 +84,7 @@ const getStepperIndex = (estado) => {
 const currentStep = getStepperIndex(order.estado);
 const totalUnidades = orderItems.reduce((acc, curr) => acc + (curr.cantidad || 1), 0);
 
-// Timeline items parsing or mock history
-let timelineEvents = [];
-try {
-	// customer_id se guarda como string, así que hay que resolver el perfil:
-	// leer order.customer_id?.nombre daba siempre undefined y la ficha caía a
-	// datos de relleno con el nombre y los mails de otras personas.
-	const customerId = typeof order.customer_id === 'string' ? order.customer_id : order.customer_id?.$id;
-	if (customerId) {
-		try {
-			customer = await databases.getDocument('urbanpoint', 'profiles', customerId);
-		} catch (e) {
-			console.warn(`No se pudo resolver el cliente ${customerId} del pedido ${id}:`, e);
-		}
-	}
-
-	// Historial real de la orden (order_events), no eventos inventados.
-	try {
-		const eventsRes = await databases.listDocuments('urbanpoint', 'order_events', [
-			Query.equal('order_id', id as string),
-			Query.orderDesc('$createdAt'),
-			Query.limit(50)
-		]);
-		timelineEvents = eventsRes.documents.map((ev: any) => ({
-			tipo: 'Cambio de estado',
-			fecha: new Date(ev.$createdAt).toLocaleString('es-AR', {
-				day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-			}),
-			detalle: `${ETIQUETAS[ev.de_estado as EstadoPedido] || ev.de_estado} → ${ETIQUETAS[ev.a_estado as EstadoPedido] || ev.a_estado}`,
-			usuario: ev.motivo || ''
-		}));
-	} catch (e) {
-		console.warn(`No se pudo leer el historial del pedido ${id}:`, e);
-	}
-} catch (e) {
-	timelineEvents = [];
-}
-
-// Sin eventos registrados la línea de tiempo queda vacía. Antes se rellenaba
-// con dos eventos inventados ("Ventalista"), que se mostraban como si fueran
-// historial real de este pedido.
+// Timeline items parsing
 if (!Array.isArray(timelineEvents)) {
 	timelineEvents = [];
 }

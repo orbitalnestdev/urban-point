@@ -13,25 +13,25 @@ let applications: any[] = [];
 let pendingLedgers: any[] = [];
 
 try {
-	const resOrders = await databases.listDocuments('urbanpoint', 'orders', [
-		Query.orderDesc('$createdAt'),
-		Query.limit(200)
+	const [resOrders, resProducts, resApps, resLedger] = await Promise.all([
+		databases.listDocuments('urbanpoint', 'orders', [
+			Query.orderDesc('$createdAt'),
+			Query.limit(200)
+		]),
+		databases.listDocuments('urbanpoint', 'products', [
+			Query.limit(200)
+		]),
+		databases.listDocuments('urbanpoint', 'canillita_applications', [
+			Query.equal('estado', 'solicitado')
+		]),
+		databases.listDocuments('urbanpoint', 'commission_ledger', [
+			Query.equal('estado', 'pendiente')
+		])
 	]);
+
 	orders = resOrders.documents;
-	
-	const resProducts = await databases.listDocuments('urbanpoint', 'products', [
-		Query.limit(200)
-	]);
 	products = resProducts.documents;
-
-	const resApps = await databases.listDocuments('urbanpoint', 'canillita_applications', [
-		Query.equal('estado', 'solicitado')
-	]);
 	applications = resApps.documents;
-
-	const resLedger = await databases.listDocuments('urbanpoint', 'commission_ledger', [
-		Query.equal('estado', 'pendiente')
-	]);
 	pendingLedgers = resLedger.documents;
 } catch (e) {
 	console.error("Dashboard error:", e);

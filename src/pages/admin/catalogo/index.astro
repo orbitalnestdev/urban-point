@@ -34,8 +34,10 @@ async function fetchAllDocs(collectionId: string) {
 }
 
 try {
-	products = await fetchAllDocs('products');
-	categories = await fetchAllDocs('categories');
+	[products, categories] = await Promise.all([
+		fetchAllDocs('products'),
+		fetchAllDocs('categories')
+	]);
 
 	const categoryMap: Record<string, any> = {};
 	categories.forEach(c => { categoryMap[c.$id] = c; });

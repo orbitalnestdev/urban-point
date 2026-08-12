@@ -27,8 +27,10 @@ async function fetchAllDocs(coll: string, baseQueries: any[] = []) {
 }
 
 try {
-	puntos = await fetchAllDocs('pickup_points', [Query.orderDesc('$createdAt')]);
-	referidos = await fetchAllDocs('referral_codes');
+	[puntos, referidos] = await Promise.all([
+		fetchAllDocs('pickup_points', [Query.orderDesc('$createdAt')]),
+		fetchAllDocs('referral_codes')
+	]);
 } catch (e) {
 	console.error(e);
 }
