@@ -1,5 +1,6 @@
 import { Client, Databases, Query, ID } from 'node-appwrite';
 import { createAdminClient } from './server/appwrite';
+import { estaPago } from './orderStates';
 
 const db = new Proxy({} as Databases, {
 	get(_target, prop: keyof Databases) {
@@ -50,7 +51,10 @@ export async function resolverComisiones(orderId: string) {
 	try {
 		const order = await db.getDocument('urbanpoint', 'orders', orderId);
 		
-		if (order.estado !== 'pagado') {
+		// Acepta cualquier estado posterior al cobro, no sólo 'pagado' exacto:
+		// una orden que ya avanzó a preparando/en_punto sigue teniendo su pago
+		// acreditado y debe poder devengar si algo quedó pendiente.
+		if (!estaPago(order.estado)) {
 			throw new Error('La orden no está pagada.');
 		}
 

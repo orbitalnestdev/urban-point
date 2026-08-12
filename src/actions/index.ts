@@ -6,6 +6,7 @@ import { getClientProfile, requireRole } from '../lib/server/auth';
 import {
 	normalizarEstadoPedido,
 	esTransicionValida,
+	puedeEntregarse,
 	type EstadoPedido
 } from '../lib/orderStates';
 import { parseActiveNodeValue, NODE_COOKIE_NAME } from '../lib/nodeSession';
@@ -546,6 +547,16 @@ export const server = {
 
 				const order = await db.getDocument('urbanpoint', 'orders', input.orderId);
 
+				// No se entrega mercadería sin pago acreditado. El panel llegó a
+				// mostrar pedidos pendiente_pago como "Listo para Retiro".
+				if (!puedeEntregarse(order.estado)) {
+					throw new Error(
+						order.estado === 'pendiente_pago'
+							? 'Este pedido todavía no tiene el pago acreditado.'
+							: `Un pedido en estado "${order.estado}" no se puede entregar.`
+					);
+				}
+
 				// Validate pickup point ownership if caller is canillita
 				if (ctx.locals.user.role === 'canillita') {
 					const userPoints = await db.listDocuments('urbanpoint', 'pickup_points', [
@@ -578,10 +589,11 @@ export const server = {
 					});
 				} catch (e) {}
 
-				// Trigger commissions devengo if not already pagado
-				if (order.estado !== 'pagado') {
-					await resolverComisiones(input.orderId);
-				}
+				// Las comisiones se devengan al acreditarse el pago (webhook o
+				// updateOrderStatus), no al entregar. Acá se llamaba a
+				// resolverComisiones DESPUÉS de escribir estado='entregado', y esa
+				// función exige estado 'pagado': tiraba error aunque la entrega
+				// hubiera salido bien, y la action devolvía success:false.
 
 				return { success: true };
 			} catch (error: any) {

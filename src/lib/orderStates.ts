@@ -73,6 +73,17 @@ export function transicionesPosibles(desde: EstadoPedido): EstadoPedido[] {
 	return TRANSICIONES[desde] ?? [];
 }
 
+/**
+ * ¿El canillita puede entregar este pedido?
+ *
+ * Sólo si el pago está acreditado y todavía no se entregó. El panel marcaba
+ * como "Listo para Retiro" todo lo que no estuviera entregado —incluidos los
+ * pendiente_pago— con el botón de entrega habilitado.
+ */
+export function puedeEntregarse(estado: EstadoPedido): boolean {
+	return ['pagado', 'preparando', 'despachado', 'en_punto'].includes(estado);
+}
+
 /** Un pedido cobrado: a partir de acá se devengan comisiones. */
 export function estaPago(estado: EstadoPedido): boolean {
 	return !['pendiente_pago', 'cancelado'].includes(estado);

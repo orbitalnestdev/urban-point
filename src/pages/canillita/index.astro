@@ -3,6 +3,12 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { Query } from 'node-appwrite';
 import { createAdminClient } from '../../lib/server/appwrite';
+import {
+  ETIQUETAS,
+  puedeEntregarse,
+  normalizarEstadoPedido,
+  type EstadoPedido
+} from '../../lib/orderStates';
 
 const user = Astro.locals.user;
 if (!user || (user.role !== 'canillita' && user.role !== 'admin')) {
@@ -50,7 +56,11 @@ try {
       Query.limit(100)
     ];
     if (estadoFiltro !== 'todos') {
-      orderQueries.unshift(Query.equal('estado', estadoFiltro));
+      // El tab "Listos" apuntaba al estado inexistente 'listo' y devolvía vacío.
+      const estadoCanonico = normalizarEstadoPedido(estadoFiltro);
+      if (estadoCanonico) {
+        orderQueries.unshift(Query.equal('estado', estadoCanonico));
+      }
     }
     const fetchedOrders = await db.listDocuments('urbanpoint', 'orders', orderQueries);
     ordersList = fetchedOrders.documents;
@@ -85,7 +95,9 @@ try {
 
     totalAcumuladoCentavos = ledgerList.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
     totalPendienteCentavos = ledgerList.filter(l => l.estado === 'pendiente').reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
-    totalLiquidadoCentavos = ledgerList.filter(l => l.estado === 'pagado').reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
+    // El enum del ledger es pendiente|disponible|liquidado|revertido: filtrar
+    // por 'pagado' daba siempre $0.
+    totalLiquidadoCentavos = ledgerList.filter(l => l.estado === 'liquidado').reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
   }
 } catch (e) {
   console.error("Canillita Dashboard Error:", e);
@@ -148,7 +160,7 @@ const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCod
 			<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
 				<div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200">
 					<h3 class="text-slate-400 font-bold text-xs uppercase tracking-wider mb-2">Entregas Pendientes</h3>
-					<p class="text-3xl font-black text-slate-900">{ordersList.filter(o => o.estado === 'listo' || o.estado === 'pagado').length}</p>
+					<p class="text-3xl font-black text-slate-900">{ordersList.filter(o => puedeEntregarse(o.estado)).length}</p>
 				</div>
 				<div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200">
 					<h3 class="text-slate-400 font-bold text-xs uppercase tracking-wider mb-2">Comisiones Totales</h3>
@@ -213,19 +225,25 @@ const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCod
 										</td>
 										<td class="p-4 text-center">
 											<span class="inline-block px-3 py-1 bg-slate-100 border border-slate-200 text-slate-700 font-mono font-bold tracking-widest rounded-lg text-xs">
-												{order.pickup_code_hash || '123456'}
+												{order.pickup_code_hash || 'Sin código'}
 											</span>
 										</td>
 										<td class="p-4 text-center">
-											{order.estado === 'entregado' ? (
-												<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">Entregado</span>
+											{order.estado === 'pendiente_pago' ? (
+												<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">Pendiente de pago</span>
 											) : (
-												<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">Listo para Retiro</span>
+												<span class={`px-2.5 py-1 rounded-full text-xs font-bold border ${order.estado === 'entregado' || order.estado === 'retirado' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-indigo-100 text-indigo-800 border-indigo-200'}`}>
+													{ETIQUETAS[order.estado as EstadoPedido] || order.estado}
+												</span>
 											)}
 										</td>
 										<td class="p-4 text-right">
-											{order.estado !== 'entregado' ? (
-												<button 
+											{order.estado === 'pendiente_pago' ? (
+												<span class="text-xs font-semibold text-amber-700">
+													No entregar: sin pago acreditado
+												</span>
+											) : puedeEntregarse(order.estado) ? (
+												<button
 													class="btn-entregar-pedido px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
 													data-id={order.$id}
 													data-code={order.pickup_code_hash || ''}
