@@ -38,10 +38,24 @@ Rama `fix/auditoria-fase-2`. Un hallazgo por commit, en orden de severidad.
 | A-04 Escapes rotos en el alta | Corregido | `196f0d7` |
 | A-01 Formulario de alta inalcanzable | Corregido | `6ce5300` |
 | C-08 IDOR del código de retiro | Corregido | `01ab717` |
+| A-07 Entrega sin pago acreditado | Corregido | `de5aa72` |
+| A-08 Datos internos de canillitas publicados | Corregido | `3d51522` |
+| A-09 Acceso a pedidos ajenos | Corregido | `f3f9946` |
+| A-03 Liquidaciones inoperativas | Corregido | `9bca2f9` |
+| A-06 Política de atribución contradictoria | Corregido | `22a3beb` |
 | **C-06 `precio_promocional` en float** | **Pendiente: requiere migrar la base** | — |
 
-Suite: **51 de 52 tests en verde**. El único rojo es C-06, que no se puede
-cerrar desde el código.
+**Los 9 críticos y los 9 altos están cerrados, salvo C-06**, que no se puede
+resolver desde el código. Suite: **71 de 72 tests en verde**; el único rojo
+es justamente C-06.
+
+### Política de atribución adoptada (A-06)
+
+**Last-touch, ventana de 30 días, resuelta en el servidor.** El último
+canillita que trae al comprador se queda la venta, llegue por `?ref=` o por
+la página de su punto. Es una decisión de negocio que quedó documentada en
+`src/middleware.ts` y cubierta por tests; si preferís first-touch, se cambia
+en un solo lugar.
 
 ### Acciones que dependen de vos (no las puedo hacer yo)
 

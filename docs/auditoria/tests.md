@@ -1,5 +1,14 @@
 # Estado de los tests
 
+> **Actualizado tras la Fase 2.** La suite pasó de 24 a **72 tests, con 71 en
+> verde**. El único rojo es C-06 (`precio_promocional` declarado como `double`
+> en Appwrite), que no se puede cerrar desde el código: requiere migrar el
+> atributo. Los archivos por área son `commissions`, `orderStates`, `pricing`,
+> `pricingModule`, `nodeSession`, `payouts` y `atribucion`.
+>
+> Lo que sigue documenta el estado en que se encontró el proyecto.
+
+
 ## Runner
 
 El proyecto **no tenía** runner real. `package.json` declaraba `node --test tests/*.test.ts`.

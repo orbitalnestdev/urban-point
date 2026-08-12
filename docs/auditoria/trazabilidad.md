@@ -1,6 +1,17 @@
 # Trazabilidad: de la página del punto al asiento de comisión
 
-Recorrido real del dato **tal como está hoy**, no como debería ser. Cada punto de corte está marcado y verificado.
+> **Estado tras la Fase 2.** Los cuatro cortes descritos abajo están
+> corregidos: la cookie de nodo se serializa bien (`a67edfa`), el estado
+> "pagado" exige autorización y transición válida (`c3262df`), el webhook
+> valida firma (`5b56dad`) y la atribución quedó unificada en un único canal
+> server-side con política last-touch (`22a3beb`).
+>
+> **Lo que sigue es el diagnóstico original**, que se conserva como registro de
+> por qué la cadena estaba rota y contra qué hay que no volver a regresionar.
+> Los pedidos históricos con `pickup_point_id` y `origin_node_id` en null no se
+> corrigen solos: siguen sin atribución.
+
+Recorrido real del dato **tal como estaba**, no como debería ser. Cada punto de corte está marcado y verificado.
 
 ---
 
