@@ -8,6 +8,7 @@ import {
 	esTransicionValida,
 	type EstadoPedido
 } from '../lib/orderStates';
+import { parseActiveNodeValue, NODE_COOKIE_NAME } from '../lib/nodeSession';
 
 
 import { resolverComisiones, cancelarOrdenYRestaurarStock } from '../lib/commissions';
@@ -670,19 +671,10 @@ export const server = {
 
 				const pickupCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-				// Parse active node session from cookie for origin attribution
-				let activeNodeSession: any = null;
-				try {
-					const nodeCookieVal = ctx.cookies.get('up_active_node')?.value;
-					if (nodeCookieVal) {
-						activeNodeSession = JSON.parse(decodeURIComponent(nodeCookieVal));
-					}
-				} catch (e) {
-					try {
-						const rawVal = ctx.cookies.get('up_active_node')?.value;
-						if (rawVal) activeNodeSession = JSON.parse(rawVal);
-					} catch (err) {}
-				}
+				// Nodo de origen para la atribución de la venta.
+				const activeNodeSession = parseActiveNodeValue(
+					ctx.cookies.get(NODE_COOKIE_NAME)?.value
+				);
 
 				// Create the Order in Appwrite
 				const orderPayload: any = {
