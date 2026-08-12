@@ -2,7 +2,11 @@ import type { APIRoute } from 'astro';
 import crypto from 'node:crypto';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import { createAdminClient } from '../../../lib/server/appwrite';
-import { resolverComisiones, cancelarOrdenYRestaurarStock } from '../../../lib/commissions';
+import {
+	resolverComisiones,
+	cancelarOrdenYRestaurarStock,
+	revertirComisiones
+} from '../../../lib/commissions';
 
 export const prerender = false;
 
@@ -125,6 +129,8 @@ async function aplicarEstadoDePago(orderId: string, mpStatus: string, paymentId:
 		case 'refunded':
 		case 'charged_back': {
 			if (order.estado === 'reembolsado') return;
+			// La comisión se devengó contra un cobro que ya no existe.
+			await revertirComisiones(orderId, `Reversa por reembolso del pago ${paymentId}`);
 			await db.updateDocument('urbanpoint', 'orders', orderId, {
 				estado: 'reembolsado',
 				mp_payment_id: paymentId,

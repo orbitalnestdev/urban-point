@@ -160,6 +160,49 @@ export async function resolverComisiones(orderId: string) {
 	}
 }
 
+/**
+ * Revierte los devengos de comisión de una orden. [A-02]
+ *
+ * El ledger es contable: no se borra ni se reescribe el monto de un asiento.
+ * Por cada devengo vivo se inserta un asiento compensatorio de tipo `reversa`
+ * con monto negativo, y el original pasa a `revertido` para que deje de contar
+ * como liquidable.
+ *
+ * Antes se escribía estado 'cancelado', un valor que NO existe en el enum
+ * (pendiente|disponible|liquidado|revertido), así que Appwrite rechazaba el
+ * update: la comisión quedaba viva sobre una venta anulada.
+ */
+export async function revertirComisiones(orderId: string, motivo: string) {
+	const ledgersRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
+		Query.equal('order_id', orderId),
+		Query.limit(500)
+	]);
+
+	let revertidos = 0;
+
+	for (const asiento of ledgersRes.documents) {
+		// Idempotencia: si ya se revirtió, no se vuelve a compensar.
+		if (asiento.estado === 'revertido' || asiento.tipo === 'reversa') continue;
+
+		await db.createDocument('urbanpoint', 'commission_ledger', ID.unique(), {
+			profile_id: typeof asiento.profile_id === 'string' ? asiento.profile_id : asiento.profile_id?.$id,
+			order_id: orderId,
+			tipo: 'reversa',
+			estado: 'revertido',
+			monto_centavos: -(asiento.monto_centavos || 0),
+			motivo
+		});
+
+		await db.updateDocument('urbanpoint', 'commission_ledger', asiento.$id, {
+			estado: 'revertido'
+		});
+
+		revertidos++;
+	}
+
+	return revertidos;
+}
+
 export async function cancelarOrdenYRestaurarStock(orderId: string) {
 	try {
 		const order = await db.getDocument('urbanpoint', 'orders', orderId);
@@ -167,39 +210,34 @@ export async function cancelarOrdenYRestaurarStock(orderId: string) {
 			return { success: true, alreadyCancelled: true };
 		}
 
-		// 1. Restaurar stock de productos
-		const itemsRes = await db.listDocuments('urbanpoint', 'order_items', [
-			Query.equal('order_id', orderId)
-		]);
+		// 1. Revertir comisiones ANTES de tocar el stock. Si esto falla, la
+		//    operación aborta sin haber dejado el inventario inflado: el orden
+		//    inverso dejaba stock restaurado y comisiones vivas.
+		await revertirComisiones(orderId, `Reversa por anulación de la orden ${orderId}`);
 
-		for (const item of itemsRes.documents) {
-			const productId = typeof item.product_id === 'string' ? item.product_id : item.product_id.$id;
-			try {
-				const product = await db.getDocument('urbanpoint', 'products', productId);
-				const nuevoStock = (product.stock || 0) + item.cantidad;
-				await db.updateDocument('urbanpoint', 'products', productId, {
-					stock: nuevoStock
-				});
-			} catch (e) {
-				console.warn(`No se pudo restaurar el stock del producto ${productId}:`, e);
+		// 2. Restaurar stock, sólo si llegó a descontarse. El descuento ocurre
+		//    en resolverComisiones, que corre recién cuando la orden se paga:
+		//    devolver stock de una orden nunca pagada inflaba el inventario.
+		if (order.estado !== 'pendiente_pago') {
+			const itemsRes = await db.listDocuments('urbanpoint', 'order_items', [
+				Query.equal('order_id', orderId),
+				Query.limit(500)
+			]);
+
+			for (const item of itemsRes.documents) {
+				const productId = typeof item.product_id === 'string' ? item.product_id : item.product_id.$id;
+				try {
+					const product = await db.getDocument('urbanpoint', 'products', productId);
+					await db.updateDocument('urbanpoint', 'products', productId, {
+						stock: (product.stock || 0) + item.cantidad
+					});
+				} catch (e) {
+					console.warn(`No se pudo restaurar el stock del producto ${productId}:`, e);
+				}
 			}
 		}
 
-		// 2. Anular / Cancelar comisiones pendientes asociadas a la orden
-		const ledgersRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
-			Query.equal('order_id', orderId)
-		]);
-
-		for (const ledger of ledgersRes.documents) {
-			if (ledger.estado === 'pendiente') {
-				await db.updateDocument('urbanpoint', 'commission_ledger', ledger.$id, {
-					estado: 'cancelado',
-					motivo: `Cancelado por anulación de Orden #${orderId}`
-				});
-			}
-		}
-
-		// 3. Cambiar estado de la orden a cancelado
+		// 3. Recién ahora se marca la orden como cancelada.
 		await db.updateDocument('urbanpoint', 'orders', orderId, {
 			estado: 'cancelado'
 		});
