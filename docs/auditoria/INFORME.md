@@ -43,11 +43,34 @@ Rama `fix/auditoria-fase-2`. Un hallazgo por commit, en orden de severidad.
 | A-09 Acceso a pedidos ajenos | Corregido | `f3f9946` |
 | A-03 Liquidaciones inoperativas | Corregido | `9bca2f9` |
 | A-06 Política de atribución contradictoria | Corregido | `22a3beb` |
+| M-01 / M-02 Edición del catálogo destructiva | Corregido | `3c3e1fa` |
+| M-03 Vocabulario de estados | Corregido | `546bd30` |
+| M-05 /mi-cuenta deslogueaba al admin | Corregido | `4b8ad7e` |
+| M-06 Ficha de pedido con datos de terceros | Corregido | `1cf0c52` |
+| M-07 / M-08 / M-09 Controles muertos y export | Corregido | `8b65be3` |
+| M-13 / M-14 / M-15 Upload, cookie y enumeración | Corregido | `3526866` |
+| M-17 XSS almacenado en `<script>` | Corregido | `ae817b3` |
+| M-11 / M-12 Mapa y slug del punto | Corregido | `1c2a383` |
+| B-01 … B-06 Deuda y cosmética | Corregido | `55a870b`, `1c2a383`, `872d124` |
 | **C-06 `precio_promocional` en float** | **Pendiente: requiere migrar la base** | — |
 
-**Los 9 críticos y los 9 altos están cerrados, salvo C-06**, que no se puede
-resolver desde el código. Suite: **71 de 72 tests en verde**; el único rojo
-es justamente C-06.
+**Todos los hallazgos están cerrados salvo C-06**, que no se puede resolver
+desde el código. Suite: **83 de 84 tests en verde**; el único rojo es
+justamente C-06. `astro check` sin errores, build OK, `npm audit` en 0.
+
+### Lo que sigue sin verificarse
+
+Cerrar el hallazgo no equivale a haberlo probado en vivo. Sigue pendiente:
+
+- **El webhook real de Mercado Pago.** La firma se implementó y hay un script
+  para probarla (`scripts/simulate-webhook.ts`), pero **no se ejecutó contra el
+  sandbox**: hace falta `MP_WEBHOOK_SECRET` y un pago real.
+- **Condiciones de carrera de stock.** El descuento sigue siendo `get` + `update`
+  sin transacción ni control optimista (`src/lib/commissions.ts`): dos compras
+  simultáneas del último producto probablemente sobrevendan. No se corrigió.
+- **Los pedidos históricos.** Los 19 pedidos existentes siguen con
+  `pickup_point_id` y `origin_node_id` en null. El fix de C-02 no es retroactivo.
+- **Los E2E de Playwright**, por las razones documentadas en `tests.md`.
 
 ### Política de atribución adoptada (A-06)
 
