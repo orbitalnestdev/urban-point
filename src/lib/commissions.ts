@@ -207,6 +207,101 @@ export async function revertirComisiones(orderId: string, motivo: string) {
 	return revertidos;
 }
 
+export interface LiquidacionInput {
+	profileId: string;
+	medioPago: string;
+	referenciaPago: string;
+	idempotencyKey: string;
+	actorProfileId: string;
+	/** Si se informa, debe coincidir con el total pendiente calculado. */
+	montoCentavosEsperado?: number;
+	notas?: string;
+}
+
+/**
+ * Liquida las comisiones pendientes de un canillita. [A-03]
+ *
+ * Fuente única. Antes convivían dos actions que escribían la misma colección
+ * con nombres de campo distintos y ambas fallaban por motivos diferentes:
+ * liquidateCommissions nunca guardaba profile_id, así que el payout quedaba
+ * huérfano y no aparecía en "Mis Cobros" del canillita; y createPayout omitía
+ * periodo_desde y periodo_hasta, que son requeridos, con lo que Appwrite
+ * rechazaba el documento siempre.
+ */
+export async function liquidarComisiones(input: LiquidacionInput) {
+	// Idempotencia: reintentar la misma liquidación no puede pagar dos veces.
+	const previo = await db.listDocuments('urbanpoint', 'payouts', [
+		Query.equal('idempotency_key', input.idempotencyKey),
+		Query.limit(1)
+	]);
+	if (previo.documents.length > 0) {
+		return {
+			payoutId: previo.documents[0].$id,
+			montoCentavos: previo.documents[0].monto_centavos,
+			idempotencySkipped: true
+		};
+	}
+
+	const pendientes = await db.listDocuments('urbanpoint', 'commission_ledger', [
+		Query.equal('profile_id', input.profileId),
+		Query.equal('estado', 'pendiente'),
+		Query.limit(500)
+	]);
+
+	if (pendientes.documents.length === 0) {
+		throw new Error('No hay comisiones pendientes de liquidar para este canillita.');
+	}
+
+	const montoCentavos = pendientes.documents.reduce(
+		(acc, cur) => acc + (cur.monto_centavos || 0),
+		0
+	);
+
+	if (montoCentavos <= 0) {
+		throw new Error('El saldo pendiente no es positivo: no hay nada que liquidar.');
+	}
+
+	// El monto se calcula en el servidor. Si el admin informó uno distinto,
+	// se aborta en vez de pagar una cifra que no cierra con el ledger.
+	if (
+		input.montoCentavosEsperado !== undefined &&
+		input.montoCentavosEsperado !== montoCentavos
+	) {
+		throw new Error(
+			`El monto informado (${input.montoCentavosEsperado}) no coincide con el pendiente real (${montoCentavos}).`
+		);
+	}
+
+	const fechas = pendientes.documents.map((d) => new Date(d.$createdAt).getTime());
+	const desde = new Date(Math.min(...fechas));
+	const hasta = new Date(Math.max(...fechas));
+
+	const payout = await db.createDocument('urbanpoint', 'payouts', ID.unique(), {
+		profile_id: input.profileId,
+		monto_centavos: montoCentavos,
+		estado: 'pagado',
+		// periodo_desde y periodo_hasta son requeridos en el esquema real.
+		periodo_desde: desde.toISOString(),
+		periodo_hasta: hasta.toISOString(),
+		periodo: hasta.toISOString().substring(0, 7),
+		medio_pago: input.medioPago,
+		referencia_pago: input.referenciaPago,
+		pagado_at: new Date().toISOString(),
+		idempotency_key: input.idempotencyKey,
+		actor_id: input.actorProfileId,
+		notas: input.notas || `Liquidación de ${pendientes.documents.length} devengo(s)`
+	});
+
+	for (const asiento of pendientes.documents) {
+		await db.updateDocument('urbanpoint', 'commission_ledger', asiento.$id, {
+			estado: 'liquidado',
+			payout_id: payout.$id
+		});
+	}
+
+	return { payoutId: payout.$id, montoCentavos, idempotencySkipped: false };
+}
+
 export async function cancelarOrdenYRestaurarStock(orderId: string) {
 	try {
 		const order = await db.getDocument('urbanpoint', 'orders', orderId);

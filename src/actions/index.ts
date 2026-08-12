@@ -14,7 +14,7 @@ import { precioDeVentaCentavos } from '../lib/pricing';
 import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 
 
-import { resolverComisiones, cancelarOrdenYRestaurarStock } from '../lib/commissions';
+import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones } from '../lib/commissions';
 
 import { createAdminClient } from '../lib/server/appwrite';
 
@@ -41,6 +41,28 @@ const users = new Proxy({} as Users, {
 		return typeof val === 'function' ? val.bind(instance) : val;
 	}
 });
+
+/**
+ * Recalcula el saldo disponible del canillita desde el ledger.
+ *
+ * Antes se pisaba con 0 o se restaba a ojo el monto liquidado, con lo que
+ * cualquier devengo posterior a la liquidación se perdía de vista.
+ */
+async function sincronizarSaldoDisponible(profileId: string) {
+	try {
+		const pendientes = await db.listDocuments('urbanpoint', 'commission_ledger', [
+			Query.equal('profile_id', profileId),
+			Query.equal('estado', 'pendiente'),
+			Query.limit(500)
+		]);
+		const saldo = pendientes.documents.reduce((acc, cur) => acc + (cur.monto_centavos || 0), 0);
+		await db.updateDocument('urbanpoint', 'profiles', profileId, {
+			saldo_disponible_centavos: Math.max(0, saldo)
+		});
+	} catch (e) {
+		console.error(`No se pudo sincronizar el saldo del perfil ${profileId}:`, e);
+	}
+}
 
 /**
  * Deja rastro de cada cambio de estado. Antes sólo deliverOrder registraba
@@ -470,63 +492,20 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
-				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
-					throw new Error('Solo un administrador puede ejecutar liquidaciones');
-				}
+				const actor = requireRole(ctx, 'admin');
 
-				// Idempotency check
-				const existingPayout = await db.listDocuments('urbanpoint', 'payouts', [
-					Query.equal('idempotency_key', input.idempotencyKey),
-					Query.limit(1)
-				]);
-
-				if (existingPayout.documents.length > 0) {
-					return { success: true, payoutId: existingPayout.documents[0].$id, idempotencySkipped: true };
-				}
-
-				const now = new Date();
-				const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-				const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
-
-				// Create payout document
-				const payout = await db.createDocument('urbanpoint', 'payouts', ID.unique(), {
-					monto_centavos: input.montoCentavos,
-					periodo: input.periodo || now.toISOString().substring(0, 7),
-					periodo_desde: firstDayOfMonth,
-					periodo_hasta: lastDayOfMonth,
-					estado: 'pagado',
-					metodo_pago: input.metodoPago || 'transferencia',
-					comprobante: input.comprobante || `COMP-${Date.now()}`,
-					idempotency_key: input.idempotencyKey,
-					actor_id: ctx.locals.user.id,
-					notas: `Liquidación a perfil ${input.profileId}`
+				const res = await liquidarComisiones({
+					profileId: input.profileId,
+					medioPago: input.metodoPago || 'transferencia',
+					referenciaPago: input.comprobante || `COMP-${input.idempotencyKey}`,
+					idempotencyKey: input.idempotencyKey,
+					actorProfileId: actor.profileId,
+					montoCentavosEsperado: input.montoCentavos
 				});
 
-				// Update matching ledger entries
-				const pendingEntries = await db.listDocuments('urbanpoint', 'commission_ledger', [
-					Query.equal('profile_id', input.profileId),
-					Query.equal('estado', 'pendiente'),
-					Query.limit(500)
-				]);
+				await sincronizarSaldoDisponible(input.profileId);
 
-				for (const entry of pendingEntries.documents) {
-					await db.updateDocument('urbanpoint', 'commission_ledger', entry.$id, {
-						estado: 'liquidado',
-						payout_id: payout.$id
-					});
-				}
-
-				// Deduct or adjust profile balance if tracked
-				try {
-					const profile = await db.getDocument('urbanpoint', 'profiles', input.profileId);
-					const currentSaldo = profile.saldo_disponible_centavos || 0;
-					const newSaldo = Math.max(0, currentSaldo - input.montoCentavos);
-					await db.updateDocument('urbanpoint', 'profiles', input.profileId, {
-						saldo_disponible_centavos: newSaldo
-					});
-				} catch (e) {}
-
-				return { success: true, payoutId: payout.$id };
+				return { success: true, payoutId: res.payoutId, idempotencySkipped: res.idempotencySkipped };
 			} catch (error: any) {
 				return { success: false, error: error.message };
 			}
@@ -1088,54 +1067,21 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
-				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
-					throw new Error('Solo admin puede crear payouts');
-				}
+				const actor = requireRole(ctx, 'admin');
 
-				const ledgerRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
-					Query.equal('profile_id', input.profileId),
-					Query.equal('estado', 'pendiente'),
-					Query.limit(500)
-				]);
-
-				if (ledgerRes.documents.length === 0) {
-					throw new Error('No hay devengos pendientes para liquidar');
-				}
-
-				const montoCentavos = ledgerRes.documents.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
-
-				const payout = await db.createDocument('urbanpoint', 'payouts', ID.unique(), {
-					profile_id: input.profileId,
-					monto_centavos: montoCentavos,
-					estado: 'pagado',
-					medio_pago: input.medioPago,
-					referencia_pago: input.referenciaPago,
-					pagado_at: new Date().toISOString()
+				const res = await liquidarComisiones({
+					profileId: input.profileId,
+					medioPago: input.medioPago,
+					referenciaPago: input.referenciaPago,
+					// Sin clave provista, se deriva del perfil y la referencia para
+					// que reenviar el mismo formulario no pague dos veces.
+					idempotencyKey: `payout:${input.profileId}:${input.referenciaPago}`,
+					actorProfileId: actor.profileId
 				});
 
-				for (const item of ledgerRes.documents) {
-					await db.updateDocument('urbanpoint', 'commission_ledger', item.$id, {
-						estado: 'liquidado'
-					});
-				}
+				await sincronizarSaldoDisponible(input.profileId);
 
-				await db.createDocument('urbanpoint', 'commission_ledger', ID.unique(), {
-					profile_id: input.profileId,
-					tipo: 'liquidacion',
-					estado: 'liquidado',
-					monto_centavos: -montoCentavos,
-					motivo: `Liquidación #${payout.$id}`
-				});
-
-				try {
-					await db.updateDocument('urbanpoint', 'profiles', input.profileId, {
-						saldo_disponible_centavos: 0
-					});
-				} catch (e) {
-					// Ignorar si no existe el campo
-				}
-
-				return { success: true, payoutId: payout.$id };
+				return { success: true, payoutId: res.payoutId, montoCentavos: res.montoCentavos };
 			} catch(e: any) {
 				return { success: false, error: e.message };
 			}

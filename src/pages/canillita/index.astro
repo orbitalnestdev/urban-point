@@ -93,7 +93,12 @@ try {
     ]);
     ledgerList = ledgerRes.documents;
 
-    totalAcumuladoCentavos = ledgerList.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
+    // "Comisiones totales" es lo ganado: suma sólo los devengos, sin los
+    // asientos de reversa (negativos) ni los ya revertidos, que antes se
+    // mezclaban y distorsionaban el número.
+    totalAcumuladoCentavos = ledgerList
+      .filter(l => l.tipo !== 'reversa' && l.tipo !== 'liquidacion' && l.estado !== 'revertido')
+      .reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
     totalPendienteCentavos = ledgerList.filter(l => l.estado === 'pendiente').reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
     // El enum del ledger es pendiente|disponible|liquidado|revertido: filtrar
     // por 'pagado' daba siempre $0.
@@ -301,8 +306,10 @@ const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCod
 											{formateador.format((leg.monto_centavos || 0) / 100)}
 										</td>
 										<td class="p-4 text-center">
-											{leg.estado === 'pagado' ? (
+											{leg.estado === 'liquidado' ? (
 												<span class="px-2 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-full">Liquidado</span>
+											) : leg.estado === 'revertido' ? (
+												<span class="px-2 py-1 bg-rose-100 text-rose-800 text-xs font-bold rounded-full">Revertido</span>
 											) : (
 												<span class="px-2 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">Pendiente</span>
 											)}
