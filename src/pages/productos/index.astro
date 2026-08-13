@@ -7,6 +7,7 @@ import AddToCartBtn from '../../components/shop/AddToCartBtn';
 import CartDrawer from '../../components/shop/CartDrawer';
 import { getCachedCatalog } from '../../lib/server/catalogCache';
 import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
+import { toSafeJson } from '../../lib/safeJson';
 
 let products: any[] = [];
 let categories: any[] = [];
@@ -80,22 +81,44 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 					</div>
 				</div>
 
-				<!-- Category Pills Filter -->
+				<!-- Category Pills Filter (2-Level Hierarchy) -->
 				{categories.length > 0 && (
-					<div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none pt-2 border-t border-slate-100">
-						<button class="cat-pill active px-4 py-2 rounded-xl text-xs font-bold transition-all bg-[#2D5A27] text-white shadow-sm" data-category="all">
-							Todos los productos
-						</button>
-						{categories.map((cat) => {
-							const childIds = categories.filter((c: any) => c.parent_id === cat.$id).map((c: any) => c.$id);
-							const allMatchingIds = [cat.$id, ...childIds].join(',');
-							
-							return (
-								<button class="cat-pill px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-[#F2F7F3] hover:text-[#2D5A27]" data-category={allMatchingIds}>
-									{cat.nombre}
-								</button>
-							);
-						})}
+					<div class="space-y-2 pt-2 border-t border-slate-100">
+						<!-- Main Categories Pills Row -->
+						<div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" id="main-category-pills">
+							<button 
+								class="cat-pill active px-4 py-2 rounded-xl text-xs font-bold transition-all bg-[#2D5A27] text-white shadow-sm shrink-0 cursor-pointer" 
+								data-category="all"
+							>
+								Todos los productos
+							</button>
+							{categories.filter(c => !c.parent_id).map((parent) => {
+								const children = categories.filter(c => (typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id) === parent.$id);
+								const childIds = children.map(c => c.$id);
+								const familyIds = [parent.$id, ...childIds].join(',');
+
+								return (
+									<button 
+										class="cat-pill px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-[#F2F7F3] hover:text-[#2D5A27] shrink-0 cursor-pointer flex items-center gap-1.5" 
+										data-category={familyIds}
+										data-parent-id={parent.$id}
+									>
+										{parent.nombre}
+										{children.length > 0 && (
+											<span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-extrabold">{children.length}</span>
+										)}
+									</button>
+								);
+							})}
+						</div>
+
+						<!-- Subcategories Pills Row (Dynamically Shown when a Parent Category is Active) -->
+						<div id="sub-category-pills" class="hidden flex items-center gap-2 overflow-x-auto pb-1 pt-1.5 border-t border-slate-100/80 bg-slate-50/70 p-2 rounded-xl">
+							<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">Subcategorías:</span>
+							<div id="sub-pills-container" class="flex items-center gap-2 overflow-x-auto scrollbar-none">
+								<!-- Populated by JavaScript when a parent category is clicked -->
+							</div>
+						</div>
 					</div>
 				)}
 			</div>
@@ -227,99 +250,154 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 	<Footer />
 </Layout>
 
-<script>
-	document.addEventListener('DOMContentLoaded', () => {
-		const searchInput = document.getElementById('search-input') as HTMLInputElement;
-		const sortSelect = document.getElementById('sort-select') as HTMLSelectElement;
-		const catPills = document.querySelectorAll('.cat-pill');
-		const grid = document.getElementById('products-grid');
-		const countSpan = document.getElementById('prod-count');
-		const noResultsBox = document.getElementById('no-results-box');
-		const btnResetFilters = document.getElementById('btn-reset-filters');
+	<script type="application/json" id="categories-json-data" set:html={toSafeJson(categories)} />
 
-		let activeCategory = 'all';
+	<script>
+		document.addEventListener('DOMContentLoaded', () => {
+			const searchInput = document.getElementById('search-input') as HTMLInputElement;
+			const sortSelect = document.getElementById('sort-select') as HTMLSelectElement;
+			const catPills = document.querySelectorAll('#main-category-pills .cat-pill');
+			const grid = document.getElementById('products-grid');
+			const countSpan = document.getElementById('prod-count');
+			const noResultsBox = document.getElementById('no-results-box');
+			const btnResetFilters = document.getElementById('btn-reset-filters');
+			const subRow = document.getElementById('sub-category-pills');
+			const subContainer = document.getElementById('sub-pills-container');
 
-		function filterAndSort() {
-			if (!grid) return;
-			const cards = Array.from(grid.querySelectorAll('.product-card')) as HTMLElement[];
-			const term = searchInput ? searchInput.value.toLowerCase().trim() : '';
-			const sortMode = sortSelect ? sortSelect.value : 'default';
-			const allowedCats = activeCategory.split(',');
+			let allCategories: any[] = [];
+			try {
+				const jsonText = document.getElementById('categories-json-data')?.textContent || '[]';
+				allCategories = JSON.parse(jsonText);
+			} catch (e) {}
 
-			let visibleCards = cards.filter(card => {
-				const name = card.getAttribute('data-name') || '';
-				const brand = card.getAttribute('data-brand') || '';
-				const cat = card.getAttribute('data-category') || '';
+			let activeCategory = 'all';
 
-				const matchesSearch = name.includes(term) || brand.includes(term);
-				const matchesCat = activeCategory === 'all' || allowedCats.includes(cat);
+			function filterAndSort() {
+				if (!grid) return;
+				const cards = Array.from(grid.querySelectorAll('.product-card')) as HTMLElement[];
+				const term = searchInput ? searchInput.value.toLowerCase().trim() : '';
+				const sortMode = sortSelect ? sortSelect.value : 'default';
+				const allowedCats = activeCategory.split(',');
 
-				return matchesSearch && matchesCat;
-			});
+				let visibleCards = cards.filter(card => {
+					const name = card.getAttribute('data-name') || '';
+					const brand = card.getAttribute('data-brand') || '';
+					const cat = card.getAttribute('data-category') || '';
 
-			// Sort
-			if (sortMode === 'price-asc') {
-				visibleCards.sort((a, b) => Number(a.getAttribute('data-price')) - Number(b.getAttribute('data-price')));
-			} else if (sortMode === 'price-desc') {
-				visibleCards.sort((a, b) => Number(b.getAttribute('data-price')) - Number(a.getAttribute('data-price')));
-			} else if (sortMode === 'name-asc') {
-				visibleCards.sort((a, b) => (a.getAttribute('data-name') || '').localeCompare(b.getAttribute('data-name') || ''));
-			}
+					const matchesSearch = !term || name.includes(term) || brand.includes(term);
+					const matchesCat = activeCategory === 'all' || allowedCats.includes(cat);
 
-			// Render
-			cards.forEach(card => card.style.display = 'none');
-			visibleCards.forEach(card => {
-				card.style.display = 'flex';
-				grid.appendChild(card); // re-append in sorted order
-			});
+					return matchesSearch && matchesCat;
+				});
 
-			if (countSpan) {
-				countSpan.textContent = visibleCards.length.toString();
-			}
+				// Sort
+				if (sortMode === 'price-asc') {
+					visibleCards.sort((a, b) => Number(a.getAttribute('data-price')) - Number(b.getAttribute('data-price')));
+				} else if (sortMode === 'price-desc') {
+					visibleCards.sort((a, b) => Number(b.getAttribute('data-price')) - Number(a.getAttribute('data-price')));
+				} else if (sortMode === 'name-asc') {
+					visibleCards.sort((a, b) => (a.getAttribute('data-name') || '').localeCompare(b.getAttribute('data-name') || ''));
+				}
 
-			// Toggle empty search box
-			if (noResultsBox) {
-				if (visibleCards.length === 0) {
-					noResultsBox.classList.remove('hidden');
-				} else {
-					noResultsBox.classList.add('hidden');
+				// Render
+				cards.forEach(card => card.style.display = 'none');
+				visibleCards.forEach(card => {
+					card.style.display = 'flex';
+					grid.appendChild(card); // re-append in sorted order
+				});
+
+				if (countSpan) {
+					countSpan.textContent = visibleCards.length.toString();
+				}
+
+				// Toggle empty search box
+				if (noResultsBox) {
+					if (visibleCards.length === 0) {
+						noResultsBox.classList.remove('hidden');
+					} else {
+						noResultsBox.classList.add('hidden');
+					}
 				}
 			}
-		}
 
-		if (searchInput) searchInput.addEventListener('input', filterAndSort);
-		if (sortSelect) sortSelect.addEventListener('change', filterAndSort);
+			if (searchInput) searchInput.addEventListener('input', filterAndSort);
+			if (sortSelect) sortSelect.addEventListener('change', filterAndSort);
 
-		if (btnResetFilters) {
-			btnResetFilters.addEventListener('click', () => {
-				if (searchInput) searchInput.value = '';
-				activeCategory = 'all';
-				catPills.forEach((p, idx) => {
-					p.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-sm');
-					p.classList.add('bg-slate-100', 'text-slate-600');
-					if (idx === 0) {
-						p.classList.remove('bg-slate-100', 'text-slate-600');
-						p.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-sm');
+			if (btnResetFilters) {
+				btnResetFilters.addEventListener('click', () => {
+					if (searchInput) searchInput.value = '';
+					activeCategory = 'all';
+					if (subRow) subRow.classList.add('hidden');
+					catPills.forEach((p, idx) => {
+						p.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-sm');
+						p.classList.add('bg-slate-100', 'text-slate-600');
+						if (idx === 0) {
+							p.classList.remove('bg-slate-100', 'text-slate-600');
+							p.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-sm');
+						}
+					});
+					filterAndSort();
+				});
+			}
+
+			catPills.forEach(pill => {
+				pill.addEventListener('click', () => {
+					const parentId = pill.getAttribute('data-parent-id');
+
+					catPills.forEach(p => {
+						p.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-sm');
+						p.classList.add('bg-slate-100', 'text-slate-600');
+					});
+					pill.classList.remove('bg-slate-100', 'text-slate-600');
+					pill.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-sm');
+
+					activeCategory = pill.getAttribute('data-category') || 'all';
+
+					// Render subcategories row if available
+					if (parentId && subRow && subContainer) {
+						const children = allCategories.filter((c: any) => {
+							const pid = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id;
+							return pid === parentId;
+						});
+
+						if (children.length > 0) {
+							subContainer.innerHTML = `
+								<button class="sub-cat-pill active px-3 py-1 rounded-lg text-xs font-bold bg-[#2D5A27] text-white shadow-xs shrink-0 cursor-pointer" data-category="${activeCategory}">
+									Todas las de ${pill.textContent?.replace(/\d+/g, '').trim()}
+								</button>
+								${children.map((child: any) => `
+									<button class="sub-cat-pill px-3 py-1 rounded-lg text-xs font-semibold bg-white text-slate-700 hover:bg-emerald-50 hover:text-[#2D5A27] border border-slate-200 shrink-0 cursor-pointer" data-category="${child.$id}">
+										${child.nombre}
+									</button>
+								`).join('')}
+							`;
+							subRow.classList.remove('hidden');
+
+							subContainer.querySelectorAll('.sub-cat-pill').forEach(subBtn => {
+								subBtn.addEventListener('click', (e) => {
+									subContainer.querySelectorAll('.sub-cat-pill').forEach(sb => {
+										sb.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-xs');
+										sb.classList.add('bg-white', 'text-slate-700');
+									});
+									const target = e.currentTarget as HTMLElement;
+									target.classList.remove('bg-white', 'text-slate-700');
+									target.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-xs');
+
+									activeCategory = target.getAttribute('data-category') || 'all';
+									filterAndSort();
+								});
+							});
+						} else {
+							subRow.classList.add('hidden');
+						}
+					} else {
+						if (subRow) subRow.classList.add('hidden');
 					}
-				});
-				filterAndSort();
-			});
-		}
 
-		catPills.forEach(pill => {
-			pill.addEventListener('click', () => {
-				catPills.forEach(p => {
-					p.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-sm');
-					p.classList.add('bg-slate-100', 'text-slate-600');
+					filterAndSort();
 				});
-				pill.classList.remove('bg-slate-100', 'text-slate-600');
-				pill.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-sm');
-
-				activeCategory = pill.getAttribute('data-category') || 'all';
-				filterAndSort();
 			});
 		});
-	});
-</script>
+	</script>
 	<Footer />
 </Layout>

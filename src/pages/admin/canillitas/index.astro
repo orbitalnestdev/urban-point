@@ -149,9 +149,21 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 									<td class="p-4">
 										<p class="font-bold text-slate-900">{punto.nombre_comercial}</p>
 										<p class="text-xs text-slate-500">{punto.direccion}</p>
-										{punto.profileObj && (
+										{punto.profileObj && punto.profileObj.email ? (
 											<p class="text-[11px] font-semibold text-indigo-700 mt-0.5 flex items-center gap-1">
-												<span>👤 Titular:</span> <strong>{punto.profileObj.nombre || 'Canillita'}</strong> &bull; {punto.profileObj.email}
+												<span>🟢 Acceso Canillita:</span> <strong>{punto.profileObj.email}</strong>
+											</p>
+										) : (
+											<p class="text-[11px] font-medium text-slate-400 mt-0.5 flex items-center gap-1">
+												<span>⚪ Solo Punto (Sin Usuario)</span>
+												&bull; 
+												<button 
+													type="button" 
+													class="btn-editar-punto text-indigo-600 font-bold hover:underline cursor-pointer"
+													data-punto={toSafeJson(punto)}
+												>
+													+ Crear Acceso
+												</button>
 											</p>
 										)}
 									</td>
@@ -339,6 +351,9 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 						</h4>
 						<span class="text-[10px] bg-indigo-200 text-indigo-800 font-bold px-2 py-0.5 rounded-full">Rol: Canillita</span>
 					</div>
+					<p class="text-[11px] text-slate-600 font-medium leading-relaxed">
+						Completá Email y Contraseña para que el Canillita pueda ingresar a su portal (<code class="bg-white px-1.5 py-0.5 rounded border border-indigo-200 text-indigo-700">/canillita/login</code>). Válido para puestos nuevos o puestos existentes sin usuario.
+					</p>
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div>
 							<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre y Apellido del Titular</label>
@@ -350,8 +365,20 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 						</div>
 					</div>
 					<div>
-						<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Contraseña de Acceso <span id="pwd-help-text" class="text-[10px] text-slate-500 font-normal">(Mín. 8 caracteres &bull; Opcional si solo edita el puesto)</span></label>
-						<input type="password" id="punto-password" placeholder="••••••••" class="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+						<div class="flex items-center justify-between mb-1">
+							<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+								Contraseña de Acceso <span id="pwd-help-text" class="text-[10px] text-slate-500 font-normal">(Mín. 8 caracteres)</span>
+							</label>
+							<div class="flex items-center gap-2">
+								<button type="button" id="btn-gen-password" class="text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2.5 py-1 rounded-lg transition-colors cursor-pointer shadow-xs">
+									🎲 Generar Contraseña
+								</button>
+								<button type="button" id="btn-copy-credentials" class="text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded-lg transition-colors cursor-pointer shadow-xs hidden">
+									📋 Copiar Acceso
+								</button>
+							</div>
+						</div>
+						<input type="text" id="punto-password" placeholder="••••••••" class="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-mono outline-none focus:border-indigo-600" />
 					</div>
 				</div>
 
@@ -565,6 +592,30 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 			} catch(err) {
 				console.error('Error buscando dirección:', err);
 			}
+		});
+
+		document.getElementById('btn-gen-password')?.addEventListener('click', () => {
+			const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$';
+			let pass = 'Urban2026!';
+			for (let i = 0; i < 4; i++) {
+				pass += chars.charAt(Math.floor(Math.random() * chars.length));
+			}
+			inputPassword.value = pass;
+			const btnCopy = document.getElementById('btn-copy-credentials');
+			if (btnCopy) btnCopy.classList.remove('hidden');
+		});
+
+		document.getElementById('btn-copy-credentials')?.addEventListener('click', () => {
+			const email = inputEmail.value.trim();
+			const pass = inputPassword.value.trim();
+			if (!email || !pass) {
+				alert('Completá email y contraseña antes de copiar.');
+				return;
+			}
+			const text = `Acceso Panel Canillita (UrbanPoint):\nURL: ${window.location.origin}/canillita/login\nUsuario: ${email}\nContraseña: ${pass}`;
+			navigator.clipboard.writeText(text).then(() => {
+				alert('¡Credenciales copiadas al portapapeles!\n\n' + text);
+			});
 		});
 
 		function openModal(data: any = null) {
