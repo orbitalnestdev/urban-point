@@ -4,6 +4,21 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import Pagination from '../../../components/admin/Pagination.astro';
+import { toSafeJson } from '../../../lib/safeJson';
+import { 
+  DollarSign, 
+  Calendar, 
+  User, 
+  Filter, 
+  Search, 
+  CreditCard, 
+  CheckCircle2, 
+  Clock, 
+  ArrowUpRight, 
+  Building2, 
+  FileText,
+  RefreshCw
+} from 'lucide-react';
 
 const user = Astro.locals.user;
 if (!user || user.role !== 'admin') {
@@ -12,402 +27,793 @@ if (!user || user.role !== 'admin') {
 
 const { databases } = createAdminClient();
 
-const tabParam = Astro.url.searchParams.get('tab') || 'pendientes';
+// URL Query Parameters
+const canillitaParam = Astro.url.searchParams.get('canillita') || '';
 const periodoParam = Astro.url.searchParams.get('periodo') || '';
-
-let pendingBalances: any[] = [];
-let pastPayouts: any[] = [];
-let totalPendienteCentavos = 0;
-let totalLiquidadoCentavos = 0;
-let currentPage = 1;
-let pageSize = 25;
-let totalPendingItems = 0;
-let totalPendingPages = 1;
-let pagedPendingBalances: any[] = [];
-let totalPayoutItems = 0;
-let totalPayoutPages = 1;
-let pagedPastPayouts: any[] = [];
+const estadoParam = Astro.url.searchParams.get('estado') || 'todos';
+const qParam = Astro.url.searchParams.get('q') || '';
+const tabParam = Astro.url.searchParams.get('tab') || 'resumen';
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
+let pickupPoints: any[] = [];
+let profiles: any[] = [];
+let refCodes: any[] = [];
+let allLedgerDocs: any[] = [];
+let pastPayouts: any[] = [];
+let canillitaOptionsMap: Record<string, any> = {};
+let canillitaOptions: any[] = [];
+
+// Available months for period selector
+const periodOptions = [
+  { value: '', label: 'Todos los períodos' },
+  { value: '2026-08', label: 'Agosto 2026 (Actual)' },
+  { value: '2026-07', label: 'Julio 2026' },
+  { value: '2026-06', label: 'Junio 2026' },
+  { value: '2026-05', label: 'Mayo 2026' },
+  { value: '2026-04', label: 'Abril 2026' }
+];
+
 try {
-  // 1. Fetch pending commission ledger entries
-  const ledgerRes = await databases.listDocuments('urbanpoint', 'commission_ledger', [
-    Query.equal('estado', 'pendiente'),
-    Query.limit(5000)
+  // 1. Fetch auxiliary collections
+  const [pointsRes, profilesRes, refRes] = await Promise.all([
+    databases.listDocuments('urbanpoint', 'pickup_points', [Query.limit(500)]).catch(() => ({ documents: [] })),
+    databases.listDocuments('urbanpoint', 'profiles', [Query.equal('role', 'canillita'), Query.limit(500)]).catch(() => ({ documents: [] })),
+    databases.listDocuments('urbanpoint', 'referral_codes', [Query.limit(500)]).catch(() => ({ documents: [] }))
   ]);
 
-  // Aggregate pending balance by profile
-  const balanceMap: Record<string, {
-    id: string;
-    name: string;
-    commercial_name: string;
-    email: string;
-    phone: string;
-    code: string;
-    cbu: string;
-    alias: string;
-    banco: string;
-    titular: string;
-    balance: number;
-    count: number;
-  }> = {};
+  pickupPoints = pointsRes.documents || [];
+  profiles = profilesRes.documents || [];
+  refCodes = refRes.documents || [];
 
-  for (const item of ledgerRes.documents) {
-    const profileId = typeof item.profile_id === 'string' ? item.profile_id : item.profile_id?.$id;
-    if (!profileId) continue;
+  // Map profile details & bank info
+  const profileMap: Record<string, any> = {};
+  profiles.forEach(p => { profileMap[p.$id] = p; });
 
-    const monto = item.monto_centavos || 0;
-    totalPendienteCentavos += monto;
+  const pointMap: Record<string, any> = {};
+  pickupPoints.forEach(pt => {
+    const pId = typeof pt.profile_id === 'string' ? pt.profile_id : pt.profile_id?.$id;
+    if (pId) pointMap[pId] = pt;
+  });
 
-    if (!balanceMap[profileId]) {
-      balanceMap[profileId] = {
-        id: profileId,
-        name: 'Canillita',
-        commercial_name: '',
-        email: '',
-        phone: '',
-        code: 'CANI-REF',
-        cbu: 'No informado',
-        alias: 'No informado',
-        banco: 'No especificado',
-        titular: 'No especificado',
-        balance: 0,
-        count: 0
+  const refCodeMap: Record<string, any> = {};
+  refCodes.forEach(ref => {
+    const ownerId = typeof ref.owner_id === 'string' ? ref.owner_id : ref.owner_id?.$id;
+    if (ownerId) refCodeMap[ownerId] = ref.code;
+  });
+
+  // Build Canillita Options List for Select Filter
+  canillitaOptionsMap = {};
+  
+  // Add from pickup points
+  pickupPoints.forEach(pt => {
+    const pId = typeof pt.profile_id === 'string' ? pt.profile_id : pt.profile_id?.$id;
+    if (pId) {
+      const prof = profileMap[pId];
+      canillitaOptionsMap[pId] = {
+        profileId: pId,
+        nombreComercial: pt.nombre_comercial,
+        titular: prof?.nombre || pt.titular_nombre || 'Sin titular',
+        email: prof?.email || pt.email || '',
+        phone: prof?.telefono || pt.telefono || '',
+        cbu: pt.cbu || pt.cvu || prof?.cbu || prof?.cvu || 'No informado',
+        alias: pt.alias || prof?.alias || 'No informado',
+        banco: pt.banco || prof?.banco || 'No especificado',
+        titularCuenta: pt.titular_cuenta || prof?.titular_cuenta || prof?.nombre || 'No especificado',
+        code: refCodeMap[pId] || 'S/CODE'
       };
     }
-    balanceMap[profileId].balance += monto;
-    balanceMap[profileId].count += 1;
+  });
+
+  // Add remaining canillita profiles if not mapped
+  profiles.forEach(prof => {
+    if (!canillitaOptionsMap[prof.$id]) {
+      const pt = pointMap[prof.$id];
+      canillitaOptionsMap[prof.$id] = {
+        profileId: prof.$id,
+        nombreComercial: pt?.nombre_comercial || prof.nombre,
+        titular: prof.nombre,
+        email: prof.email || '',
+        phone: prof.telefono || '',
+        cbu: pt?.cbu || prof.cbu || prof.cvu || 'No informado',
+        alias: pt?.alias || prof.alias || 'No informado',
+        banco: pt?.banco || prof.banco || 'No especificado',
+        titularCuenta: pt?.titular_cuenta || prof.titular_cuenta || prof.nombre || 'No especificado',
+        code: refCodeMap[prof.$id] || 'S/CODE'
+      };
+    }
+  });
+
+  canillitaOptions = Object.values(canillitaOptionsMap).sort((a: any, b: any) => 
+    a.nombreComercial.localeCompare(b.nombreComercial)
+  );
+
+  // 2. Fetch Ledger Entries
+  const ledgerQueries = [Query.orderDesc('$createdAt'), Query.limit(5000)];
+  if (canillitaParam) {
+    ledgerQueries.unshift(Query.equal('profile_id', canillitaParam));
+  }
+  if (estadoParam !== 'todos') {
+    ledgerQueries.unshift(Query.equal('estado', estadoParam));
   }
 
-  // Fetch profiles, pickup points, and referral codes for display & banking
-  const profileIds = Object.keys(balanceMap);
-  if (profileIds.length > 0) {
-    const [profilesRes, pointsRes, refCodesRes] = await Promise.all([
-      databases.listDocuments('urbanpoint', 'profiles', [
-        Query.equal('$id', profileIds),
-        Query.limit(500)
-      ]).catch(() => ({ documents: [] })),
-      databases.listDocuments('urbanpoint', 'pickup_points', [
-        Query.equal('profile_id', profileIds),
-        Query.limit(500)
-      ]).catch(() => ({ documents: [] })),
-      databases.listDocuments('urbanpoint', 'referral_codes', [
-        Query.equal('owner_id', profileIds),
-        Query.limit(500)
-      ]).catch(() => ({ documents: [] }))
-    ]);
+  const ledgerRes = await databases.listDocuments('urbanpoint', 'commission_ledger', ledgerQueries);
+  allLedgerDocs = ledgerRes.documents || [];
 
-    const profileDocMap: Record<string, any> = {};
-    (profilesRes.documents || []).forEach((p: any) => { profileDocMap[p.$id] = p; });
-
-    const pointDocMap: Record<string, any> = {};
-    (pointsRes.documents || []).forEach((pt: any) => {
-      const pId = typeof pt.profile_id === 'string' ? pt.profile_id : pt.profile_id?.$id;
-      if (pId) pointDocMap[pId] = pt;
-    });
-
-    for (const pId of profileIds) {
-      const prof = profileDocMap[pId];
-      const pt = pointDocMap[pId];
-      if (balanceMap[pId]) {
-        balanceMap[pId].name = prof?.nombre || pt?.nombre_comercial || 'Canillita';
-        balanceMap[pId].commercial_name = pt?.nombre_comercial || prof?.nombre || '';
-        balanceMap[pId].email = prof?.email || pt?.email || '';
-        balanceMap[pId].phone = prof?.telefono || pt?.telefono || '';
-        balanceMap[pId].cbu = pt?.cbu || pt?.cvu || prof?.cbu || prof?.cvu || 'No informado';
-        balanceMap[pId].alias = pt?.alias || prof?.alias || 'No informado';
-        balanceMap[pId].banco = pt?.banco || prof?.banco || 'No especificado';
-        balanceMap[pId].titular = pt?.titular_cuenta || prof?.titular_cuenta || prof?.nombre || 'No especificado';
-      }
+  // Filter ledgers locally by period ($createdAt month match) and search query q
+  allLedgerDocs = allLedgerDocs.filter(doc => {
+    if (periodoParam) {
+      const docDate = doc.$createdAt ? doc.$createdAt.substring(0, 7) : '';
+      if (docDate !== periodoParam) return false;
     }
-
-    for (const ref of (refCodesRes.documents || [])) {
-      const oId = typeof ref.owner_id === 'string' ? ref.owner_id : ref.owner_id?.$id;
-      if (oId && balanceMap[oId]) {
-        balanceMap[oId].code = ref.code;
-      }
+    if (qParam.trim()) {
+      const q = qParam.toLowerCase();
+      const pId = typeof doc.profile_id === 'string' ? doc.profile_id : doc.profile_id?.$id;
+      const cInfo = canillitaOptionsMap[pId];
+      const matchName = cInfo?.nombreComercial?.toLowerCase().includes(q) || cInfo?.titular?.toLowerCase().includes(q);
+      const matchMotivo = doc.motivo?.toLowerCase().includes(q);
+      const matchOrder = (typeof doc.order_id === 'string' ? doc.order_id : doc.order_id?.$id)?.toLowerCase().includes(q);
+      if (!matchName && !matchMotivo && !matchOrder) return false;
     }
+    return true;
+  });
+
+  // 3. Fetch past Payouts
+  const payoutQueries = [Query.orderDesc('$createdAt'), Query.limit(500)];
+  if (canillitaParam) {
+    payoutQueries.unshift(Query.equal('profile_id', canillitaParam));
   }
-
-  pendingBalances = Object.values(balanceMap);
-
-  // 2. Fetch past payouts history with beneficiary resolution
-  const payoutQueries = [Query.orderDesc('$createdAt'), Query.limit(100)];
   if (periodoParam) {
     payoutQueries.unshift(Query.equal('periodo', periodoParam));
   }
   const payoutsRes = await databases.listDocuments('urbanpoint', 'payouts', payoutQueries);
-
-  const payoutProfileIds = Array.from(new Set((payoutsRes.documents || []).map((p: any) => typeof p.profile_id === 'string' ? p.profile_id : p.profile_id?.$id).filter(Boolean)));
-
-  const payoutProfileMap: Record<string, any> = {};
-  if (payoutProfileIds.length > 0) {
-    const [pRes, ptRes] = await Promise.all([
-      databases.listDocuments('urbanpoint', 'profiles', [
-        Query.equal('$id', payoutProfileIds),
-        Query.limit(500)
-      ]).catch(() => ({ documents: [] })),
-      databases.listDocuments('urbanpoint', 'pickup_points', [
-        Query.equal('profile_id', payoutProfileIds),
-        Query.limit(500)
-      ]).catch(() => ({ documents: [] }))
-    ]);
-    (pRes.documents || []).forEach((p: any) => { payoutProfileMap[p.$id] = p; });
-    (ptRes.documents || []).forEach((pt: any) => {
-      const pId = typeof pt.profile_id === 'string' ? pt.profile_id : pt.profile_id?.$id;
-      if (pId) payoutProfileMap[pId + '_pt'] = pt;
-    });
-  }
-
   pastPayouts = (payoutsRes.documents || []).map((pay: any) => {
-    const profId = typeof pay.profile_id === 'string' ? pay.profile_id : pay.profile_id?.$id;
-    const prof = profId ? payoutProfileMap[profId] : null;
-    const pt = profId ? payoutProfileMap[profId + '_pt'] : null;
+    const pId = typeof pay.profile_id === 'string' ? pay.profile_id : pay.profile_id?.$id;
+    const cInfo = canillitaOptionsMap[pId];
     return {
       ...pay,
-      beneficiaryName: pt?.nombre_comercial || prof?.nombre || 'Canillita',
-      contactInfo: prof?.email || prof?.telefono || ''
+      beneficiaryName: cInfo?.nombreComercial || cInfo?.titular || 'Canillita',
+      email: cInfo?.email || '',
+      cbu: cInfo?.cbu || 'No informado'
     };
   });
 
-  totalLiquidadoCentavos = pastPayouts.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
-
-  currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
-  pageSize = 25;
-
-  totalPendingItems = pendingBalances.length;
-  totalPendingPages = Math.ceil(totalPendingItems / pageSize) || 1;
-  pagedPendingBalances = pendingBalances.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-  totalPayoutItems = pastPayouts.length;
-  totalPayoutPages = Math.ceil(totalPayoutItems / pageSize) || 1;
-  pagedPastPayouts = pastPayouts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
 } catch (e) {
-  console.error("Error loading liquidaciones:", e);
+  console.error("Error cargando panel de liquidaciones:", e);
 }
+
+// Global KPI Metrics calculation based on filtered ledgers
+let totalComisionCentavos = 0;
+let totalFeeLogisticaCentavos = 0;
+let totalComisionReferidoCentavos = 0;
+let totalPendienteCentavos = 0;
+let totalLiquidadoCentavos = 0;
+
+for (const doc of allLedgerDocs) {
+  const monto = doc.monto_centavos || 0;
+  totalComisionCentavos += monto;
+
+  if (doc.tipo === 'fee_logistica') {
+    totalFeeLogisticaCentavos += monto;
+  } else if (doc.tipo === 'comision_referido') {
+    totalComisionReferidoCentavos += monto;
+  }
+
+  if (doc.estado === 'pendiente') {
+    totalPendienteCentavos += monto;
+  } else if (doc.estado === 'liquidado') {
+    totalLiquidadoCentavos += monto;
+  }
+}
+
+// Group ledgers by Canillita for Tab 1 (Resumen por Canillita)
+const groupedByCanillitaMap: Record<string, {
+  profileId: string;
+  info: any;
+  feeLogisticaCentavos: number;
+  referidoCentavos: number;
+  pendienteCentavos: number;
+  liquidadoCentavos: number;
+  totalCentavos: number;
+  asientosCount: number;
+}> = {};
+
+for (const doc of allLedgerDocs) {
+  const pId = typeof doc.profile_id === 'string' ? doc.profile_id : doc.profile_id?.$id;
+  if (!pId) continue;
+
+  if (!groupedByCanillitaMap[pId]) {
+    groupedByCanillitaMap[pId] = {
+      profileId: pId,
+      info: canillitaOptionsMap[pId] || {
+        profileId: pId,
+        nombreComercial: 'Canillita',
+        titular: 'Sin Titular',
+        email: '',
+        phone: '',
+        cbu: 'No informado',
+        alias: 'No informado',
+        banco: 'No especificado',
+        titularCuenta: 'No especificado',
+        code: 'S/CODE'
+      },
+      feeLogisticaCentavos: 0,
+      referidoCentavos: 0,
+      pendienteCentavos: 0,
+      liquidadoCentavos: 0,
+      totalCentavos: 0,
+      asientosCount: 0
+    };
+  }
+
+  const monto = doc.monto_centavos || 0;
+  const group = groupedByCanillitaMap[pId];
+  group.totalCentavos += monto;
+  group.asientosCount += 1;
+
+  if (doc.tipo === 'fee_logistica') group.feeLogisticaCentavos += monto;
+  if (doc.tipo === 'comision_referido') group.referidoCentavos += monto;
+  if (doc.estado === 'pendiente') group.pendienteCentavos += monto;
+  if (doc.estado === 'liquidado') group.liquidadoCentavos += monto;
+}
+
+const summaryCanillitasList = Object.values(groupedByCanillitaMap).sort((a, b) => b.pendienteCentavos - a.pendienteCentavos);
+
+// Pagination setup
+const currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
+const pageSize = 25;
+
+const totalLedgerItems = allLedgerDocs.length;
+const totalLedgerPages = Math.ceil(totalLedgerItems / pageSize) || 1;
+const pagedLedgerDocs = allLedgerDocs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+const selectedCanillitaInfo = canillitaParam ? canillitaOptionsMap[canillitaParam] : null;
+const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaParam] : null;
 ---
 
-<AdminLayout title="Liquidación de Comisiones">
-	<main class="p-6 md:p-8 max-w-7xl mx-auto">
-		<!-- Compact Header with Live Statistics -->
-		<header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-200">
+<AdminLayout title="Gestión y Liquidación de Comisiones">
+	<main class="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+		
+		<!-- Header Principal -->
+		<header class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
 			<div>
-				<h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Liquidación de Comisiones</h1>
-				<p class="text-xs text-slate-500 font-medium mt-0.5">
-					Pendientes: <strong class="text-emerald-700">{formateador.format(totalPendienteCentavos / 100)}</strong> ({pendingBalances.length} canillitas) | Liquidado histórico: <strong class="text-slate-800">{formateador.format(totalLiquidadoCentavos / 100)}</strong>
+				<h1 class="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
+					<DollarSign className="w-7 h-7 text-indigo-600" />
+					Gestión & Liquidación de Comisiones
+				</h1>
+				<p class="text-slate-500 text-xs sm:text-sm mt-1">
+					Auditoría detallada de comisiones por Canillita, fee de logística, referidos y ejecución de pagos.
 				</p>
 			</div>
-
+			
 			<div class="flex items-center gap-3">
-				<button id="btn-export-csv" class="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1.5">
-					<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-					Exportar a CSV
-				</button>
+				<a 
+					href="/admin/liquidaciones" 
+					class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors flex items-center gap-2"
+				>
+					<RefreshCw className="w-4 h-4" />
+					Limpiar Filtros
+				</a>
 			</div>
 		</header>
 
-		<!-- Subheader & Tabs -->
-		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-			<div class="flex items-center gap-2 bg-slate-100 p-1 rounded-xl text-xs font-bold w-fit">
-				<a href="?tab=pendientes" class={`px-4 py-2 rounded-lg transition-colors ${tabParam === 'pendientes' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>
-					Pendientes de Pago ({pendingBalances.length})
-				</a>
-				<a href="?tab=historial" class={`px-4 py-2 rounded-lg transition-colors ${tabParam === 'historial' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>
-					Historial de Liquidaciones ({pastPayouts.length})
-				</a>
+		<!-- Control Surface / Filtros de Auditoría -->
+		<div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+			<div class="flex items-center gap-2 border-b border-slate-100 pb-3">
+				<Filter className="w-4 h-4 text-indigo-600" />
+				<h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Filtros de Auditoría & Período</h2>
+			</div>
+
+			<form method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+				<input type="hidden" name="tab" value={tabParam} />
+				
+				<!-- Filtro 1: Seleccionar Canillita / Punto -->
+				<div>
+					<label for="canillita" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+						<User className="w-3.5 h-3.5 text-slate-400" /> Canillita / Punto
+					</label>
+					<select 
+						name="canillita" 
+						id="canillita" 
+						onchange="this.form.submit()"
+						class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 cursor-pointer"
+					>
+						<option value="">-- Todos los Canillitas ({canillitaOptions.length}) --</option>
+						{canillitaOptions.map(c => (
+							<option value={c.profileId} selected={canillitaParam === c.profileId}>
+								{c.nombreComercial} ({c.titular})
+							</option>
+						))}
+					</select>
+				</div>
+
+				<!-- Filtro 2: Período / Mes -->
+				<div>
+					<label for="periodo" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+						<Calendar className="w-3.5 h-3.5 text-slate-400" /> Mes / Período
+					</label>
+					<select 
+						name="periodo" 
+						id="periodo" 
+						onchange="this.form.submit()"
+						class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 cursor-pointer"
+					>
+						{periodOptions.map(p => (
+							<option value={p.value} selected={periodoParam === p.value}>{p.label}</option>
+						))}
+					</select>
+				</div>
+
+				<!-- Filtro 3: Estado de Comisión -->
+				<div>
+					<label for="estado" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+						<Clock className="w-3.5 h-3.5 text-slate-400" /> Estado
+					</label>
+					<select 
+						name="estado" 
+						id="estado" 
+						onchange="this.form.submit()"
+						class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 cursor-pointer"
+					>
+						<option value="todos" selected={estadoParam === 'todos'}>Todas las comisiones</option>
+						<option value="pendiente" selected={estadoParam === 'pendiente'}>Solo Pendientes de Pago</option>
+						<option value="liquidado" selected={estadoParam === 'liquidado'}>Solo Liquidadas / Pagadas</option>
+					</select>
+				</div>
+
+				<!-- Filtro 4: Búsqueda rápida por texto -->
+				<div>
+					<label for="q" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+						<Search className="w-3.5 h-3.5 text-slate-400" /> Buscar por Nombre / Orden
+					</label>
+					<div class="relative">
+						<input 
+							type="text" 
+							name="q" 
+							id="q" 
+							value={qParam} 
+							placeholder="Ej: Adelina, N° Orden..." 
+							class="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-indigo-600"
+						/>
+						<Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+					</div>
+				</div>
+			</form>
+		</div>
+
+		<!-- Spotlight Card (Si hay un Canillita seleccionado) -->
+		{selectedCanillitaInfo && (
+			<div class="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl border border-indigo-700/50 space-y-4">
+				<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-indigo-800/80 pb-4">
+					<div class="flex items-center gap-3.5">
+						<div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white font-black flex items-center justify-center text-xl shadow-lg shrink-0">
+							{selectedCanillitaInfo.nombreComercial.charAt(0)}
+						</div>
+						<div>
+							<div class="flex items-center gap-2">
+								<h2 class="text-xl font-black tracking-tight">{selectedCanillitaInfo.nombreComercial}</h2>
+								<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-800/80 text-indigo-200 border border-indigo-700">
+									REF: {selectedCanillitaInfo.code}
+								</span>
+							</div>
+							<p class="text-xs text-indigo-200 font-medium mt-0.5">
+								Titular: <strong>{selectedCanillitaInfo.titular}</strong> &bull; {selectedCanillitaInfo.email} &bull; {selectedCanillitaInfo.phone}
+							</p>
+						</div>
+					</div>
+
+					{selectedCanillitaStats && selectedCanillitaStats.pendienteCentavos > 0 && (
+						<button 
+							class="btn-abrir-payout px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl shadow-lg transition-all text-xs flex items-center gap-2 cursor-pointer shrink-0 hover:scale-[1.02]"
+							data-profile-id={selectedCanillitaInfo.profileId}
+							data-nombre={selectedCanillitaInfo.nombreComercial}
+							data-titular={selectedCanillitaInfo.titularCuenta}
+							data-banco={selectedCanillitaInfo.banco}
+							data-cbu={selectedCanillitaInfo.cbu}
+							data-alias={selectedCanillitaInfo.alias}
+							data-monto={selectedCanillitaStats.pendienteCentavos}
+						>
+							<CreditCard className="w-4 h-4" />
+							Liquidar Saldo Pendiente ({formateador.format(selectedCanillitaStats.pendienteCentavos / 100)})
+						</button>
+					)}
+				</div>
+
+				<!-- Datos Bancarios & Totales del Canillita -->
+				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+					<div class="bg-indigo-950/60 p-4 rounded-2xl border border-indigo-800/60">
+						<p class="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">CBU / CVU para Transferencia</p>
+						<p class="text-sm font-mono font-bold text-white mt-1 select-all">{selectedCanillitaInfo.cbu}</p>
+					</div>
+
+					<div class="bg-indigo-950/60 p-4 rounded-2xl border border-indigo-800/60">
+						<p class="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">Alias & Banco</p>
+						<p class="text-sm font-bold text-white mt-1">{selectedCanillitaInfo.alias} <span class="text-xs text-indigo-300">({selectedCanillitaInfo.banco})</span></p>
+					</div>
+
+					<div class="bg-indigo-950/60 p-4 rounded-2xl border border-indigo-800/60">
+						<p class="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">Titular de Cuenta</p>
+						<p class="text-sm font-bold text-white mt-1">{selectedCanillitaInfo.titularCuenta}</p>
+					</div>
+
+					<div class="bg-indigo-950/60 p-4 rounded-2xl border border-indigo-800/60">
+						<p class="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">Saldo Pendiente Actual</p>
+						<p class="text-lg font-black text-emerald-400 mt-0.5">
+							{selectedCanillitaStats ? formateador.format(selectedCanillitaStats.pendienteCentavos / 100) : '$0,00'}
+						</p>
+					</div>
+				</div>
+			</div>
+		)}
+
+		<!-- KPI Metric Cards (Dinamizadas según los filtros) -->
+		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+				<div class="flex items-center justify-between text-slate-400 mb-2">
+					<span class="text-xs font-bold uppercase tracking-wider text-slate-500">Comisiones Totales</span>
+					<DollarSign className="w-5 h-5 text-indigo-600" />
+				</div>
+				<h3 class="text-2xl font-black text-slate-900">{formateador.format(totalComisionCentavos / 100)}</h3>
+				<p class="text-[11px] text-slate-500 font-medium mt-1">{allLedgerDocs.length} asientos registrados</p>
+			</div>
+
+			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+				<div class="flex items-center justify-between text-slate-400 mb-2">
+					<span class="text-xs font-bold uppercase tracking-wider text-slate-500">Fee Logística (Puntos)</span>
+					<Building2 className="w-5 h-5 text-sky-600" />
+				</div>
+				<h3 class="text-2xl font-black text-slate-900">{formateador.format(totalFeeLogisticaCentavos / 100)}</h3>
+				<p class="text-[11px] text-slate-500 font-medium mt-1">Comisión por entregas en local</p>
+			</div>
+
+			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+				<div class="flex items-center justify-between text-slate-400 mb-2">
+					<span class="text-xs font-bold uppercase tracking-wider text-slate-500">Comisión Referidos</span>
+					<ArrowUpRight className="w-5 h-5 text-purple-600" />
+				</div>
+				<h3 class="text-2xl font-black text-slate-900">{formateador.format(totalComisionReferidoCentavos / 100)}</h3>
+				<p class="text-[11px] text-slate-500 font-medium mt-1">Comisión por ventas referidas</p>
+			</div>
+
+			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs bg-amber-50/40">
+				<div class="flex items-center justify-between text-slate-400 mb-2">
+					<span class="text-xs font-bold uppercase tracking-wider text-amber-800">Saldo Pendiente a Liquidar</span>
+					<Clock className="w-5 h-5 text-amber-600" />
+				</div>
+				<h3 class="text-2xl font-black text-amber-700">{formateador.format(totalPendienteCentavos / 100)}</h3>
+				<p class="text-[11px] text-amber-700 font-medium mt-1">{summaryCanillitasList.filter(s => s.pendienteCentavos > 0).length} canillitas con saldo a favor</p>
 			</div>
 		</div>
 
-		{/* Tab 1: Pendientes de Pago */}
-		{tabParam === 'pendientes' && (
-			<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-				{pendingBalances.length === 0 ? (
-					<div class="p-12 text-center text-slate-500">
-						<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mx-auto mb-3 text-emerald-500"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-						<p class="text-lg font-bold text-slate-800">¡Todo al día!</p>
-						<p class="text-xs text-slate-500 mt-1">No hay saldo a favor pendiente de pago para liquidar en este momento.</p>
-					</div>
-				) : (
-					<div class="overflow-x-auto">
-						<table class="w-full text-left border-collapse text-xs">
-							<thead>
-								<tr class="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider h-[38px]">
-									<th class="px-4 py-2">Canillita / Comercio</th>
-									<th class="px-4 py-2 text-center">Código REF</th>
-									<th class="px-4 py-2 text-center">Contacto</th>
-									<th class="px-4 py-2 text-center">Órdenes</th>
-									<th class="px-4 py-2 text-right">Saldo Pendiente</th>
-									<th class="px-4 py-2 text-right">Acción</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-slate-100">
-								{pagedPendingBalances.map(p => (
-									<tr class="hover:bg-slate-50 transition-colors h-[42px]">
-										<td class="px-4 py-2">
-											<p class="font-bold text-slate-900">{p.name} {p.commercial_name && p.commercial_name !== p.name ? `(${p.commercial_name})` : ''}</p>
-											<p class="text-[11px] text-slate-500 font-mono">CBU: {p.cbu}</p>
-										</td>
-										<td class="px-4 py-2 text-center">
-											<span class="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded text-[11px]">{p.code}</span>
-										</td>
-										<td class="px-4 py-2 text-center text-slate-600">
-											{p.phone || p.email || 'Sin contacto'}
-										</td>
-										<td class="px-4 py-2 text-center font-bold text-slate-800">
-											{p.count}
-										</td>
-										<td class="px-4 py-2 text-right font-black text-emerald-600 text-sm">
-											{formateador.format(p.balance / 100)}
-										</td>
-										<td class="px-4 py-2 text-right">
+		<!-- Navigation Tabs -->
+		<div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+			<div class="flex border-b border-slate-200 bg-slate-50/60 p-2 gap-2">
+				<a 
+					href={`/admin/liquidaciones?tab=resumen${canillitaParam ? `&canillita=${canillitaParam}` : ''}${periodoParam ? `&periodo=${periodoParam}` : ''}`} 
+					class={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 ${tabParam === 'resumen' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200/60'}`}
+				>
+					<User className="w-4 h-4" />
+					Resumen por Canillita ({summaryCanillitasList.length})
+				</a>
+
+				<a 
+					href={`/admin/liquidaciones?tab=movimientos${canillitaParam ? `&canillita=${canillitaParam}` : ''}${periodoParam ? `&periodo=${periodoParam}` : ''}`} 
+					class={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 ${tabParam === 'movimientos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200/60'}`}
+				>
+					<FileText className="w-4 h-4" />
+					Detalle de Movimientos / Asientos ({allLedgerDocs.length})
+				</a>
+
+				<a 
+					href={`/admin/liquidaciones?tab=payouts${canillitaParam ? `&canillita=${canillitaParam}` : ''}${periodoParam ? `&periodo=${periodoParam}` : ''}`} 
+					class={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 ${tabParam === 'payouts' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200/60'}`}
+				>
+					<CheckCircle2 className="w-4 h-4" />
+					Histórico de Liquidaciones / Pagos ({pastPayouts.length})
+				</a>
+			</div>
+
+			<!-- TAB 1: Resumen por Canillitas -->
+			{tabParam === 'resumen' && (
+				<div class="overflow-x-auto">
+					<table class="w-full text-left border-collapse">
+						<thead>
+							<tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+								<th class="p-4">Canillita (Punto de Retiro)</th>
+								<th class="p-4">Datos de Transferencia Bancaria</th>
+								<th class="p-4 text-right">Fee Logística</th>
+								<th class="p-4 text-right">Referidos</th>
+								<th class="p-4 text-right">Saldo Pendiente</th>
+								<th class="p-4 text-right">Total Liquidado</th>
+								<th class="p-4 text-center">Acciones</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-slate-100 text-xs">
+							{summaryCanillitasList.map(item => (
+								<tr class="hover:bg-slate-50/80 transition-colors">
+									<td class="p-4">
+										<p class="font-extrabold text-slate-900 text-sm">{item.info.nombreComercial}</p>
+										<p class="text-slate-500 text-[11px] mt-0.5">
+											Titular: <strong>{item.info.titular}</strong> &bull; {item.info.email || 'Sin email'}
+										</p>
+										<span class="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+											REF: {item.info.code}
+										</span>
+									</td>
+
+									<td class="p-4">
+										<p class="font-mono text-xs font-bold text-slate-800 select-all">{item.info.cbu}</p>
+										<p class="text-[11px] text-slate-500 mt-0.5">
+											Alias: <strong class="text-slate-700">{item.info.alias}</strong> ({item.info.banco})
+										</p>
+										<p class="text-[10px] text-slate-400">Titular: {item.info.titularCuenta}</p>
+									</td>
+
+									<td class="p-4 text-right font-medium text-slate-700">
+										{formateador.format(item.feeLogisticaCentavos / 100)}
+									</td>
+
+									<td class="p-4 text-right font-medium text-slate-700">
+										{formateador.format(item.referidoCentavos / 100)}
+									</td>
+
+									<td class="p-4 text-right">
+										<span class={`font-black text-sm ${item.pendienteCentavos > 0 ? 'text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200' : 'text-slate-400'}`}>
+											{formateador.format(item.pendienteCentavos / 100)}
+										</span>
+									</td>
+
+									<td class="p-4 text-right font-bold text-slate-800">
+										{formateador.format(item.liquidadoCentavos / 100)}
+									</td>
+
+									<td class="p-4 text-center space-x-2 whitespace-nowrap">
+										<a 
+											href={`/admin/liquidaciones?canillita=${item.profileId}${periodoParam ? `&periodo=${periodoParam}` : ''}&tab=movimientos`} 
+											class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition-colors inline-block"
+										>
+											Ver Movimientos
+										</a>
+
+										{item.pendienteCentavos > 0 && (
 											<button 
-												class="btn-liquidar-modal px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-all shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-												data-profile={p.id}
-												data-name={p.name}
-												data-comercial={p.commercial_name}
-												data-balance={p.balance}
-												data-cbu={p.cbu}
-												data-alias={p.alias}
-												data-banco={p.banco}
-												data-titular={p.titular}
-												disabled={p.balance <= 0}
+												class="btn-abrir-payout px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs cursor-pointer"
+												data-profile-id={item.profileId}
+												data-nombre={item.info.nombreComercial}
+												data-titular={item.info.titularCuenta}
+												data-banco={item.info.banco}
+												data-cbu={item.info.cbu}
+												data-alias={item.info.alias}
+												data-monto={item.pendienteCentavos}
 											>
 												Liquidar
 											</button>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-						<Pagination 
-							currentPage={currentPage} 
-							totalPages={totalPendingPages} 
-							totalItems={totalPendingItems} 
-							pageSize={pageSize} 
-							searchParams={Astro.url.searchParams} 
-							baseUrl="/admin/liquidaciones" 
-						/>
-					</div>
-				)}
-			</div>
-		)}
+										)}
+									</td>
+								</tr>
+							))}
 
-		{/* Tab 2: Historial de Liquidaciones */}
-		{tabParam === 'historial' && (
-			<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-				{pastPayouts.length === 0 ? (
-					<div class="p-12 text-center text-slate-500 text-sm">
-						No hay liquidaciones históricas registradas.
-					</div>
-				) : (
+							{summaryCanillitasList.length === 0 && (
+								<tr>
+									<td colspan="7" class="p-12 text-center text-slate-500 font-medium">
+										No hay comisiones ni canillitas para los filtros seleccionados.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+			)}
+
+			<!-- TAB 2: Detalle de Movimientos / Asientos -->
+			{tabParam === 'movimientos' && (
+				<div>
 					<div class="overflow-x-auto">
-						<table class="w-full text-left border-collapse text-xs">
+						<table class="w-full text-left border-collapse">
 							<thead>
-								<tr class="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider h-[38px]">
-									<th class="px-4 py-2">Fecha</th>
-									<th class="px-4 py-2">Beneficiario</th>
-									<th class="px-4 py-2">Comprobante #</th>
-									<th class="px-4 py-2 text-center">Período</th>
-									<th class="px-4 py-2 text-center">Método</th>
-									<th class="px-4 py-2 text-right">Monto Liquidado</th>
-									<th class="px-4 py-2 text-center">Estado</th>
+								<tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+									<th class="p-4">Fecha / Hora</th>
+									<th class="p-4">Canillita Beneficiario</th>
+									<th class="p-4">Pedido Relacionado</th>
+									<th class="p-4">Tipo de Comisión</th>
+									<th class="p-4">Concepto / Motivo</th>
+									<th class="p-4 text-right">Monto Comisión</th>
+									<th class="p-4 text-center">Estado</th>
 								</tr>
 							</thead>
-							<tbody class="divide-y divide-slate-100">
-								{pagedPastPayouts.map(pay => (
-									<tr class="hover:bg-slate-50 transition-colors h-[42px]">
-										<td class="px-4 py-2 text-slate-700 font-medium">
-											{new Date(pay.$createdAt).toLocaleString('es-AR')}
-										</td>
-										<td class="px-4 py-2 font-bold text-slate-900">
-											{pay.beneficiaryName}
-											{pay.contactInfo && <span class="block text-[10px] font-normal text-slate-400">{pay.contactInfo}</span>}
-										</td>
-										<td class="px-4 py-2 font-mono text-slate-900 font-bold">
-											{pay.comprobante || pay.$id.substring(0,10)}
-										</td>
-										<td class="px-4 py-2 text-center font-bold text-slate-800">
-											{pay.periodo || '2026-08'}
-										</td>
-										<td class="px-4 py-2 text-center text-slate-600 capitalize">
-											{pay.metodo_pago || 'Transferencia'}
-										</td>
-										<td class="px-4 py-2 text-right font-black text-slate-900 text-sm">
-											{formateador.format((pay.monto_centavos || 0) / 100)}
-										</td>
-										<td class="px-4 py-2 text-center">
-											<span class="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-[11px] rounded-full border border-emerald-200">Ejecutado</span>
+							<tbody class="divide-y divide-slate-100 text-xs">
+								{pagedLedgerDocs.map((doc: any) => {
+									const pId = typeof doc.profile_id === 'string' ? doc.profile_id : doc.profile_id?.$id;
+									const cInfo = canillitaOptionsMap[pId];
+									const orderId = typeof doc.order_id === 'string' ? doc.order_id : doc.order_id?.$id;
+									const fechaStr = doc.$createdAt ? new Date(doc.$createdAt).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+
+									return (
+										<tr class="hover:bg-slate-50/80 transition-colors">
+											<td class="p-4 font-mono text-slate-500 whitespace-nowrap">{fechaStr}</td>
+
+											<td class="p-4">
+												<p class="font-bold text-slate-900">{cInfo?.nombreComercial || 'Canillita'}</p>
+												<p class="text-[11px] text-slate-400">{cInfo?.titular}</p>
+											</td>
+
+											<td class="p-4">
+												{orderId ? (
+													<a href={`/admin/pedidos/${orderId}`} target="_blank" class="font-mono text-indigo-600 font-bold hover:underline">
+														#{orderId.substring(0, 8)}
+													</a>
+												) : (
+													<span class="text-slate-400 italic">S/N</span>
+												)}
+											</td>
+
+											<td class="p-4">
+												{doc.tipo === 'fee_logistica' ? (
+													<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+														Fee Logística
+													</span>
+												) : (
+													<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+														Comisión Referido
+													</span>
+												)}
+											</td>
+
+											<td class="p-4 text-slate-700 font-medium">
+												{doc.motivo || 'Devengo de comisión'}
+											</td>
+
+											<td class="p-4 text-right font-extrabold text-slate-900 text-sm">
+												{formateador.format((doc.monto_centavos || 0) / 100)}
+											</td>
+
+											<td class="p-4 text-center">
+												{doc.estado === 'pendiente' ? (
+													<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+														Pendiente
+													</span>
+												) : (
+													<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+														Liquidado
+													</span>
+												)}
+											</td>
+										</tr>
+									);
+								})}
+
+								{pagedLedgerDocs.length === 0 && (
+									<tr>
+										<td colspan="7" class="p-12 text-center text-slate-500 font-medium">
+											No hay asientos registrados para este filtro.
 										</td>
 									</tr>
-								))}
+								)}
 							</tbody>
 						</table>
+					</div>
+
+					<div class="p-4 border-t border-slate-100">
 						<Pagination 
 							currentPage={currentPage} 
-							totalPages={totalPayoutPages} 
-							totalItems={totalPayoutItems} 
+							totalPages={totalLedgerPages} 
+							totalItems={totalLedgerItems} 
 							pageSize={pageSize} 
 							searchParams={Astro.url.searchParams} 
 							baseUrl="/admin/liquidaciones" 
 						/>
 					</div>
-				)}
-			</div>
-		)}
+				</div>
+			)}
+
+			<!-- TAB 3: Histórico de Liquidaciones / Payouts -->
+			{tabParam === 'payouts' && (
+				<div class="overflow-x-auto">
+					<table class="w-full text-left border-collapse">
+						<thead>
+							<tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+								<th class="p-4">Fecha de Pago</th>
+								<th class="p-4">Beneficiario (Canillita)</th>
+								<th class="p-4">Período Liquidado</th>
+								<th class="p-4">Medio & Referencia</th>
+								<th class="p-4 text-right">Monto Liquidado</th>
+								<th class="p-4 text-center">Estado</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-slate-100 text-xs">
+							{pastPayouts.map((pay: any) => {
+								const fechaStr = pay.$createdAt ? new Date(pay.$createdAt).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+
+								return (
+									<tr class="hover:bg-slate-50/80 transition-colors">
+										<td class="p-4 font-mono text-slate-500">{fechaStr}</td>
+
+										<td class="p-4">
+											<p class="font-bold text-slate-900">{pay.beneficiaryName}</p>
+											<p class="text-[11px] text-slate-400">CBU: {pay.cbu}</p>
+										</td>
+
+										<td class="p-4 font-mono font-bold text-slate-700">
+											{pay.periodo || 'Acumulado'}
+										</td>
+
+										<td class="p-4">
+											<p class="font-bold text-slate-800 uppercase text-[11px]">{pay.medio_pago || 'Transferencia'}</p>
+											<p class="font-mono text-slate-500 text-[11px]">Ref: {pay.referencia_pago || pay.idempotency_key || 'S/R'}</p>
+										</td>
+
+										<td class="p-4 text-right font-black text-slate-900 text-sm">
+											{formateador.format((pay.monto_centavos || 0) / 100)}
+										</td>
+
+										<td class="p-4 text-center">
+											<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+												Completado
+											</span>
+										</td>
+									</tr>
+								);
+							})}
+
+							{pastPayouts.length === 0 && (
+								<tr>
+									<td colspan="6" class="p-12 text-center text-slate-500 font-medium">
+										No se han registrado pagos ni liquidaciones en el período seleccionado.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+			)}
+		</div>
 	</main>
 
-	<!-- Modal de Confirmación e Idempotencia de Payout -->
+	<!-- Modal de Ejecución de Liquidación / Payout -->
 	<div id="modal-payout" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
-		<div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6">
-			<div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200">
-				<h3 class="text-lg font-extrabold text-slate-900">Confirmar Liquidación</h3>
-				<button id="btn-close-payout" class="text-slate-400 hover:text-slate-600 text-2xl font-bold">&times;</button>
+		<div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-5">
+			<div class="flex items-center justify-between pb-3 border-b border-slate-200">
+				<h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+					<CreditCard className="w-5 h-5 text-emerald-600" />
+					Confirmar Liquidación de Comisiones
+				</h3>
+				<button id="btn-close-payout-modal" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
 			</div>
 
 			<form id="form-payout" class="space-y-4">
 				<input type="hidden" id="payout-profile-id" />
-				<input type="hidden" id="payout-balance-val" />
-				<input type="hidden" id="payout-idempotency" />
 
-				<div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-3">
-					<div>
-						<p class="text-xs text-slate-500 font-medium">Canillita Beneficiario:</p>
-						<p id="payout-target-name" class="text-base font-bold text-slate-900"></p>
+				<div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+					<p class="text-xs text-slate-500 font-bold uppercase tracking-wider">Beneficiario</p>
+					<h4 id="payout-canillita-nombre" class="text-base font-black text-slate-900">Nombre Canillita</h4>
+					
+					<div class="pt-2 border-t border-slate-200 grid grid-cols-2 gap-2 text-xs">
+						<div>Titular: <strong id="payout-titular" class="text-slate-800">--</strong></div>
+						<div>Banco: <strong id="payout-banco" class="text-slate-800">--</strong></div>
+						<div class="col-span-2 font-mono">CBU/CVU: <strong id="payout-cbu" class="text-slate-900 select-all">--</strong></div>
+						<div class="col-span-2">Alias: <strong id="payout-alias" class="text-slate-900">--</strong></div>
 					</div>
+				</div>
 
-					<div class="pt-2 border-t border-slate-200 text-xs space-y-1">
-						<p class="font-bold text-slate-700">Datos Bancarios para Transferencia:</p>
-						<p class="text-slate-600"><span class="font-semibold text-slate-800">Titular:</span> <span id="payout-target-titular" class="font-medium text-slate-900"></span></p>
-						<p class="text-slate-600"><span class="font-semibold text-slate-800">CBU / CVU:</span> <span id="payout-target-cbu" class="select-all font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded"></span></p>
-						<p class="text-slate-600"><span class="font-semibold text-slate-800">Alias:</span> <span id="payout-target-alias" class="select-all font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded"></span></p>
-						<p class="text-slate-600"><span class="font-semibold text-slate-800">Banco:</span> <span id="payout-target-banco" class="font-medium text-slate-900"></span></p>
-					</div>
-
-					<div class="pt-2 border-t border-slate-200">
-						<p class="text-xs text-slate-500 font-medium">Monto Total a Liquidar:</p>
-						<p id="payout-target-monto" class="text-2xl font-black text-emerald-600"></p>
-					</div>
+				<div class="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-center">
+					<p class="text-xs font-bold text-emerald-800 uppercase tracking-wider">Monto Total A Liquidar</p>
+					<h2 id="payout-monto-text" class="text-3xl font-black text-emerald-700 mt-0.5">$0,00</h2>
 				</div>
 
 				<div>
-					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nº Comprobante / Transacción Banco</label>
-					<input type="text" id="payout-comprobante" required placeholder="Ej: TR-98240192" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono outline-none focus:border-emerald-600" />
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">N° de Comprobante / Referencia Bancaria</label>
+					<input 
+						type="text" 
+						id="payout-referencia" 
+						required 
+						placeholder="Ej: TRANSF-8947201" 
+						class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono outline-none focus:border-emerald-600"
+					/>
 				</div>
 
-				<div>
-					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Método de Pago</label>
-					<select id="payout-metodo" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-600 cursor-pointer">
-						<option value="transferencia">Transferencia Bancaria (CBU)</option>
-						<option value="mercadopago">Mercado Pago / CVU</option>
-						<option value="efectivo">Efectivo en Mano</option>
-					</select>
-				</div>
-
-				<div class="flex justify-end gap-3 pt-4 border-t border-slate-200">
-					<button type="button" id="btn-cancel-payout" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200">Cancelar</button>
-					<button type="submit" id="btn-confirm-payout" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md text-xs cursor-pointer">Ejecutar Pago Idempotente</button>
+				<div class="flex justify-end gap-3 pt-3 border-t border-slate-200">
+					<button type="button" id="btn-cancel-payout" class="px-5 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 text-sm">Cancelar</button>
+					<button type="submit" id="btn-confirm-payout" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md text-sm cursor-pointer">Confirmar Pago & Liquidar</button>
 				</div>
 			</form>
 		</div>
@@ -416,116 +822,81 @@ try {
 	<script>
 		import { actions } from 'astro:actions';
 
-		const modal = document.getElementById('modal-payout');
+		const modalPayout = document.getElementById('modal-payout');
+		const btnClosePayout = document.getElementById('btn-close-payout-modal');
+		const btnCancelPayout = document.getElementById('btn-cancel-payout');
 		const formPayout = document.getElementById('form-payout') as HTMLFormElement;
-		const targetName = document.getElementById('payout-target-name')!;
-		const targetMonto = document.getElementById('payout-target-monto')!;
-		const targetTitular = document.getElementById('payout-target-titular')!;
-		const targetCbu = document.getElementById('payout-target-cbu')!;
-		const targetAlias = document.getElementById('payout-target-alias')!;
-		const targetBanco = document.getElementById('payout-target-banco')!;
 
-		const inputProfile = document.getElementById('payout-profile-id') as HTMLInputElement;
-		const inputBalance = document.getElementById('payout-balance-val') as HTMLInputElement;
-		const inputIdempotency = document.getElementById('payout-idempotency') as HTMLInputElement;
-		const inputComprobante = document.getElementById('payout-comprobante') as HTMLInputElement;
-		const inputMetodo = document.getElementById('payout-metodo') as HTMLSelectElement;
+		const inputProfileId = document.getElementById('payout-profile-id') as HTMLInputElement;
+		const txtNombre = document.getElementById('payout-canillita-nombre');
+		const txtTitular = document.getElementById('payout-titular');
+		const txtBanco = document.getElementById('payout-banco');
+		const txtCbu = document.getElementById('payout-cbu');
+		const txtAlias = document.getElementById('payout-alias');
+		const txtMonto = document.getElementById('payout-monto-text');
+		const inputRef = document.getElementById('payout-referencia') as HTMLInputElement;
 
 		const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
-		document.querySelectorAll('.btn-liquidar-modal').forEach(btn => {
+		function closeModal() {
+			modalPayout?.classList.add('hidden');
+		}
+
+		btnClosePayout?.addEventListener('click', closeModal);
+		btnCancelPayout?.addEventListener('click', closeModal);
+
+		document.querySelectorAll('.btn-abrir-payout').forEach(btn => {
 			btn.addEventListener('click', (e) => {
-				const el = e.currentTarget as HTMLElement;
-				const profileId = el.dataset.profile || '';
-				const name = el.dataset.name || 'Canillita';
-				const comercial = el.dataset.comercial || '';
-				const balance = parseInt(el.dataset.balance || '0', 10);
-				const cbu = el.dataset.cbu || 'No informado';
-				const alias = el.dataset.alias || 'No informado';
-				const banco = el.dataset.banco || 'No especificado';
-				const titular = el.dataset.titular || name;
+				const target = e.currentTarget as HTMLElement;
+				const pId = target.dataset.profileId || '';
+				const nombre = target.dataset.nombre || '';
+				const titular = target.dataset.titular || '';
+				const banco = target.dataset.banco || '';
+				const cbu = target.dataset.cbu || '';
+				const alias = target.dataset.alias || '';
+				const montoCentavos = parseInt(target.dataset.monto || '0', 10);
 
-				if (balance <= 0) {
-					alert('No se puede liquidar un saldo en $0.00.');
-					return;
-				}
+				inputProfileId.value = pId;
+				if (txtNombre) txtNombre.textContent = nombre;
+				if (txtTitular) txtTitular.textContent = titular;
+				if (txtBanco) txtBanco.textContent = banco;
+				if (txtCbu) txtCbu.textContent = cbu;
+				if (txtAlias) txtAlias.textContent = alias;
+				if (txtMonto) txtMonto.textContent = formateador.format(montoCentavos / 100);
+				inputRef.value = `TRANSF-${Date.now().toString().substring(6)}`;
 
-				inputProfile.value = profileId;
-				inputBalance.value = balance.toString();
-				targetName.textContent = comercial && comercial !== name ? `${name} (${comercial})` : name;
-				targetMonto.textContent = formateador.format(balance / 100);
-				
-				if (targetTitular) targetTitular.textContent = titular;
-				if (targetCbu) targetCbu.textContent = cbu;
-				if (targetAlias) targetAlias.textContent = alias;
-				if (targetBanco) targetBanco.textContent = banco;
-
-				// Generate unique idempotency key
-				inputIdempotency.value = `IDEMP-${profileId}-${balance}-${Date.now()}`;
-				inputComprobante.value = `TR-${Math.floor(100000 + Math.random() * 900000)}`;
-
-				modal?.classList.remove('hidden');
+				modalPayout?.classList.remove('hidden');
 			});
 		});
-
-		document.getElementById('btn-close-payout')?.addEventListener('click', () => modal?.classList.add('hidden'));
-		document.getElementById('btn-cancel-payout')?.addEventListener('click', () => modal?.classList.add('hidden'));
 
 		formPayout?.addEventListener('submit', async (e) => {
 			e.preventDefault();
-			const profileId = inputProfile.value;
-			const balance = parseInt(inputBalance.value, 10);
-			const idempotencyKey = inputIdempotency.value;
-			const comprobante = inputComprobante.value;
-			const metodo = inputMetodo.value;
+			const profileId = inputProfileId.value;
+			const referenciaPago = inputRef.value.trim();
 
-			const btnSubmit = document.getElementById('btn-confirm-payout') as HTMLButtonElement;
-			btnSubmit.setAttribute('disabled', 'true');
-			btnSubmit.textContent = 'Procesando Pago...';
-
-			try {
-				const { data, error } = await actions.liquidateCommissions({
-					profileId,
-					montoCentavos: balance,
-					periodo: new Date().toISOString().substring(0, 7),
-					metodoPago: metodo,
-					comprobante,
-					idempotencyKey
-				});
-
-				if (error || !data?.success) {
-					alert(error?.message || 'Error al ejecutar la liquidación.');
-					btnSubmit.removeAttribute('disabled');
-					btnSubmit.textContent = 'Ejecutar Pago Idempotente';
-				} else {
-					alert('¡Liquidación ejecutada con éxito!');
-					window.location.reload();
-				}
-			} catch (err) {
-				alert('Error de conexión');
-				btnSubmit.removeAttribute('disabled');
-				btnSubmit.textContent = 'Ejecutar Pago Idempotente';
+			if (!profileId || !referenciaPago) {
+				alert('Por favor ingresá un número de comprobante de transferencia.');
+				return;
 			}
-		});
 
-		// CSV Exporter
-		document.getElementById('btn-export-csv')?.addEventListener('click', () => {
-			const rows = [
-				['Canillita ID', 'Periodo', 'Monto ARS', 'Comprobante', 'Metodo']
-			];
-			document.querySelectorAll('tbody tr').forEach(tr => {
-				const cols = Array.from(tr.querySelectorAll('td')).map(td => td.innerText.replace(/\n/g, ' ').trim());
-				if (cols.length > 0) rows.push(cols);
-			});
+			const btnConfirm = document.getElementById('btn-confirm-payout') as HTMLButtonElement;
+			btnConfirm.disabled = true;
+			btnConfirm.textContent = 'Procesando pago...';
 
-			const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
-			const encodedUri = encodeURI(csvContent);
-			const link = document.createElement("a");
-			link.setAttribute("href", encodedUri);
-			link.setAttribute("download", `liquidaciones_${new Date().toISOString().substring(0,10)}.csv`);
-			document.body.appendChild(link);
-			link.click();
-			document.body.removeChild(link);
+			const formData = new FormData();
+			formData.append('profileId', profileId);
+			formData.append('medioPago', 'transferencia');
+			formData.append('referenciaPago', referenciaPago);
+
+			const { data, error } = await actions.createPayout(formData);
+			if (error || !data?.success) {
+				alert(error?.message || 'Error al procesar la liquidación');
+				btnConfirm.disabled = false;
+				btnConfirm.textContent = 'Confirmar Pago & Liquidar';
+			} else {
+				alert('¡Liquidación registrada exitosamente!');
+				window.location.reload();
+			}
 		});
 	</script>
 </AdminLayout>

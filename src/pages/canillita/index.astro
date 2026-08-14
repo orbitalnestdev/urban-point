@@ -12,7 +12,7 @@ import {
 
 const user = Astro.locals.user;
 if (!user || (user.role !== 'canillita' && user.role !== 'admin')) {
-  return Astro.redirect('/');
+  return Astro.redirect('/canillita/login');
 }
 
 const { databases: db } = createAdminClient();

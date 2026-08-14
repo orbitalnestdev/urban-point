@@ -8,7 +8,10 @@ interface Props {
 }
 
 const { activePage = '', showAnnouncement = true } = Astro.props;
-const isLoggedIn = !!Astro.cookies.get('up_session')?.value;
+const user = Astro.locals.user;
+const isLoggedIn = !!user;
+const accountHref = user?.role === 'canillita' ? '/canillita' : (user?.role === 'admin' ? '/admin' : '/mi-cuenta');
+const accountText = user?.role === 'canillita' ? 'Panel Canillita' : (user?.role === 'admin' ? 'Panel Admin' : 'Mi Cuenta');
 ---
 
 <header class="sticky top-0 z-50 w-full transition-all duration-300">
@@ -71,10 +74,10 @@ const isLoggedIn = !!Astro.cookies.get('up_session')?.value;
       <div class="flex items-center gap-3 sm:gap-4">
         {isLoggedIn ? (
           <a 
-            href="/login" 
+            href={accountHref} 
             class="px-4 sm:px-5 py-2 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-full text-xs sm:text-sm font-bold shadow-md transition-all hover:scale-[1.02]"
           >
-            Mi Cuenta
+            {accountText}
           </a>
         ) : (
           <Fragment>

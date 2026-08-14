@@ -11,6 +11,11 @@ export const prerender = false;
 
 let loginError = '';
 
+const existingUser = Astro.locals.user;
+if (existingUser && (existingUser.role === 'canillita' || existingUser.role === 'admin')) {
+	return Astro.redirect('/canillita');
+}
+
 if (Astro.request.method === 'POST') {
 	try {
 		const formData = await Astro.request.formData();

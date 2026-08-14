@@ -37,7 +37,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 	
 	if (!sessionSecret) {
 		if (isProtectedPage) {
-			return context.redirect('/login');
+			return context.redirect(pathname.startsWith('/canillita') ? '/canillita/login' : '/login');
 		}
 		return next();
 	}

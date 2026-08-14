@@ -3,10 +3,12 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import Logo from '../../components/Logo.astro';
 import { getSiteSettings } from '../../lib/server/settings';
+import { parseActiveNodeCookie } from '../../lib/nodeSession';
 
 const settings = await getSiteSettings();
 const mpEnabled = settings.mp_enabled;
 const transferenciaEnabled = settings.transferencia_enabled;
+const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cookie'));
 ---
 
 <Layout title="Pago y Confirmación | UrbanPoint Checkout">
@@ -63,9 +65,16 @@ const transferenciaEnabled = settings.transferencia_enabled;
                     </div>
                     Punto de Retiro Elegido
                 </h2>
-                <a href="/checkout/retiro" class="text-sm font-bold text-[#2D5A27] hover:text-[#1e3d1a] hover:underline bg-[#F2F7F3] px-3 py-1.5 rounded-lg transition-colors">
-                    Cambiar punto
-                </a>
+                {activeNodeSession ? (
+                    <span class="text-xs font-extrabold text-[#2D5A27] bg-[#F2F7F3] px-3 py-1.5 rounded-lg border border-[#D4E5D6] flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        Punto Asignado
+                    </span>
+                ) : (
+                    <a href="/checkout/retiro" class="text-sm font-bold text-[#2D5A27] hover:text-[#1e3d1a] hover:underline bg-[#F2F7F3] px-3 py-1.5 rounded-lg transition-colors">
+                        Cambiar punto
+                    </a>
+                )}
             </div>
             <div id="selected-point-details" class="p-5 bg-white border-2 border-[#F2F7F3] rounded-2xl flex items-start gap-4 shadow-sm hover:border-[#D4E5D6] transition-colors">
                 <!-- Injected via JS -->
@@ -192,6 +201,19 @@ const transferenciaEnabled = settings.transferencia_enabled;
                 `;
             }
         } else {
+            if (!currentCheckout.pickupPointId) {
+                try {
+                    const savedNodeStr = localStorage.getItem('up_active_node');
+                    if (savedNodeStr) {
+                        const savedNode = JSON.parse(savedNodeStr);
+                        if (savedNode && savedNode.id) {
+                            currentCheckout.pickupPointId = savedNode.id;
+                            checkoutData.set({ ...currentCheckout, pickupPointId: savedNode.id });
+                        }
+                    }
+                } catch (e) {}
+            }
+
             if (!currentCheckout.pickupPointId) {
                 window.location.href = '/checkout/retiro';
                 return;
