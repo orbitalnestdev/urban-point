@@ -49,10 +49,22 @@ export const getCachedCatalog = async () => {
       const pkRes = await databases.listDocuments('urbanpoint', 'pickup_points', [Query.limit(100)]);
       cache.pickupPoints = pkRes.documents
         .filter((p: any) => p.estado === 'activo' || !p.estado)
+        // Allowlist explícita: este objeto se serializa dentro del HTML
+        // (index.astro:93), así que no puede arrastrar CBU, condición fiscal,
+        // profile_id ni los tokens de Mercado Pago del punto.
+        //
+        // Tiene que incluir TODOS los campos que consume el front. Antes sólo
+        // traía nombre y dirección, y el buscador de barrios del home filtra
+        // por `localidad` y `provincia`: llegaban undefined, así que devolvía
+        // cero resultados para cualquier barrio y el listado imprimía
+        // "undefined" al lado de la dirección.
         .map((p: any) => ({
           $id: p.$id,
           nombre_comercial: p.nombre_comercial,
-          direccion: p.direccion
+          direccion: p.direccion,
+          localidad: p.localidad,
+          provincia: p.provincia,
+          horarios: p.horarios
         }));
     } catch (e: any) {
       if (!cache.pickupPoints) cache.pickupPoints = [];

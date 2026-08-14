@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import { getSiteSettings, saveSiteSetting } from '../../../lib/server/settings';
+import { getSiteSettings, saveSiteSetting, getClavesConfiguradas } from '../../../lib/server/settings';
 import { CheckCircle, AlertTriangle, Store, Phone, MessageSquare, Newspaper, Truck, CreditCard, Bell, Search } from 'lucide-react';
 
 export const prerender = false;
@@ -32,6 +32,10 @@ if (Astro.request.method === 'POST') {
 		errorMessage = 'Ocurrió un error al guardar la configuración: ' + e.message;
 	}
 }
+
+// Qué se está viendo realmente: valores guardados o defaults del código.
+const clavesConfiguradas = await getClavesConfiguradas();
+const sinConfigurar = clavesConfiguradas.size === 0;
 ---
 
 <AdminLayout title="Configuración de Tienda">
@@ -67,6 +71,18 @@ if (Astro.request.method === 'POST') {
 				<div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-xs font-bold mb-6 flex items-center gap-2">
 					<AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
 					<span>{errorMessage}</span>
+				</div>
+			)}
+
+			{sinConfigurar && !successMessage && (
+				<div class="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-2xl text-xs mb-6 flex items-start gap-2">
+					<AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+					<span>
+						<strong class="block font-bold mb-0.5">Todavía no hay ninguna configuración guardada.</strong>
+						Los valores de abajo son los que trae el código por defecto, no configuración real de la tienda:
+						el sitio está publicando ese número de WhatsApp y ese mail de contacto.
+						Revisá cada campo y presioná <strong>Guardar Todos los Cambios</strong> para que queden persistidos.
+					</span>
 				</div>
 			)}
 

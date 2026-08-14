@@ -741,19 +741,29 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 		const allPoints = pointsDataEl ? JSON.parse(pointsDataEl.textContent || '[]') : [];
 
 		if (checkBtn && locationInput && resultBox) {
+			// "Nuñez", "Vicente López" y "Villa Pueyrredón" concentran 41 de los
+			// primeros 100 puntos. Sin normalizar, quien escribe "nunez" o
+			// "vicente lopez" —lo habitual— no encontraba ninguno.
+			// \p{Diacritic} en vez del rango U+0300-U+036F: deja el fuente en ASCII
+			// puro, sin marcas combinantes invisibles que un editor pueda romper.
+			const normalizar = (s: string) =>
+				s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+
 			const performSearch = () => {
-				const query = locationInput.value.trim().toLowerCase();
+				const query = normalizar(locationInput.value.trim());
 				if (!query) {
 					resultBox.innerHTML = "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' class='inline-block align-[-2px] shrink-0'><path d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg> Por favor ingresá un barrio o localidad para verificar (ej: Palermo, Belgrano, Almagro).";
 					resultBox.classList.remove('hidden');
 					return;
 				}
 
-				const matches = allPoints.filter((p: any) => 
-					(p.localidad && p.localidad.toLowerCase().includes(query)) ||
-					(p.nombre_comercial && p.nombre_comercial.toLowerCase().includes(query)) ||
-					(p.direccion && p.direccion.toLowerCase().includes(query)) ||
-					(p.provincia && p.provincia.toLowerCase().includes(query))
+				// Ambos lados normalizados: normalizar sólo la query no alcanza,
+				// porque el dato guardado conserva la tilde ("Nuñez").
+				const matches = allPoints.filter((p: any) =>
+					(p.localidad && normalizar(p.localidad).includes(query)) ||
+					(p.nombre_comercial && normalizar(p.nombre_comercial).includes(query)) ||
+					(p.direccion && normalizar(p.direccion).includes(query)) ||
+					(p.provincia && normalizar(p.provincia).includes(query))
 				);
 
 				if (matches.length > 0) {

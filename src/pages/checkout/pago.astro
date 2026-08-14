@@ -185,7 +185,12 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
         const isEnvio = currentCheckout.fulfillment === 'envio';
 
         if (isEnvio) {
-            const envioCosto = Number(currentCheckout.costoEnvio || 150000);
+            // El total mostrado tiene que ser el que se cobra. createCheckout
+            // liquida `input.costoEnvio || 0` (actions/index.ts:708), así que
+            // acá se refleja lo mismo. Antes había un literal de 150000: la
+            // pantalla sumaba $1.500 de envío que el servidor nunca cobraba, y
+            // ese número no salía de ninguna configuración cargada.
+            const envioCosto = Number(currentCheckout.costoEnvio) || 0;
             totalSum += envioCosto;
 
             if (pointDetailsEl) {

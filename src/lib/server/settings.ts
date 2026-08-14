@@ -140,7 +140,30 @@ export async function getSiteSettings(): Promise<SiteSettings> {
             analytics_pixel_code: settingsMap.analytics_pixel_code || DEFAULT_SETTINGS.analytics_pixel_code
         };
     } catch (error) {
+        // Un fallo de backend no puede quedar mudo: devolver los defaults sin
+        // avisar hace que un incidente se vea igual que una tienda configurada.
+        console.error('No se pudo leer la colección settings, se usan los valores por defecto:', error);
         return DEFAULT_SETTINGS;
+    }
+}
+
+/**
+ * Claves realmente persistidas en `settings`.
+ *
+ * `getSiteSettings()` completa con DEFAULT_SETTINGS todo lo que falte, así que
+ * por sí solo no distingue "configurado así" de "nunca se cargó". El panel de
+ * admin renderizaba los valores por defecto dentro de los inputs como si
+ * estuvieran guardados: el costo de envío, el teléfono de WhatsApp y el mail
+ * de contacto que se veían ahí no existían en ninguna parte.
+ */
+export async function getClavesConfiguradas(): Promise<Set<string>> {
+    try {
+        const { databases } = createAdminClient();
+        const docs = await databases.listDocuments('urbanpoint', 'settings');
+        return new Set(docs.documents.map((doc: any) => doc.key));
+    } catch (error) {
+        console.error('No se pudieron leer las claves guardadas de settings:', error);
+        return new Set();
     }
 }
 
