@@ -1,17 +1,18 @@
 import type { APIRoute } from 'astro';
 import { validarStateOAuth, intercambiarCodigoPorTokens } from '../../../../lib/server/mercadopagoOAuth';
 import { saveSiteSetting } from '../../../../lib/server/settings';
-import { env } from '../../../../lib/server/env';
+import { env, getPublicSiteUrl } from '../../../../lib/server/env';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ url, cookies }) => {
+export const GET: APIRoute = async ({ request, url, cookies }) => {
 	const code = url.searchParams.get('code');
 	const stateFromUrl = url.searchParams.get('state');
 	const errorFromUrl = url.searchParams.get('error');
 	const errorDescription = url.searchParams.get('error_description');
 
-	const siteUrl = (env('PUBLIC_SITE_URL') || url.origin).replace(/\/+$/, '');
+	const siteUrl = getPublicSiteUrl({ request, url });
+
 	const redirectUri = `${siteUrl}/api/auth/mercadopago/callback`;
 	const adminRedirect = '/admin/configuracion#sec-pagos';
 

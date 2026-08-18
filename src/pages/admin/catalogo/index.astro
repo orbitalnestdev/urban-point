@@ -7,6 +7,8 @@ import { FileEdit, AlertTriangle, Image as ImageIcon, CheckCircle, Package, Paus
 import { getOptimizedImageUrl, getAdminCachedCatalog } from '../../../lib/server/catalogCache';
 import Pagination from '../../../components/admin/Pagination.astro';
 
+import { buildCategoryTree, getCategoryDisplayName } from '../../../lib/server/categoryUtils';
+
 export const prerender = false;
 
 const searchQuery = Astro.url.searchParams.get('q') || '';
@@ -18,11 +20,13 @@ const soloBorradores = Astro.url.searchParams.get('borradores') === 'true';
 
 let products: any[] = [];
 let categories: any[] = [];
+let categoryTree: any[] = [];
 
 try {
 	const adminCache = await getAdminCachedCatalog();
 	products = Array.from(adminCache.products || []);
 	categories = Array.from(adminCache.categories || []);
+	categoryTree = buildCategoryTree(categories);
 
 	// Mostrar siempre los últimos productos agregados al comienzo
 	products.sort((a: any, b: any) => new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime());
@@ -31,11 +35,13 @@ try {
 	categories.forEach((c: any) => { categoryMap[c.$id] = c; });
 	products = products.map((p: any) => ({
 		...p,
-		categoryObj: typeof p.categoria_id === 'string' ? categoryMap[p.categoria_id] : p.categoria_id
+		categoryObj: typeof p.categoria_id === 'string' ? categoryMap[p.categoria_id] : p.categoria_id,
+		categoryDisplayName: getCategoryDisplayName(p.categoria_id, categoryMap)
 	}));
 } catch (e) {
 	console.error("Error loading products page:", e);
 }
+
 
 
 
@@ -78,8 +84,23 @@ if (searchQuery.trim()) {
 }
 
 if (categoriaFilter && categoriaFilter !== 'todos') {
-	filteredProducts = filteredProducts.filter(p => p.categoria_id?.$id === categoriaFilter || p.categoria_id === categoriaFilter);
+	const matchingCategoryIds = new Set<string>();
+	matchingCategoryIds.add(categoriaFilter);
+
+	// Incluir también todas las subcategorías cuyo parent_id sea la categoría filtrada
+	categories.forEach((c: any) => {
+		const parentId = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id;
+		if (parentId === categoriaFilter) {
+			matchingCategoryIds.add(c.$id);
+		}
+	});
+
+	filteredProducts = filteredProducts.filter(p => {
+		const pCatId = typeof p.categoria_id === 'string' ? p.categoria_id : p.categoria_id?.$id;
+		return pCatId && matchingCategoryIds.has(pCatId);
+	});
 }
+
 
 
 if (minPrice) {

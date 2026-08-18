@@ -11,17 +11,20 @@ const { databases } = createAdminClient();
 const tipoParam = Astro.url.searchParams.get('tipo') || 'simple';
 
 let product = null;
+import { buildCategoryTree } from '../../../lib/server/categoryUtils';
+
 let categories = [];
 let allProducts = [];
 
 try {
 	product = await databases.getDocument('urbanpoint', 'products', id as string);
-	const catRes = await databases.listDocuments('urbanpoint', 'categories');
+	const catRes = await databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
 	categories = catRes.documents;
 
 	const allProdRes = await databases.listDocuments('urbanpoint', 'products', [Query.limit(100)]);
 	allProducts = allProdRes.documents.filter(p => p.$id !== id);
 } catch (e) {
+
 	console.error(e);
 	return Astro.redirect('/admin/catalogo');
 }
@@ -187,20 +190,18 @@ if (product.galeria_urls) {
 								</div>
 								<div>
 									<label class="block text-sm font-bold text-slate-900 mb-1">Categoría</label>
-									<select id="input-categoria" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 h-[46px]">
-										<option value="">Sin Categoría</option>
-										{categories.map((c: any) => {
-											const isSub = !!c.parent_id;
-											const parent = isSub ? categories.find((p: any) => p.$id === c.parent_id) : null;
-											const displayName = parent ? `${parent.nombre} › ${c.nombre}` : c.nombre;
-
-											return (
-												<option value={c.$id} selected={product.categoria_id?.$id === c.$id || product.categoria_id === c.$id}>
-													{displayName}
-												</option>
-											);
-										})}
+									<select id="input-categoria" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-900 font-medium bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 h-[46px] cursor-pointer">
+										<option value="">-- Sin Categoría --</option>
+										{buildCategoryTree(categories).map((c) => (
+											<option 
+												value={c.$id} 
+												selected={product.categoria_id?.$id === c.$id || product.categoria_id === c.$id}
+											>
+												{c.isSub ? `\u00A0\u00A0\u00A0\u00A0↳ ${c.nombre}` : `📁 ${c.nombre}`}
+											</option>
+										))}
 									</select>
+
 								</div>
 								<div>
 									<label class="block text-sm font-bold text-slate-900 mb-1">SKU (Código único)</label>

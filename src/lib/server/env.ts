@@ -46,3 +46,38 @@ export const appwriteEndpoint = () =>
 
 export const appwriteProjectId = () =>
 	env('PUBLIC_APPWRITE_PROJECT_ID', 'NEXT_PUBLIC_APPWRITE_PROJECT_ID') || APPWRITE_PROJECT_ID_DEFAULT;
+
+/**
+ * Resuelve la URL pública base del sitio (para webhooks, back_urls y redirecciones OAuth MP).
+ * Evita fallos cuando Node corre internamente en localhost detras de cPanel / Nginx / Passenger.
+ */
+export function getPublicSiteUrl(ctx?: any): string {
+	const envUrl = env('PUBLIC_SITE_URL', 'SITE_URL');
+	if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+		return envUrl.replace(/\/+$/, '');
+	}
+
+	let req: Request | null = null;
+	if (ctx) {
+		if (ctx instanceof Request) req = ctx;
+		else if (ctx.request instanceof Request) req = ctx.request;
+	}
+
+	if (req) {
+		const forwardedHost = req.headers.get('x-forwarded-host');
+		const host = forwardedHost || req.headers.get('host');
+		const proto = req.headers.get('x-forwarded-proto') || 'https';
+
+		if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+			return `${proto}://${host}`.replace(/\/+$/, '');
+		}
+	}
+
+	const urlObj = ctx?.url || (ctx instanceof URL ? ctx : null);
+	if (urlObj?.origin && !urlObj.origin.includes('localhost') && !urlObj.origin.includes('127.0.0.1')) {
+		return urlObj.origin.replace(/\/+$/, '');
+	}
+
+	return 'https://urbanpoints.com.ar';
+}
+

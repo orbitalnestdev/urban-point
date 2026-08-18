@@ -1,10 +1,10 @@
 import type { APIRoute } from 'astro';
 import { generarStateOAuth, obtenerUrlAutorizacionMP } from '../../../../lib/server/mercadopagoOAuth';
-import { env } from '../../../../lib/server/env';
+import { env, getPublicSiteUrl } from '../../../../lib/server/env';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ locals, cookies, url }) => {
+export const GET: APIRoute = async ({ request, locals, cookies, url }) => {
 	const user = locals.user;
 	if (!user || user.role !== 'admin') {
 		return new Response('No autorizado. Solo los administradores pueden conectar Mercado Pago.', {
@@ -24,7 +24,8 @@ export const GET: APIRoute = async ({ locals, cookies, url }) => {
 			maxAge: 900 // 15 minutos
 		});
 
-		const siteUrl = (env('PUBLIC_SITE_URL') || url.origin).replace(/\/+$/, '');
+		const siteUrl = getPublicSiteUrl({ request, url });
+
 		const redirectUri = `${siteUrl}/api/auth/mercadopago/callback`;
 
 		const mpAuthUrl = obtenerUrlAutorizacionMP(state, redirectUri);

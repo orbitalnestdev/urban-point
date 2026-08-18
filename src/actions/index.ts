@@ -29,7 +29,8 @@ import {
 
 
 
-import { env } from '../lib/server/env';
+import { env, getPublicSiteUrl } from '../lib/server/env';
+
 import { saveSiteSetting } from '../lib/server/settings';
 import { obtenerTokenPlataformaValido } from '../lib/server/mercadopagoOAuth';
 
@@ -881,16 +882,12 @@ export const server = {
 				const mp = new MercadoPagoConfig({ accessToken: mpAccessToken, options: { timeout: 5000 } });
 				const preference = new Preference(mp);
 
-				const baseUrl = (env('PUBLIC_SITE_URL') || ctx.url.origin).replace(/\/+$/, '');
+				const baseUrl = getPublicSiteUrl(ctx);
 
 				const result = await preference.create({
 					body: {
 						items: prefItems,
 						external_reference: orderDoc.$id,
-						// El host sale del request, con PUBLIC_SITE_URL como
-						// override. Estaba fijo en http://localhost:4321, así que
-						// en producción Mercado Pago devolvía al comprador a una
-						// dirección inexistente después de pagar.
 						back_urls: {
 							success: `${baseUrl}/checkout/success?order_id=${orderDoc.$id}`,
 							failure: `${baseUrl}/checkout/failure?order_id=${orderDoc.$id}`,
@@ -899,6 +896,7 @@ export const server = {
 						auto_return: 'approved'
 					}
 				});
+
 
 				// Update order with preference ID
 				await db.updateDocument('urbanpoint', 'orders', orderDoc.$id, {
