@@ -23,10 +23,11 @@ async function fetchAllDocs(collectionId: string) {
 	let allDocs: any[] = [];
 	let offset = 0;
 	while (true) {
-		const res = await databases.listDocuments('urbanpoint', collectionId, [
-			Query.limit(100),
-			Query.offset(offset)
-		]);
+		const queries = [Query.limit(100), Query.offset(offset)];
+		if (collectionId === 'products') {
+			queries.push(Query.orderDesc('$createdAt'));
+		}
+		const res = await databases.listDocuments('urbanpoint', collectionId, queries);
 		allDocs = allDocs.concat(res.documents);
 		if (res.documents.length < 100) break;
 		offset += 100;
@@ -40,6 +41,9 @@ try {
 		fetchAllDocs('categories')
 	]);
 
+	// Mostrar siempre los últimos productos agregados al comienzo
+	products.sort((a, b) => new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime());
+
 	const categoryMap: Record<string, any> = {};
 	categories.forEach(c => { categoryMap[c.$id] = c; });
 	products = products.map(p => ({
@@ -49,6 +53,7 @@ try {
 } catch (e) {
 	console.error("Error loading products page:", e);
 }
+
 
 const numBorradores = products.filter(p => p.estado === 'borrador').length;
 const numSinStock = products.filter(p => p.stock === 0 && p.estado !== 'borrador').length;
@@ -63,21 +68,35 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 let filteredProducts = [...products];
 
 if (searchQuery.trim()) {
-	const q = searchQuery.toLowerCase();
-	filteredProducts = filteredProducts.filter(p => 
-		p.nombre?.toLowerCase().includes(q) ||
-		p.sku?.toLowerCase().includes(q) ||
-		p.descripcion?.toLowerCase().includes(q)
-	);
-}
+	const qRaw = searchQuery.trim().toLowerCase();
+	const qClean = qRaw.replace(/[^a-z0-9]/g, '');
 
-if (estadoFilter && estadoFilter !== 'todos') {
+	filteredProducts = filteredProducts.filter(p => {
+		const nombre = String(p.nombre || '').toLowerCase();
+		const sku = String(p.sku || '').toLowerCase();
+		const skuClean = sku.replace(/[^a-z0-9]/g, '');
+		const desc = String(p.descripcion || '').toLowerCase();
+		
+		return nombre.includes(qRaw) || 
+			   sku.includes(qRaw) || 
+			   (qClean.length > 0 && skuClean.includes(qClean)) ||
+			   desc.includes(qRaw);
+	});
+
+	if (estadoFilter && estadoFilter !== 'todos') {
+		const inState = filteredProducts.filter(p => p.estado === estadoFilter);
+		if (inState.length > 0) {
+			filteredProducts = inState;
+		}
+	}
+} else if (estadoFilter && estadoFilter !== 'todos') {
 	filteredProducts = filteredProducts.filter(p => p.estado === estadoFilter);
 }
 
 if (categoriaFilter && categoriaFilter !== 'todos') {
 	filteredProducts = filteredProducts.filter(p => p.categoria_id?.$id === categoriaFilter || p.categoria_id === categoriaFilter);
 }
+
 
 if (minPrice) {
 	const min = parseFloat(minPrice) * 100;
@@ -326,7 +345,7 @@ const paginationItems = filteredPages.map((p, index) => ({
 							<th class="p-3.5 text-right">Precio ARS</th>
 							<th class="p-3.5 text-center">Stock</th>
 							<th class="p-3.5 text-center">Estado (3 Valores)</th>
-							<th class="p-3.5 text-center">Editar</th>
+							<th class="p-3.5 text-center">Acciones</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-slate-100 text-xs">
@@ -422,10 +441,23 @@ const paginationItems = filteredPages.map((p, index) => ({
 									</td>
 
 									<td class="p-3.5 text-center" onclick="event.stopPropagation()">
-										<button class="btn-open-drawer px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition-colors">
-											Editar
-										</button>
+										<div class="flex items-center justify-center gap-1.5">
+											<button class="btn-open-drawer px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition-colors">
+												Editar
+											</button>
+											<a 
+												href={`/productos/${product.slug || product.$id}`} 
+												target="_blank" 
+												rel="noopener noreferrer"
+												title="Ver producto en la tienda pública"
+												class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] rounded-lg transition-colors flex items-center gap-1 border border-emerald-200"
+											>
+												<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+												Ver producto
+											</a>
+										</div>
 									</td>
+
 								</tr>
 							);
 						})}
@@ -594,7 +626,9 @@ const paginationItems = filteredPages.map((p, index) => ({
 		</div>
 
 	</main>
+	<NewProductModal client:load />
 </AdminLayout>
+
 
 <script>
 	import { exportProductsCsv } from '../../../lib/exports';
@@ -884,16 +918,14 @@ const paginationItems = filteredPages.map((p, index) => ({
 		exportProductsCsv(await res.json());
 	});
 
-	// New Product Action
-	document.getElementById('btn-nuevo-producto')?.addEventListener('click', async () => {
-		const { data, error } = await actions.createProduct({
-			nombre: 'Nuevo Producto ' + Math.floor(100 + Math.random()*900),
-			tipo: 'simple'
-		});
-		if (error || !data?.success) {
-			alert('Error al crear producto: ' + (error?.message || data?.error));
-			return;
+	// New Product Action - Abrir Modal selector de tipo de producto
+	document.getElementById('btn-nuevo-producto')?.addEventListener('click', () => {
+		if (typeof (window as any).openNewProductModal === 'function') {
+			(window as any).openNewProductModal();
+		} else {
+			window.dispatchEvent(new CustomEvent('modal:new-product'));
 		}
-		window.location.href = `/admin/catalogo?estado=borrador`;
 	});
 </script>
+
+

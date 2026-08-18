@@ -81,3 +81,13 @@ export const getCachedCatalog = async () => {
 
   return cache;
 };
+
+export const invalidateCatalogCache = () => {
+  if (globalObj.__urbanpointCache) {
+    globalObj.__urbanpointCache.products = null;
+    globalObj.__urbanpointCache.categories = null;
+    globalObj.__urbanpointCache.pickupPoints = null;
+    globalObj.__urbanpointCache.lastFetch = 0;
+  }
+};
+

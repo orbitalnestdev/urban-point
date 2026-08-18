@@ -6,21 +6,17 @@ import { REF_COOKIE_NAME, REF_COOKIE_MAX_AGE } from './lib/nodeSession';
 const DEFAULT_ENDPOINT = 'https://aw.orbitalnest.net/v1';
 const DEFAULT_PROJECT_ID = '6a6a5321001439f06817';
 
+interface CachedSession {
+	user: any;
+	profile: any;
+	expiresAt: number;
+}
+const sessionAuthCache = new Map<string, CachedSession>();
+const SESSION_CACHE_TTL_MS = 60 * 1000; // 60 segundos
+
 export const onRequest = defineMiddleware(async (context, next) => {
 	const { pathname } = context.url;
 
-	// Atribución por código de referido (?ref=CODIGO).
-	//
-	// POLÍTICA: last-touch con ventana de 30 días. El último canillita que
-	// trajo al comprador se queda la venta, tanto si llegó por ?ref= como si
-	// entró por la página de un punto (que escribe la misma cookie).
-	//
-	// Fuente única y del lado del servidor. Antes el código viajaba además por
-	// localStorage y por una cookie legible desde JS, y el checkout lo tomaba
-	// de ahí: cualquiera podía atribuirse la venta escribiendo el código de
-	// otro canillita. Y convivían dos criterios opuestos —el referido era
-	// first-touch y el nodo last-touch—, así que entrar por A y después por B
-	// hacía que A cobrara el referido y B el fee de logística.
 	const refParam = context.url.searchParams.get('ref');
 	if (refParam && refParam.trim()) {
 		context.cookies.set(REF_COOKIE_NAME, refParam.trim(), {
@@ -44,33 +40,46 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
 	try {
 		let user: any;
-		
-		if (import.meta.env.DEV && sessionSecret === 'dev_mock_admin_session') {
-			user = { $id: '6a6b75790014f4940f25', email: 'azcurraely@gmail.com' };
-		} else {
-			const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
-			const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
+		let profile: any;
 
-			const authClient = new Client()
-				.setEndpoint(endpoint)
-				.setProject(projectId)
-				.setSession(sessionSecret)
-				.addHeader('X-Fallback-Cookies', `a_session_${projectId}=${sessionSecret}`);
+		const cached = sessionAuthCache.get(sessionSecret);
+		if (cached && cached.expiresAt > Date.now()) {
+			user = cached.user;
+			profile = cached.profile;
+		} else {
+			if (import.meta.env.DEV && sessionSecret === 'dev_mock_admin_session') {
+				user = { $id: '6a6b75790014f4940f25', email: 'azcurraely@gmail.com' };
+			} else {
+				const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
+				const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
+
+				const authClient = new Client()
+					.setEndpoint(endpoint)
+					.setProject(projectId)
+					.setSession(sessionSecret)
+					.addHeader('X-Fallback-Cookies', `a_session_${projectId}=${sessionSecret}`);
+				
+				const account = new Account(authClient);
+				user = await account.get();
+			}
 			
-			const account = new Account(authClient);
-			user = await account.get();
+			const { databases } = createAdminClient();
+			const profiles = await databases.listDocuments('urbanpoint', 'profiles', [
+				Query.equal('user_id', user.$id)
+			]);
+			
+			if (profiles.documents.length === 0) {
+				return context.redirect('/login');
+			}
+			
+			profile = profiles.documents[0];
+			sessionAuthCache.set(sessionSecret, {
+				user,
+				profile,
+				expiresAt: Date.now() + SESSION_CACHE_TTL_MS
+			});
 		}
-		
-		const { databases } = createAdminClient();
-		const profiles = await databases.listDocuments('urbanpoint', 'profiles', [
-			Query.equal('user_id', user.$id)
-		]);
-		
-		if (profiles.documents.length === 0) {
-			return context.redirect('/login');
-		}
-		
-		const profile = profiles.documents[0];
+
 		
 		// Bloque 7 — Protección de Rutas por Rol (admin vs gestion)
 		if (pathname.startsWith('/admin')) {
@@ -118,7 +127,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
 		return next();
 	} catch (error: any) {
 		console.error("Middleware Auth Error:", error);
+		if (sessionSecret) sessionAuthCache.delete(sessionSecret);
 		context.cookies.delete('up_session', { path: '/' });
 		return context.redirect('/login');
 	}
 });
+

@@ -307,9 +307,65 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 						</div>
 					</div>
 
-					{/* 7. SEO */}
+					{/* 7. Notificaciones & Emails SMTP */}
+					<div id="sec-notificaciones" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+						<div class="flex items-center justify-between border-b border-slate-100 pb-3">
+							<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">7. Notificaciones por Email & Servidor SMTP</h3>
+							<span class="text-[11px] bg-emerald-50 text-emerald-700 font-bold px-2.5 py-1 rounded-full">Soporta Múltiples Correos Admin</span>
+						</div>
+
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+							<div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+								<label class="block font-black text-slate-900 text-xs">
+									Correos de Notificación para Administradores (separados por coma)
+								</label>
+								<input 
+									type="text" 
+									name="admin_emails" 
+									value={settings.admin_emails} 
+									placeholder="ej: admin@urbanpoint.com.ar, ventas@urbanpoint.com.ar"
+									class="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-900 outline-none focus:border-emerald-600 shadow-sm" 
+								/>
+								<p class="text-[11px] text-slate-500 font-medium leading-relaxed">
+									Podés ingresar uno o varios correos electrónicos separados por coma (<code>,</code>). Todos recibirán la notificación automática con el detalle del pedido cada vez que un cliente realice una compra.
+								</p>
+							</div>
+
+							<div>
+								<label class="block font-bold text-slate-900 mb-1">Host del Servidor SMTP</label>
+								<input type="text" name="smtp_host" value={settings.smtp_host} placeholder="smtp.gmail.com o mail.tu-dominio.com" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+							</div>
+
+							<div>
+								<label class="block font-bold text-slate-900 mb-1">Puerto SMTP</label>
+								<input type="number" name="smtp_port" value={settings.smtp_port} placeholder="587 o 465" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+							</div>
+
+							<div>
+								<label class="block font-bold text-slate-900 mb-1">Usuario SMTP</label>
+								<input type="text" name="smtp_user" value={settings.smtp_user} placeholder="notificaciones@urbanpoint.com.ar" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+							</div>
+
+							<div>
+								<label class="block font-bold text-slate-900 mb-1">Contraseña SMTP</label>
+								<input type="password" name="smtp_pass" value={settings.smtp_pass} placeholder="••••••••••••" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+							</div>
+
+							<div class="md:col-span-2">
+								<label class="block font-bold text-slate-900 mb-1">Nombre y Email del Remitente (From)</label>
+								<input type="text" name="smtp_from" value={settings.smtp_from} placeholder="UrbanPoint <notificaciones@urbanpoint.com.ar>" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+							</div>
+
+							<div class="md:col-span-2 flex items-center gap-3 pt-2 border-t border-slate-100">
+								<input type="checkbox" name="notify_email_order_created" value="true" checked={settings.notify_email_order_created} id="chk-notify-order" class="w-4 h-4 text-emerald-600 rounded cursor-pointer" />
+								<label for="chk-notify-order" class="font-bold text-slate-800 cursor-pointer">Enviar emails automáticos al cliente, punto de retiro (canillita) y administradores</label>
+							</div>
+						</div>
+					</div>
+
+					{/* 8. SEO */}
 					<div id="sec-seo" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">7. SEO & Configuración de Buscadores</h3>
+						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">8. SEO & Configuración de Buscadores</h3>
 						<div class="grid grid-cols-1 gap-4 text-xs">
 							<div>
 								<label class="block font-bold text-slate-900 mb-1">Título SEO Principal</label>
@@ -321,6 +377,7 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 							</div>
 						</div>
 					</div>
+
 
 				</div>
 			</div>

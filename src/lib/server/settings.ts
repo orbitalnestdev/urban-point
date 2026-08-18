@@ -37,12 +37,20 @@ export interface SiteSettings {
     notify_email_order_ready: boolean;
     notify_email_canillita_approved: boolean;
 
+    smtp_host: string;
+    smtp_port: number;
+    smtp_user: string;
+    smtp_pass: string;
+    smtp_from: string;
+    admin_emails: string;
+
     terms_and_conditions: string;
     privacy_policy: string;
     seo_title: string;
     seo_meta_description: string;
     analytics_pixel_code: string;
 }
+
 
 export const DEFAULT_SETTINGS: SiteSettings = {
     site_name: 'UrbanPoint',
@@ -79,6 +87,13 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     notify_email_order_created: true,
     notify_email_order_ready: true,
     notify_email_canillita_approved: true,
+
+    smtp_host: '',
+    smtp_port: 587,
+    smtp_user: '',
+    smtp_pass: '',
+    smtp_from: 'UrbanPoint <notificaciones@urbanpoint.com.ar>',
+    admin_emails: 'admin@urbanpoint.com.ar, azcurraely@gmail.com',
 
     terms_and_conditions: 'Términos y condiciones generales del servicio UrbanPoint.',
     privacy_policy: 'Políticas de privacidad y protección de datos personales.',
@@ -133,12 +148,20 @@ export async function getSiteSettings(): Promise<SiteSettings> {
             notify_email_order_ready: settingsMap.notify_email_order_ready !== undefined ? settingsMap.notify_email_order_ready === 'true' : DEFAULT_SETTINGS.notify_email_order_ready,
             notify_email_canillita_approved: settingsMap.notify_email_canillita_approved !== undefined ? settingsMap.notify_email_canillita_approved === 'true' : DEFAULT_SETTINGS.notify_email_canillita_approved,
 
+            smtp_host: settingsMap.smtp_host !== undefined ? settingsMap.smtp_host : DEFAULT_SETTINGS.smtp_host,
+            smtp_port: settingsMap.smtp_port ? parseInt(settingsMap.smtp_port, 10) : DEFAULT_SETTINGS.smtp_port,
+            smtp_user: settingsMap.smtp_user !== undefined ? settingsMap.smtp_user : DEFAULT_SETTINGS.smtp_user,
+            smtp_pass: settingsMap.smtp_pass !== undefined ? settingsMap.smtp_pass : DEFAULT_SETTINGS.smtp_pass,
+            smtp_from: settingsMap.smtp_from !== undefined ? settingsMap.smtp_from : DEFAULT_SETTINGS.smtp_from,
+            admin_emails: settingsMap.admin_emails !== undefined ? settingsMap.admin_emails : DEFAULT_SETTINGS.admin_emails,
+
             terms_and_conditions: settingsMap.terms_and_conditions || DEFAULT_SETTINGS.terms_and_conditions,
             privacy_policy: settingsMap.privacy_policy || DEFAULT_SETTINGS.privacy_policy,
             seo_title: settingsMap.seo_title || DEFAULT_SETTINGS.seo_title,
             seo_meta_description: settingsMap.seo_meta_description || DEFAULT_SETTINGS.seo_meta_description,
             analytics_pixel_code: settingsMap.analytics_pixel_code || DEFAULT_SETTINGS.analytics_pixel_code
         };
+
     } catch (error) {
         // Un fallo de backend no puede quedar mudo: devolver los defaults sin
         // avisar hace que un incidente se vea igual que una tienda configurada.

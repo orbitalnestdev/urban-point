@@ -26,12 +26,13 @@ try {
 			Query.limit(200)
 		]),
 		databases.listDocuments('urbanpoint', 'profiles', [
-			Query.limit(1000)
+			Query.limit(200)
 		]).catch(() => ({ documents: [] })),
 		databases.listDocuments('urbanpoint', 'pickup_points', [
-			Query.limit(1000)
+			Query.limit(200)
 		]).catch(() => ({ documents: [] }))
 	]);
+
 
 	const rawOrders = resOrders.documents;
 

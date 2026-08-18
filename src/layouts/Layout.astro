@@ -19,9 +19,11 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
 		<meta name="description" content="UrbanPoint - Comprá en línea y retirá tus pedidos cerca de tu casa. O sumate como Canillita y ganá comisiones." />
 		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/jpeg" href="/images/favicon.jpg" />
+		<link rel="preconnect" href="https://aw.orbitalnest.net" crossorigin>
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+
 		<meta name="generator" content={Astro.generator} />
 		<title>{title}</title>
 	</head>

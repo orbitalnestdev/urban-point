@@ -18,6 +18,10 @@ import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones } from '../lib/commissions';
 
 import { createAdminClient } from '../lib/server/appwrite';
+import { invalidateCatalogCache } from '../lib/server/catalogCache';
+import { sendOrderNotificationEmails } from '../lib/server/mailer';
+
+
 import { env } from '../lib/server/env';
 import { saveSiteSetting } from '../lib/server/settings';
 import { obtenerTokenPlataformaValido } from '../lib/server/mercadopagoOAuth';
@@ -765,6 +769,56 @@ export const server = {
 					});
 				}
 
+				// Resolve names & emails for SMTP notifications
+				(async () => {
+					try {
+						let customerName = '';
+						let customerEmail = '';
+						let canillitaEmail = '';
+						let canillitaNombre = '';
+						let pickupNodeName = activeNodeSession?.nombre || '';
+						let pickupNodeAddress = activeNodeSession?.direccion || '';
+
+						if (profileId) {
+							try {
+								const custProf = await db.getDocument('urbanpoint', 'profiles', profileId);
+								customerName = custProf.nombre || '';
+								customerEmail = custProf.email || '';
+							} catch (e) {}
+						}
+
+						if (resolvedCanillitaId) {
+							try {
+								const canProf = await db.getDocument('urbanpoint', 'profiles', resolvedCanillitaId);
+								canillitaNombre = canProf.nombre || '';
+								canillitaEmail = canProf.email || '';
+							} catch (e) {}
+						}
+
+						if (finalPickupPointId && !pickupNodeName) {
+							try {
+								const ptDoc = await db.getDocument('urbanpoint', 'pickup_points', finalPickupPointId);
+								pickupNodeName = ptDoc.nombre_comercial || '';
+								pickupNodeAddress = ptDoc.direccion || '';
+							} catch (e) {}
+						}
+
+						await sendOrderNotificationEmails({
+							...orderDoc,
+							total: grandTotal,
+							customerName,
+							customerEmail,
+							canillitaEmail,
+							canillitaNombre,
+							pickupNodeName,
+							pickupNodeAddress
+						}, orderItemsData);
+					} catch (mailErr: any) {
+						console.error('[Checkout SMTP Mailer] Error:', mailErr.message);
+					}
+				})();
+
+
 				if (input.paymentMethod === 'a_convenir') {
 					return { success: true, init_point: `/checkout/success?order_id=${orderDoc.$id}` };
 				}
@@ -1324,6 +1378,7 @@ export const server = {
 				};
 
 				const doc = await db.createDocument('urbanpoint', 'products', ID.unique(), payload);
+				invalidateCatalogCache();
 
 				return { success: true, id: doc.$id };
 			} catch (error: any) {
@@ -1336,10 +1391,6 @@ export const server = {
 		accept: 'json',
 		input: z.object({
 			id: z.string(),
-			// Actualización PARCIAL: sólo se escriben los campos informados.
-			// nombre, precio y stock eran obligatorios, así que cualquier
-			// llamador que quisiera cambiar un solo campo tenía que reenviar el
-			// producto entero — y los dos que había mandaban valores inventados.
 			nombre: z.string().min(2).optional(),
 			descripcion: z.string().optional(),
 			precio: z.number().min(0).optional(),
@@ -1367,11 +1418,6 @@ export const server = {
 			try {
 				requireRole(ctx, 'admin', 'gestion');
 
-				// Sólo se escriben los campos informados. Antes se forzaban
-				// siempre nombre, descripcion, precio, stock y estado: cambiar el
-				// estado desde el desplegable de la tabla renombraba el producto
-				// a "Producto" con precio $1 y stock 0, y guardar desde el panel
-				// rápido vaciaba la descripción.
 				const updateData: any = {};
 
 				if (input.nombre !== undefined) updateData.nombre = input.nombre;
@@ -1382,7 +1428,14 @@ export const server = {
 					updateData.estado = input.estado === 'inactivo' ? 'pausado' : input.estado;
 				}
 
-				if (input.precio_promocional !== undefined) updateData.precio_promocional = input.precio_promocional;
+				if (input.precio_promocional !== undefined) {
+					const finalPrecio = input.precio !== undefined ? input.precio : undefined;
+					if (input.precio_promocional <= 0 || (finalPrecio !== undefined && input.precio_promocional >= finalPrecio)) {
+						updateData.precio_promocional = null;
+					} else {
+						updateData.precio_promocional = input.precio_promocional;
+					}
+				}
 				if (input.precio_distribuidor !== undefined) updateData.precio_distribuidor = input.precio_distribuidor;
 				if (input.precio_canillita !== undefined) updateData.precio_canillita = input.precio_canillita;
 				if (input.marca !== undefined) updateData.marca = input.marca;
@@ -1403,6 +1456,7 @@ export const server = {
 				}
 
 				await db.updateDocument('urbanpoint', 'products', input.id, updateData);
+				invalidateCatalogCache();
 
 				return { success: true };
 			} catch (error: any) {
@@ -1438,6 +1492,7 @@ export const server = {
 						}
 					}
 				}
+				invalidateCatalogCache();
 				return { success: true };
 			} catch (error: any) {
 				return { success: false, error: error.message };
@@ -1455,6 +1510,7 @@ export const server = {
 				requireRole(ctx, 'admin', 'gestion');
 
 				await db.deleteDocument('urbanpoint', 'products', input.id);
+				invalidateCatalogCache();
 				return { success: true };
 			} catch (error: any) {
 				return { success: false, error: error.message };

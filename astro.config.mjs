@@ -17,8 +17,25 @@ export default defineConfig({
   },
 
   vite: {
-    plugins: [tailwindcss()]
+    plugins: [tailwindcss()],
+    build: {
+      cssCodeSplit: true,
+      minify: 'esbuild',
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('lucide-react')) {
+                return 'vendor';
+              }
+            }
+          }
+        }
+      }
+    }
   },
+
+
 
   adapter: node({
     mode: 'standalone'

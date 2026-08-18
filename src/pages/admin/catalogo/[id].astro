@@ -908,7 +908,8 @@ if (product.galeria_urls) {
 					marca,
 					descripcion,
 					precio: Math.round(precioArs * 100),
-					precio_promocional: Math.round(precioPromocionalArs * 100),
+					precio_promocional: (precioPromocionalArs > 0 && precioPromocionalArs < precioArs) ? Math.round(precioPromocionalArs * 100) : 0,
+
 					precio_distribuidor: Math.round(precioDistribuidorArs * 100),
 					precio_canillita: Math.round(precioCanillitaArs * 100),
 					costo: Math.round(costoArs * 100),

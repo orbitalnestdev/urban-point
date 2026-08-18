@@ -11,7 +11,7 @@ if (!currentUser || currentUser.role !== 'admin') {
     return Astro.redirect('/admin/pedidos');
 }
 
-const { databases } = createAdminClient();
+const { databases, users } = createAdminClient();
 
 let teamMembers: any[] = [];
 let successMessage = '';
@@ -26,33 +26,47 @@ if (Astro.request.method === 'POST') {
         if (action === 'invite') {
             const email = formData.get('email')?.toString().trim();
             const nombre = formData.get('nombre')?.toString().trim();
-            const role = formData.get('role')?.toString() || 'gestion';
+            const roleInput = formData.get('role')?.toString() || 'admin';
+            const profileRole = 'admin';
 
             if (!email || !nombre) {
                 throw new Error("El email y el nombre son obligatorios.");
             }
 
-            // Check if profile exists
+            // Ensure Auth user exists
+            let userId: string;
+            const existingUsers = await users.list([Query.equal('email', email)]);
+            let tempPassword = '';
+            if (existingUsers.users.length > 0) {
+                userId = existingUsers.users[0].$id;
+            } else {
+                tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
+                const newAuthUser = await users.create(ID.unique(), email, undefined, tempPassword, nombre);
+                userId = newAuthUser.$id;
+            }
+
+            // Check if profile document exists
             const existing = await databases.listDocuments('urbanpoint', 'profiles', [
                 Query.equal('email', email)
             ]);
 
             if (existing.documents.length > 0) {
                 await databases.updateDocument('urbanpoint', 'profiles', existing.documents[0].$id, {
-                    role
+                    role: profileRole,
+                    nombre
                 });
-                successMessage = `Se actualizó el rol de ${nombre} a ${role === 'admin' ? 'Administrador' : 'Gestión de Tienda'}.`;
+                successMessage = `Se actualizó el acceso de ${nombre} (${email}) como Miembro del Equipo.`;
             } else {
                 await databases.createDocument('urbanpoint', 'profiles', ID.unique(), {
-                    user_id: ID.unique(),
+                    user_id: userId,
                     nombre,
                     email,
-                    role,
-                    estado: 'activo'
+                    role: profileRole
                 });
-                successMessage = `Se invitó exitosamente a ${nombre} (${email}) con el rol de ${role === 'admin' ? 'Administrador' : 'Gestión de Tienda'}.`;
+                successMessage = `Se invitó exitosamente a ${nombre} (${email}) al equipo.` + (tempPassword ? ` Contraseña inicial asignada: ${tempPassword}` : '');
             }
         } else if (action === 'change_role') {
+
             const memberId = formData.get('member_id')?.toString();
             const newRole = formData.get('new_role')?.toString();
 
