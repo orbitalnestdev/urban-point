@@ -3,11 +3,14 @@ import crypto from 'node:crypto';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { env } from '../../../lib/server/env';
+import { Query } from 'node-appwrite';
+import { sendOrderNotificationEmails } from '../../../lib/server/mailer';
 import {
 	resolverComisiones,
 	cancelarOrdenYRestaurarStock,
 	revertirComisiones
 } from '../../../lib/commissions';
+
 
 export const prerender = false;
 
@@ -124,8 +127,58 @@ async function aplicarEstadoDePago(orderId: string, mpStatus: string, paymentId:
 			});
 			// resolverComisiones ya es idempotente por order_id.
 			await resolverComisiones(orderId);
+
+			// Despachar notificaciones por email
+			try {
+				const itemsRes = await db.listDocuments('urbanpoint', 'order_items', [
+					Query.equal('order_id', orderId)
+				]);
+				const items = itemsRes.documents.map((it: any) => ({
+					nombre_snapshot: it.nombre_snapshot,
+					cantidad: it.cantidad,
+					precio_unitario: it.precio_unitario,
+					subtotal: it.subtotal
+				}));
+				let customerEmail = order.customer_email || order.guest_email;
+				let customerName = order.customer_name || order.guest_name;
+				let canillitaEmail = '';
+				let canillitaNombre = '';
+				let pickupNodeName = '';
+				let pickupNodeAddress = '';
+
+				const ptId = typeof order.pickup_point_id === 'string' ? order.pickup_point_id : order.pickup_point_id?.$id;
+				if (ptId) {
+					const pt: any = await db.getDocument('urbanpoint', 'pickup_points', ptId).catch(() => null);
+					if (pt) {
+						canillitaEmail = pt.email;
+						canillitaNombre = pt.nombre_comercial;
+						pickupNodeName = pt.nombre_comercial;
+						pickupNodeAddress = pt.direccion + (pt.localidad ? `, ${pt.localidad}` : '');
+					}
+				}
+
+				await sendOrderNotificationEmails({
+					$id: order.$id,
+					numero: order.numero,
+					total: order.total,
+					subtotal: order.subtotal,
+					costo_envio: order.costo_envio,
+					fulfillment: order.fulfillment,
+					direccion_envio: order.direccion_envio,
+					pickup_code_hash: order.pickup_code_hash,
+					customerName,
+					customerEmail,
+					canillitaEmail,
+					canillitaNombre,
+					pickupNodeName,
+					pickupNodeAddress
+				}, items);
+			} catch (mailErr: any) {
+				console.error('[Webhook Mailer Error]:', mailErr.message);
+			}
 			return;
 		}
+
 
 		case 'refunded':
 		case 'charged_back': {

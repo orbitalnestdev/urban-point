@@ -18,8 +18,13 @@ import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones } from '../lib/commissions';
 
 import { createAdminClient } from '../lib/server/appwrite';
-import { invalidateCatalogCache } from '../lib/server/catalogCache';
-import { sendOrderNotificationEmails } from '../lib/server/mailer';
+import { 
+	sendOrderNotificationEmails, 
+	sendOrderStatusNotificationEmail, 
+	sendCanillitaApplicationEmail, 
+	sendCanillitaApprovedEmail 
+} from '../lib/server/mailer';
+
 
 
 import { env } from '../lib/server/env';
@@ -185,7 +190,29 @@ export const server = {
 					}
 				);
 				
+				// Enviar email de notificación a administradores y confirmación al solicitante
+				try {
+					await sendCanillitaApplicationEmail({
+						$id: doc.$id,
+						nombre: doc.nombre,
+						apellido: doc.apellido,
+						email: doc.email,
+						telefono: doc.telefono,
+						dni: doc.dni,
+						nombre_comercial: doc.nombre_comercial,
+						direccion: doc.direccion,
+						localidad: doc.localidad,
+						provincia: doc.provincia,
+						cbu: doc.cbu,
+						condicion_fiscal: doc.condicion_fiscal,
+						horarios: doc.horarios
+					});
+				} catch (e: any) {
+					console.error('[Mailer Error Canillita Application]:', e.message);
+				}
+
 				return { success: true, id: doc.$id };
+
 			} catch (error: any) {
 				console.error("Appwrite Error:", error);
 				return { success: false, error: error.message };
@@ -272,7 +299,26 @@ export const server = {
 					estado: 'aprobado'
 				});
 
+				// Enviar email de felicitaciones y bienvenida al Canillita
+				try {
+					await sendCanillitaApprovedEmail({
+						$id: app.$id,
+						nombre: app.nombre,
+						apellido: app.apellido,
+						email: app.email,
+						telefono: app.telefono,
+						dni: app.dni,
+						nombre_comercial: app.nombre_comercial,
+						direccion: app.direccion,
+						localidad: app.localidad,
+						provincia: app.provincia
+					});
+				} catch (e: any) {
+					console.error('[Mailer Error Canillita Approval]:', e.message);
+				}
+
 				return { success: true, profileId: profile.$id, code: codeStr };
+
 			} catch (error: any) {
 				console.error("Approve Error:", error);
 				return { success: false, error: error.message };
@@ -1258,7 +1304,36 @@ export const server = {
 
 				await registrarEventoOrden(input.orderId, estadoActual, targetState, actor.profileId);
 
+				// Notificar al cliente si el pedido pasó a listo_para_retirar o estado relevante
+				try {
+					let pickupNodeName = '';
+					let pickupNodeAddress = '';
+					const ptId = typeof order.pickup_point_id === 'string' ? order.pickup_point_id : order.pickup_point_id?.$id;
+					if (ptId) {
+						const pt: any = await db.getDocument('urbanpoint', 'pickup_points', ptId).catch(() => null);
+						if (pt) {
+							pickupNodeName = pt.nombre_comercial;
+							pickupNodeAddress = pt.direccion + (pt.localidad ? `, ${pt.localidad}` : '');
+						}
+					}
+
+					await sendOrderStatusNotificationEmail({
+						$id: order.$id,
+						numero: order.numero,
+						total: order.total,
+						estado: targetState,
+						pickup_code_hash: order.pickup_code_hash,
+						customerName: order.customer_name || order.guest_name,
+						customerEmail: order.customer_email || order.guest_email,
+						pickupNodeName,
+						pickupNodeAddress
+					});
+				} catch (e: any) {
+					console.error('[Mailer Error Order Status]:', e.message);
+				}
+
 				return { success: true };
+
 			} catch (error: any) {
 				return { success: false, error: error.message };
 			}
