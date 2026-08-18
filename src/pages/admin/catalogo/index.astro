@@ -4,7 +4,9 @@ import NewProductModal from '../../../components/admin/NewProductModal.tsx';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { FileEdit, AlertTriangle, Image as ImageIcon, CheckCircle, Package, PauseCircle, DollarSign, ExternalLink, Check } from 'lucide-react';
+import { getOptimizedImageUrl } from '../../../lib/server/catalogCache';
 import Pagination from '../../../components/admin/Pagination.astro';
+
 
 export const prerender = false;
 
@@ -377,7 +379,15 @@ const paginationItems = filteredPages.map((p, index) => ({
 									<td class="p-3.5">
 										<div class="flex items-center gap-3">
 											<div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
-												<img src={product.portada_url || ''} alt={product.nombre} class="w-full h-full object-cover" onerror="this.src='data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23cbd5e1%22%20stroke-width%3D%221%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%20ry%3D%222%22%3E%3C%2Frect%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%3E%3C%2Fcircle%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E'; this.className='w-full h-full object-center p-2 opacity-40';" />
+												<img 
+													src={getOptimizedImageUrl(product.portada_url, 150, 150, 75)} 
+													alt={product.nombre} 
+													loading="lazy"
+													decoding="async"
+													class="w-full h-full object-cover" 
+													onerror="this.src='data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23cbd5e1%22%20stroke-width%3D%221%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%222%22%20ry%3D%222%22%3E%3C%2Frect%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%221.5%22%3E%3C%2Fcircle%3E%3Cpolyline%20points%3D%2221%2015%2016%2010%205%2021%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E'; this.className='w-full h-full object-center p-2 opacity-40';" 
+												/>
+
 											</div>
 											<div class="min-w-0 flex-1">
 												<div class="flex items-center gap-2">

@@ -14,6 +14,15 @@ if (!globalObj.__urbanpointCache) {
 
 const CACHE_TTL = 30000; // 30 seconds
 
+export const getOptimizedImageUrl = (url?: string | null, width = 400, height = 400, quality = 80): string => {
+  if (!url) return '';
+  const cleanUrl = url.trim();
+  if (cleanUrl.includes('/storage/buckets/') && cleanUrl.includes('/files/') && cleanUrl.includes('/view')) {
+    return cleanUrl.replace('/view', `/preview?width=${width}&height=${height}&output=webp&quality=${quality}`);
+  }
+  return cleanUrl;
+};
+
 export const getCachedCatalog = async () => {
   const cache = globalObj.__urbanpointCache;
   const now = Date.now();
@@ -24,51 +33,30 @@ export const getCachedCatalog = async () => {
 
   try {
     const { databases } = createAdminClient();
-
     cache.degradado = false;
 
-    try {
-      const pRes = await databases.listDocuments('urbanpoint', 'products', [Query.limit(100)]);
-      cache.products = pRes.documents.filter((p: any) => p.estado === 'activo' || !p.estado);
-    } catch (e: any) {
-      console.error('[Cache] Error fetching products:', e.message);
-      // Marcar la degradación: si no, un fallo del backend se ve exactamente
-      // igual que un catálogo vacío y la tienda queda muda.
-      cache.degradado = true;
-      if (!cache.products) cache.products = [];
-    }
+    const [pRes, cRes, pkRes] = await Promise.all([
+      databases.listDocuments('urbanpoint', 'products', [Query.limit(100), Query.orderDesc('$createdAt')]).catch((e: any) => {
+        console.error('[Cache] Error fetching products:', e.message);
+        cache.degradado = true;
+        return { documents: cache.products || [] };
+      }),
+      databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]).catch(() => ({ documents: cache.categories || [] })),
+      databases.listDocuments('urbanpoint', 'pickup_points', [Query.limit(100)]).catch(() => ({ documents: cache.pickupPoints || [] }))
+    ]);
 
-    try {
-      const cRes = await databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
-      cache.categories = cRes.documents;
-    } catch (e: any) {
-      if (!cache.categories) cache.categories = [];
-    }
-
-    try {
-      const pkRes = await databases.listDocuments('urbanpoint', 'pickup_points', [Query.limit(100)]);
-      cache.pickupPoints = pkRes.documents
-        .filter((p: any) => p.estado === 'activo' || !p.estado)
-        // Allowlist explícita: este objeto se serializa dentro del HTML
-        // (index.astro:93), así que no puede arrastrar CBU, condición fiscal,
-        // profile_id ni los tokens de Mercado Pago del punto.
-        //
-        // Tiene que incluir TODOS los campos que consume el front. Antes sólo
-        // traía nombre y dirección, y el buscador de barrios del home filtra
-        // por `localidad` y `provincia`: llegaban undefined, así que devolvía
-        // cero resultados para cualquier barrio y el listado imprimía
-        // "undefined" al lado de la dirección.
-        .map((p: any) => ({
-          $id: p.$id,
-          nombre_comercial: p.nombre_comercial,
-          direccion: p.direccion,
-          localidad: p.localidad,
-          provincia: p.provincia,
-          horarios: p.horarios
-        }));
-    } catch (e: any) {
-      if (!cache.pickupPoints) cache.pickupPoints = [];
-    }
+    cache.products = (pRes.documents || []).filter((p: any) => p.estado === 'activo' || !p.estado);
+    cache.categories = cRes.documents || [];
+    cache.pickupPoints = (pkRes.documents || [])
+      .filter((p: any) => p.estado === 'activo' || !p.estado)
+      .map((p: any) => ({
+        $id: p.$id,
+        nombre_comercial: p.nombre_comercial,
+        direccion: p.direccion,
+        localidad: p.localidad,
+        provincia: p.provincia,
+        horarios: p.horarios
+      }));
 
     cache.lastFetch = now;
   } catch (err: any) {
@@ -90,4 +78,5 @@ export const invalidateCatalogCache = () => {
     globalObj.__urbanpointCache.lastFetch = 0;
   }
 };
+
 
