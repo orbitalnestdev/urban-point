@@ -94,8 +94,9 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     smtp_port: 587,
     smtp_user: '',
     smtp_pass: '',
-    smtp_from: 'UrbanPoint <notificaciones@urbanpoint.com.ar>',
-    admin_emails: 'admin@urbanpoint.com.ar, azcurraely@gmail.com',
+    smtp_from: 'UrbanPoint <hello@urbanpoints.com.ar>',
+    admin_emails: 'hello@urbanpoint.com.ar, azcurraely@gmail.com',
+
 
     terms_and_conditions: 'Términos y condiciones generales del servicio UrbanPoint.',
     privacy_policy: 'Políticas de privacidad y protección de datos personales.',
