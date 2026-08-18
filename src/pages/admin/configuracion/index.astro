@@ -20,9 +20,15 @@ if (Astro.request.method === 'POST') {
 		
 		for (const [key, value] of formData.entries()) {
 			if (key && !key.startsWith('__')) {
-				await saveSiteSetting(key, value.toString());
+				const strVal = value.toString();
+				// No borrar la contraseña SMTP si se envía vacía en el formulario
+				if (key === 'smtp_pass' && !strVal.trim() && settings.smtp_pass) {
+					continue;
+				}
+				await saveSiteSetting(key, strVal);
 			}
 		}
+
 
 		// Re-fetch updated settings
 		settings = await getSiteSettings();
