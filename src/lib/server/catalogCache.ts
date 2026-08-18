@@ -70,6 +70,44 @@ export const getCachedCatalog = async () => {
   return cache;
 };
 
+export const getAdminCachedCatalog = async () => {
+  const cache = globalObj.__urbanpointAdminCache || {
+    products: null,
+    categories: null,
+    lastFetch: 0
+  };
+  globalObj.__urbanpointAdminCache = cache;
+
+  const now = Date.now();
+  if (cache.products && (now - cache.lastFetch < 15000)) { // 15s TTL
+    return cache;
+  }
+
+  try {
+    const { databases } = createAdminClient();
+
+    const [pRes, cRes] = await Promise.all([
+      databases.listDocuments('urbanpoint', 'products', [
+        Query.limit(300),
+        Query.orderDesc('$createdAt')
+      ]).catch(() => ({ documents: cache.products || [] })),
+      databases.listDocuments('urbanpoint', 'categories', [
+        Query.limit(100)
+      ]).catch(() => ({ documents: cache.categories || [] }))
+    ]);
+
+    cache.products = pRes.documents || [];
+    cache.categories = cRes.documents || [];
+    cache.lastFetch = now;
+  } catch (err: any) {
+    console.error('[AdminCache] Error:', err.message);
+    if (!cache.products) cache.products = [];
+    if (!cache.categories) cache.categories = [];
+  }
+
+  return cache;
+};
+
 export const invalidateCatalogCache = () => {
   if (globalObj.__urbanpointCache) {
     globalObj.__urbanpointCache.products = null;
@@ -77,6 +115,12 @@ export const invalidateCatalogCache = () => {
     globalObj.__urbanpointCache.pickupPoints = null;
     globalObj.__urbanpointCache.lastFetch = 0;
   }
+  if (globalObj.__urbanpointAdminCache) {
+    globalObj.__urbanpointAdminCache.products = null;
+    globalObj.__urbanpointAdminCache.categories = null;
+    globalObj.__urbanpointAdminCache.lastFetch = 0;
+  }
 };
+
 
 

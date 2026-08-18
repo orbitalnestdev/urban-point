@@ -4,9 +4,8 @@ import NewProductModal from '../../../components/admin/NewProductModal.tsx';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { FileEdit, AlertTriangle, Image as ImageIcon, CheckCircle, Package, PauseCircle, DollarSign, ExternalLink, Check } from 'lucide-react';
-import { getOptimizedImageUrl } from '../../../lib/server/catalogCache';
+import { getOptimizedImageUrl, getAdminCachedCatalog } from '../../../lib/server/catalogCache';
 import Pagination from '../../../components/admin/Pagination.astro';
-
 
 export const prerender = false;
 
@@ -17,44 +16,27 @@ const minPrice = Astro.url.searchParams.get('precioMin') || '';
 const maxPrice = Astro.url.searchParams.get('precioMax') || '';
 const soloBorradores = Astro.url.searchParams.get('borradores') === 'true';
 
-const { databases } = createAdminClient();
-let products = [];
-let categories = [];
-
-async function fetchAllDocs(collectionId: string) {
-	let allDocs: any[] = [];
-	let offset = 0;
-	while (true) {
-		const queries = [Query.limit(100), Query.offset(offset)];
-		if (collectionId === 'products') {
-			queries.push(Query.orderDesc('$createdAt'));
-		}
-		const res = await databases.listDocuments('urbanpoint', collectionId, queries);
-		allDocs = allDocs.concat(res.documents);
-		if (res.documents.length < 100) break;
-		offset += 100;
-	}
-	return allDocs;
-}
+let products: any[] = [];
+let categories: any[] = [];
 
 try {
-	[products, categories] = await Promise.all([
-		fetchAllDocs('products'),
-		fetchAllDocs('categories')
-	]);
+	const adminCache = await getAdminCachedCatalog();
+	products = Array.from(adminCache.products || []);
+	categories = Array.from(adminCache.categories || []);
 
 	// Mostrar siempre los últimos productos agregados al comienzo
-	products.sort((a, b) => new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime());
+	products.sort((a: any, b: any) => new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime());
 
 	const categoryMap: Record<string, any> = {};
-	categories.forEach(c => { categoryMap[c.$id] = c; });
-	products = products.map(p => ({
+	categories.forEach((c: any) => { categoryMap[c.$id] = c; });
+	products = products.map((p: any) => ({
 		...p,
 		categoryObj: typeof p.categoria_id === 'string' ? categoryMap[p.categoria_id] : p.categoria_id
 	}));
 } catch (e) {
 	console.error("Error loading products page:", e);
 }
+
 
 
 const numBorradores = products.filter(p => p.estado === 'borrador').length;
