@@ -25,46 +25,63 @@ if (Astro.request.method === 'POST') {
 		const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
 		const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
 
-		const authClient = new Client().setEndpoint(endpoint).setProject(projectId);
-		const account = new Account(authClient);
-		const { databases } = createAdminClient();
+		const res = await fetch(`${endpoint}/account/sessions/email`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Appwrite-Project': projectId
+			},
+			body: JSON.stringify({ email, password })
+		});
 
-		const session = await account.createEmailPasswordSession(email, password);
-		
-		Astro.cookies.set('up_session', session.secret, {
+		if (!res.ok) {
+			const errorData = await res.json().catch(() => ({}));
+			console.warn(`Login fallido para Canillita ${email}:`, errorData?.message);
+			throw new Error('Email o contraseña incorrectos.');
+		}
+
+		const fallbackHeader = res.headers.get('x-fallback-cookies');
+		if (!fallbackHeader) {
+			throw new Error('No se pudo obtener el token de sesión del servidor.');
+		}
+
+		const fallbackCookies = JSON.parse(fallbackHeader);
+		const sessionSecret = fallbackCookies[`a_session_${projectId}`] || fallbackCookies[`a_session_${projectId}_legacy`];
+		const sessionBody = await res.json();
+		const userId = sessionBody.userId;
+
+		Astro.cookies.set('up_session', sessionSecret, {
 			path: '/',
 			httpOnly: true,
 			secure: import.meta.env.PROD,
 			sameSite: 'lax',
 			maxAge: 60 * 60 * 24 * 30
 		});
-		try {
-			let profiles = await databases.listDocuments('urbanpoint', 'profiles', [
-				Query.equal('user_id', session.userId)
-			]);
 
-			if (profiles.documents.length === 0 && email) {
-				profiles = await databases.listDocuments('urbanpoint', 'profiles', [
-					Query.equal('email', email)
-				]);
-				if (profiles.documents.length > 0 && !profiles.documents[0].user_id) {
-					try {
-						await databases.updateDocument('urbanpoint', 'profiles', profiles.documents[0].$id, {
-							user_id: session.userId
-						});
-					} catch (e) {}
-				}
+		const { databases } = createAdminClient();
+		let profiles = await databases.listDocuments('urbanpoint', 'profiles', [
+			Query.equal('user_id', userId)
+		]);
+
+		if (profiles.documents.length === 0 && email) {
+			profiles = await databases.listDocuments('urbanpoint', 'profiles', [
+				Query.equal('email', email)
+			]);
+			if (profiles.documents.length > 0 && !profiles.documents[0].user_id) {
+				try {
+					await databases.updateDocument('urbanpoint', 'profiles', profiles.documents[0].$id, {
+						user_id: userId
+					});
+				} catch (e) {}
 			}
-			
-			let role = profiles.documents.length > 0 ? profiles.documents[0].role : 'cliente';
-			
-            if (role === 'canillita' || role === 'admin') {
-                return Astro.redirect('/canillita');
-            } else {
-                loginError = 'Tu cuenta no tiene permisos de Canillita asociados.';
-            }
-		} catch (dbErr) {
-			loginError = 'Error al validar los permisos de la cuenta.';
+		}
+
+		let role = profiles.documents.length > 0 ? profiles.documents[0].role : 'cliente';
+
+		if (role === 'canillita' || role === 'admin') {
+			return Astro.redirect('/canillita');
+		} else {
+			loginError = 'Tu cuenta no tiene permisos de Canillita asociados.';
 		}
 	} catch (e: any) {
 		loginError = e.message || 'Credenciales incorrectas o error al iniciar sesión.';
