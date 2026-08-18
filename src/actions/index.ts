@@ -18,12 +18,14 @@ import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones } from '../lib/commissions';
 
 import { createAdminClient } from '../lib/server/appwrite';
+import { invalidateCatalogCache } from '../lib/server/catalogCache';
 import { 
 	sendOrderNotificationEmails, 
 	sendOrderStatusNotificationEmail, 
 	sendCanillitaApplicationEmail, 
 	sendCanillitaApprovedEmail 
 } from '../lib/server/mailer';
+
 
 
 
