@@ -38,11 +38,23 @@ if (Astro.request.method === 'POST') {
 			sameSite: 'lax',
 			maxAge: 60 * 60 * 24 * 30
 		});
-		
 		try {
-			const profiles = await databases.listDocuments('urbanpoint', 'profiles', [
+			let profiles = await databases.listDocuments('urbanpoint', 'profiles', [
 				Query.equal('user_id', session.userId)
 			]);
+
+			if (profiles.documents.length === 0 && email) {
+				profiles = await databases.listDocuments('urbanpoint', 'profiles', [
+					Query.equal('email', email)
+				]);
+				if (profiles.documents.length > 0 && !profiles.documents[0].user_id) {
+					try {
+						await databases.updateDocument('urbanpoint', 'profiles', profiles.documents[0].$id, {
+							user_id: session.userId
+						});
+					} catch (e) {}
+				}
+			}
 			
 			let role = profiles.documents.length > 0 ? profiles.documents[0].role : 'cliente';
 			

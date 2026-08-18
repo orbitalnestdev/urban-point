@@ -64,12 +64,25 @@ export const onRequest = defineMiddleware(async (context, next) => {
 			}
 			
 			const { databases } = createAdminClient();
-			const profiles = await databases.listDocuments('urbanpoint', 'profiles', [
+			let profiles = await databases.listDocuments('urbanpoint', 'profiles', [
 				Query.equal('user_id', user.$id)
 			]);
-			
+
+			if (profiles.documents.length === 0 && user.email) {
+				profiles = await databases.listDocuments('urbanpoint', 'profiles', [
+					Query.equal('email', user.email)
+				]);
+				if (profiles.documents.length > 0 && !profiles.documents[0].user_id) {
+					try {
+						await databases.updateDocument('urbanpoint', 'profiles', profiles.documents[0].$id, {
+							user_id: user.$id
+						});
+					} catch (e) {}
+				}
+			}
+
 			if (profiles.documents.length === 0) {
-				return context.redirect('/login');
+				return context.redirect(pathname.startsWith('/canillita') ? '/canillita/login' : '/login');
 			}
 			
 			profile = profiles.documents[0];
@@ -129,7 +142,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 		console.error("Middleware Auth Error:", error);
 		if (sessionSecret) sessionAuthCache.delete(sessionSecret);
 		context.cookies.delete('up_session', { path: '/' });
-		return context.redirect('/login');
+		return context.redirect(pathname.startsWith('/canillita') ? '/canillita/login' : '/login');
 	}
 });
 
