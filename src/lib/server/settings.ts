@@ -1,6 +1,8 @@
 import { createAdminClient } from './appwrite';
 import { AppwriteException } from 'node-appwrite';
 
+import { Query } from 'node-appwrite';
+
 export interface SiteSettings {
     site_name: string;
     site_description: string;
@@ -105,12 +107,13 @@ export const DEFAULT_SETTINGS: SiteSettings = {
 export async function getSiteSettings(): Promise<SiteSettings> {
     try {
         const { databases } = createAdminClient();
-        const docs = await databases.listDocuments('urbanpoint', 'settings');
+        const docs = await databases.listDocuments('urbanpoint', 'settings', [Query.limit(100)]);
         
         const settingsMap: Record<string, any> = {};
         for (const doc of docs.documents) {
             settingsMap[doc.key] = doc.value;
         }
+
 
         return {
             site_name: settingsMap.site_name || DEFAULT_SETTINGS.site_name,
@@ -182,9 +185,10 @@ export async function getSiteSettings(): Promise<SiteSettings> {
 export async function getClavesConfiguradas(): Promise<Set<string>> {
     try {
         const { databases } = createAdminClient();
-        const docs = await databases.listDocuments('urbanpoint', 'settings');
+        const docs = await databases.listDocuments('urbanpoint', 'settings', [Query.limit(100)]);
         return new Set(docs.documents.map((doc: any) => doc.key));
     } catch (error) {
+
         console.error('No se pudieron leer las claves guardadas de settings:', error);
         return new Set();
     }
