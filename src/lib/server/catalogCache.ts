@@ -36,7 +36,11 @@ export const getCachedCatalog = async () => {
     cache.degradado = false;
 
     const [pRes, cRes, pkRes] = await Promise.all([
-      databases.listDocuments('urbanpoint', 'products', [Query.limit(100), Query.orderDesc('$createdAt')]).catch((e: any) => {
+      databases.listDocuments('urbanpoint', 'products', [
+        Query.notEqual('estado', 'borrador'),
+        Query.limit(100),
+        Query.orderDesc('$createdAt')
+      ]).catch((e: any) => {
         console.error('[Cache] Error fetching products:', e.message);
         cache.degradado = true;
         return { documents: cache.products || [] };

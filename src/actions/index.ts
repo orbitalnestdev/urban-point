@@ -1766,8 +1766,8 @@ export const server = {
 			provincia: z.string().optional(),
 			horarios: z.string().optional(),
 			telefono: z.string().optional(),
-			lat: z.number(),
-			lng: z.number(),
+			lat: z.number().optional().default(-34.6037),
+			lng: z.number().optional().default(-58.3816),
 			estado: z.string().optional(),
 			comision_pct: z.number().optional()
 		}),

@@ -722,8 +722,8 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 				telefono: inputTelefono.value || undefined,
 				estado: inputEstado.value as any,
 				comision_pct: inputComision.value ? parseInt(inputComision.value, 10) : undefined,
-				lat: currentLat,
-				lng: currentLng
+				lat: typeof currentLat === 'number' && !isNaN(currentLat) ? currentLat : -34.6037,
+				lng: typeof currentLng === 'number' && !isNaN(currentLng) ? currentLng : -58.3816
 			};
 
 			const btnSave = document.getElementById('btn-save-punto') as HTMLButtonElement;
@@ -732,7 +732,7 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 
 			const { data, error } = await actions.savePickupPoint(payload);
 			if (error || !data?.success) {
-				alert(error?.message || 'Error al guardar el punto');
+				alert(data?.error || error?.message || 'Error al guardar el punto');
 				btnSave.disabled = false;
 				btnSave.textContent = 'Guardar Canillita y Punto';
 			} else {
