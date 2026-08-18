@@ -919,7 +919,8 @@ if (product.galeria_urls) {
 					tiempo_reposicion: tiempoReposicion,
 					envio_config: JSON.stringify(envioConfig),
 					seo_config: JSON.stringify(seoConfig),
-					portada_url: currentPortadaUrl,
+					portada_url: (currentPortadaUrl && currentPortadaUrl.trim()) ? currentPortadaUrl.trim() : undefined,
+
 					galeria_urls: JSON.stringify(currentGaleriaUrls),
 					estado,
 					categoria_id: categoriaId

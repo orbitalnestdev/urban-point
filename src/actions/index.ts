@@ -1849,13 +1849,14 @@ export const server = {
 
 				const slugBase = input.slug || input.nombre;
 				const cleanSlug = slugBase.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+				const cleanImg = (input.imagen_url || '').trim();
 
 				const payload: any = {
 					nombre: input.nombre.trim(),
 					slug: cleanSlug || 'cat-' + Date.now(),
 					parent_id: input.parent_id || null,
 					descripcion: input.descripcion || '',
-					imagen_url: input.imagen_url || '',
+					imagen_url: (cleanImg && (cleanImg.startsWith('http://') || cleanImg.startsWith('https://') || cleanImg.startsWith('//'))) ? cleanImg : null,
 					estado: input.estado || 'activa'
 				};
 
