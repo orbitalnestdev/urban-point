@@ -1638,7 +1638,17 @@ export const server = {
 				nombre: z.string(),
 				sku: z.string().optional(),
 				precio: z.number(),
-				stock: z.number()
+				precio_promocional: z.number().optional().nullable(),
+				precio_canillita: z.number().optional().nullable(),
+				precio_distribuidor: z.number().optional().nullable(),
+				costo: z.number().optional().nullable(),
+				stock: z.number(),
+				estado: z.string().optional(),
+				categoria_id: z.string().optional().nullable(),
+				categoria_nombre: z.string().optional().nullable(),
+				marca: z.string().optional(),
+				portada_url: z.string().optional(),
+				descripcion: z.string().optional()
 			}))
 		}),
 		handler: async (input, ctx) => {
@@ -1646,6 +1656,15 @@ export const server = {
 				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
 					throw new Error('Solo admin puede importar productos');
 				}
+
+				// Cargar mapa de categorías por nombre
+				const catMap: Record<string, string> = {};
+				try {
+					const catRes = await db.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
+					catRes.documents.forEach((c: any) => {
+						if (c.nombre) catMap[c.nombre.toLowerCase().trim()] = c.$id;
+					});
+				} catch (e) {}
 
 				let count = 0;
 				for (const item of input.items) {
@@ -1657,19 +1676,35 @@ export const server = {
 
 					const sku = item.sku || 'SKU-' + Math.floor(100000 + Math.random() * 900000);
 
-					await db.createDocument('urbanpoint', 'products', ID.unique(), {
+					let catId = item.categoria_id || null;
+					if (!catId && item.categoria_nombre) {
+						catId = catMap[item.categoria_nombre.toLowerCase().trim()] || null;
+					}
+
+					const payload: any = {
 						nombre: item.nombre,
 						slug: slug,
 						sku: sku,
-						descripcion: '',
+						descripcion: item.descripcion || '',
 						precio: item.precio,
 						stock: item.stock,
-						estado: 'borrador',
+						estado: item.estado || 'activo',
 						iva_pct: 21.0
-					});
+					};
+
+					if (item.precio_promocional !== undefined && item.precio_promocional !== null) payload.precio_promocional = item.precio_promocional;
+					if (item.precio_canillita !== undefined && item.precio_canillita !== null) payload.precio_canillita = item.precio_canillita;
+					if (item.precio_distribuidor !== undefined && item.precio_distribuidor !== null) payload.precio_distribuidor = item.precio_distribuidor;
+					if (item.costo !== undefined && item.costo !== null) payload.costo = item.costo;
+					if (catId) payload.categoria_id = catId;
+					if (item.marca) payload.marca = item.marca;
+					if (item.portada_url) payload.portada_url = item.portada_url;
+
+					await db.createDocument('urbanpoint', 'products', ID.unique(), payload);
 					count++;
 				}
 
+				invalidateCatalogCache();
 				return { success: true, count };
 			} catch (error: any) {
 				return { success: false, error: error.message };
@@ -1681,9 +1716,21 @@ export const server = {
 		accept: 'json',
 		input: z.object({
 			updates: z.array(z.object({
-				sku: z.string(),
+				id: z.string().optional(),
+				sku: z.string().optional(),
+				nombre: z.string().optional(),
 				precio: z.number().optional(),
-				stock: z.number().optional()
+				precio_promocional: z.number().optional().nullable(),
+				precio_canillita: z.number().optional().nullable(),
+				precio_distribuidor: z.number().optional().nullable(),
+				costo: z.number().optional().nullable(),
+				stock: z.number().optional(),
+				estado: z.string().optional(),
+				categoria_id: z.string().optional().nullable(),
+				categoria_nombre: z.string().optional().nullable(),
+				marca: z.string().optional(),
+				portada_url: z.string().optional(),
+				descripcion: z.string().optional()
 			}))
 		}),
 		handler: async (input, ctx) => {
@@ -1692,24 +1739,105 @@ export const server = {
 					throw new Error('Solo admin puede re-importar productos');
 				}
 
-				const res = await db.listDocuments('urbanpoint', 'products');
+				// Cargar TODOS los productos mediante paginado offset
+				const allProducts: any[] = [];
+				let offset = 0;
+				while (true) {
+					const res = await db.listDocuments('urbanpoint', 'products', [
+						Query.limit(100),
+						Query.offset(offset)
+					]);
+					allProducts.push(...res.documents);
+					if (res.documents.length < 100) break;
+					offset += 100;
+				}
+
+				// Cargar categorías para mapear por nombre si es necesario
+				const catMap: Record<string, string> = {};
+				try {
+					const catRes = await db.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
+					catRes.documents.forEach((c: any) => {
+						if (c.nombre) catMap[c.nombre.toLowerCase().trim()] = c.$id;
+					});
+				} catch (e) {}
+
 				let updated = 0;
+				let created = 0;
 
 				for (const update of input.updates) {
-					const target = res.documents.find(p => p.sku === update.sku || p.$id === update.sku);
+					const cleanId = update.id?.trim();
+					const cleanSku = update.sku?.trim();
+					const cleanNombre = update.nombre?.trim().toLowerCase();
+
+					// Buscar coincidencia por ID, SKU o Nombre
+					let target = allProducts.find(p => cleanId && p.$id === cleanId);
+					if (!target && cleanSku) {
+						target = allProducts.find(p => p.sku && p.sku.trim() === cleanSku);
+					}
+					if (!target && cleanNombre) {
+						target = allProducts.find(p => p.nombre && p.nombre.trim().toLowerCase() === cleanNombre);
+					}
+
+					let catId = update.categoria_id || null;
+					if (!catId && update.categoria_nombre) {
+						catId = catMap[update.categoria_nombre.toLowerCase().trim()] || null;
+					}
+
 					if (target) {
 						const patch: any = {};
+						if (update.nombre !== undefined && update.nombre.trim().length > 0) patch.nombre = update.nombre.trim();
 						if (update.precio !== undefined) patch.precio = update.precio;
+						if (update.precio_promocional !== undefined) patch.precio_promocional = update.precio_promocional;
+						if (update.precio_canillita !== undefined) patch.precio_canillita = update.precio_canillita;
+						if (update.precio_distribuidor !== undefined) patch.precio_distribuidor = update.precio_distribuidor;
+						if (update.costo !== undefined) patch.costo = update.costo;
 						if (update.stock !== undefined) patch.stock = update.stock;
+						if (update.estado !== undefined && ['activo', 'borrador', 'pausado', 'inactivo'].includes(update.estado)) patch.estado = update.estado;
+						if (catId) patch.categoria_id = catId;
+						if (update.marca !== undefined) patch.marca = update.marca;
+						if (update.portada_url !== undefined) patch.portada_url = update.portada_url;
+						if (update.descripcion !== undefined) patch.descripcion = update.descripcion;
 
 						if (Object.keys(patch).length > 0) {
 							await db.updateDocument('urbanpoint', 'products', target.$id, patch);
 							updated++;
 						}
+					} else if (update.nombre && update.precio !== undefined) {
+						// Crear producto si no existía y tiene al menos nombre y precio
+						const slug = update.nombre
+							.toLowerCase()
+							.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+							.replace(/[^a-z0-9]+/g, '-')
+							.replace(/(^-|-$)+/g, '') + '-' + Math.floor(Math.random()*1000);
+
+						const newSku = update.sku || 'SKU-' + Math.floor(100000 + Math.random() * 900000);
+
+						const newPayload: any = {
+							nombre: update.nombre,
+							slug,
+							sku: newSku,
+							descripcion: update.descripcion || '',
+							precio: update.precio,
+							stock: update.stock !== undefined ? update.stock : 0,
+							estado: update.estado || 'activo',
+							iva_pct: 21.0
+						};
+
+						if (update.precio_promocional !== undefined && update.precio_promocional !== null) newPayload.precio_promocional = update.precio_promocional;
+						if (update.precio_canillita !== undefined && update.precio_canillita !== null) newPayload.precio_canillita = update.precio_canillita;
+						if (update.precio_distribuidor !== undefined && update.precio_distribuidor !== null) newPayload.precio_distribuidor = update.precio_distribuidor;
+						if (update.costo !== undefined && update.costo !== null) newPayload.costo = update.costo;
+						if (catId) newPayload.categoria_id = catId;
+						if (update.marca) newPayload.marca = update.marca;
+						if (update.portada_url) newPayload.portada_url = update.portada_url;
+
+						await db.createDocument('urbanpoint', 'products', ID.unique(), newPayload);
+						created++;
 					}
 				}
 
-				return { success: true, updated };
+				invalidateCatalogCache();
+				return { success: true, updated, created, totalProcessed: input.updates.length };
 			} catch (error: any) {
 				return { success: false, error: error.message };
 			}

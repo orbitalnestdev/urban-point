@@ -29,16 +29,29 @@ export function downloadCsv(filename: string, csvContent: string) {
 	document.body.removeChild(link);
 }
 
-export function exportProductsCsv(products: any[]) {
-	const rows = products.map(p => ({
-		ID: p.$id,
-		SKU: p.sku || '',
-		Nombre: p.nombre || '',
-		Estado: p.estado || 'borrador',
-		Precio: (p.precio || 0) / 100,
-		Stock: p.stock || 0,
-		Descripcion: p.descripcion || ''
-	}));
+export function exportProductsCsv(products: any[], categoryMap: Record<string, string> = {}) {
+	const rows = products.map(p => {
+		const catId = typeof p.categoria_id === 'string' ? p.categoria_id : p.categoria_id?.$id || '';
+		const catName = categoryMap[catId] || (p.categoria_id?.nombre || '');
+
+		return {
+			ID: p.$id,
+			SKU: p.sku || '',
+			Nombre: p.nombre || '',
+			Categoria: catName,
+			Categoria_ID: catId,
+			Estado: p.estado || 'activo',
+			Precio: (p.precio || 0) / 100,
+			Precio_Promocional: p.precio_promocional ? p.precio_promocional / 100 : '',
+			Precio_Canillita: p.precio_canillita ? p.precio_canillita / 100 : '',
+			Precio_Distribuidor: p.precio_distribuidor ? p.precio_distribuidor / 100 : '',
+			Costo: p.costo ? p.costo / 100 : '',
+			Stock: p.stock || 0,
+			Marca: p.marca || '',
+			Portada_URL: p.portada_url || '',
+			Descripcion: p.descripcion || ''
+		};
+	});
 	const csv = generateCsvString(rows);
 	downloadCsv(`productos_urbanpoint_${new Date().toISOString().slice(0, 10)}.csv`, csv);
 }

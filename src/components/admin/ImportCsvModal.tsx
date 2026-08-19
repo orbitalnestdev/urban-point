@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { actions } from 'astro:actions';
 import { downloadTemplateSimple, downloadTemplateVariantes } from '../../lib/exports';
+import { parseCsvText } from '../../lib/csvParser';
 
 type Props = {};
 
@@ -10,11 +11,14 @@ export default function ImportCsvModal({}: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<{ nombre: string; sku: string; precio: string; stock: string }>({
+  const [mapping, setMapping] = useState<{ nombre: string; sku: string; precio: string; stock: string; estado: string; categoria: string; costo: string }>({
     nombre: '',
     sku: '',
     precio: '',
-    stock: ''
+    stock: '',
+    estado: '',
+    categoria: '',
+    costo: ''
   });
   const [isImporting, setIsImporting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -50,33 +54,25 @@ export default function ImportCsvModal({}: Props) {
       const text = evt.target?.result as string;
       if (!text) return;
 
-      const lines = text.split(/\r\n|\n/).filter(line => line.trim().length > 0);
-      if (lines.length === 0) {
-        setErrorMsg('El archivo está vacío.');
+      const { headers: rawHeaders, rows: dataRows } = parseCsvText(text);
+      if (rawHeaders.length === 0 || dataRows.length === 0) {
+        setErrorMsg('El archivo está vacío o no tiene el formato correcto.');
         return;
       }
 
-      const rawHeaders = lines[0].split(',').map(h => h.replace(/^["']|["']$/g, '').trim());
       setHeaders(rawHeaders);
 
       // Mapeo automático inteligente por nombre de columna
       const newMapping = {
         nombre: rawHeaders.find(h => /nombre|title|producto|description/i.test(h)) || rawHeaders[0] || '',
-        sku: rawHeaders.find(h => /sku|codigo|id/i.test(h)) || rawHeaders[1] || '',
-        precio: rawHeaders.find(h => /precio|price|monto/i.test(h)) || rawHeaders[2] || '',
-        stock: rawHeaders.find(h => /stock|cantidad|units/i.test(h)) || rawHeaders[3] || ''
+        sku: rawHeaders.find(h => /^sku$|^codigo$/i.test(h)) || rawHeaders.find(h => /sku|codigo/i.test(h)) || '',
+        precio: rawHeaders.find(h => /^precio$|^precio_venta$/i.test(h)) || rawHeaders.find(h => /precio|price/i.test(h)) || '',
+        stock: rawHeaders.find(h => /^stock$|^cantidad$/i.test(h)) || rawHeaders.find(h => /stock|cantidad/i.test(h)) || '',
+        estado: rawHeaders.find(h => /^estado$|^status$/i.test(h)) || '',
+        categoria: rawHeaders.find(h => /^categoria$|^category$/i.test(h)) || '',
+        costo: rawHeaders.find(h => /^costo$|^cost$/i.test(h)) || ''
       };
       setMapping(newMapping);
-
-      const dataRows = lines.slice(1).map(line => {
-        const values = line.split(',').map(v => v.replace(/^["']|["']$/g, '').trim());
-        const row: Record<string, string> = {};
-        rawHeaders.forEach((h, idx) => {
-          row[h] = values[idx] || '';
-        });
-        return row;
-      });
-
       setParsedRows(dataRows);
       setStep(2); // Avanzar a Mapeo de Columnas
     };
@@ -91,6 +87,19 @@ export default function ImportCsvModal({}: Props) {
     setStep(3); // Avanzar a Vista Previa
   };
 
+  const parseMoney = (val?: string): number => {
+    if (!val || val.trim().length === 0) return 0;
+    const clean = val.replace(/\$/g, '').replace(/\./g, '').replace(/,/g, '.').trim();
+    const num = parseFloat(clean);
+    return isNaN(num) ? 0 : Math.round(num * 100);
+  };
+
+  const parseNum = (val?: string): number => {
+    if (!val || val.trim().length === 0) return 0;
+    const num = parseInt(val.replace(/[^0-9-]/g, ''), 10);
+    return isNaN(num) ? 0 : num;
+  };
+
   const handleExecuteImport = async () => {
     setStep(4);
     setIsImporting(true);
@@ -98,9 +107,12 @@ export default function ImportCsvModal({}: Props) {
 
     const itemsToImport = parsedRows.map(row => ({
       nombre: row[mapping.nombre] || 'Producto Sin Nombre',
-      sku: row[mapping.sku] || '',
-      precio: Math.round(parseFloat(row[mapping.precio] || '0') * 100),
-      stock: parseInt(row[mapping.stock] || '0', 10)
+      sku: mapping.sku ? row[mapping.sku] : '',
+      precio: parseMoney(row[mapping.precio]),
+      costo: mapping.costo ? parseMoney(row[mapping.costo]) : undefined,
+      stock: parseNum(row[mapping.stock]),
+      estado: mapping.estado ? row[mapping.estado]?.toLowerCase() : 'activo',
+      categoria_nombre: mapping.categoria ? row[mapping.categoria] : undefined
     })).filter(item => item.nombre.trim().length > 0);
 
     try {

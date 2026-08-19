@@ -1,6 +1,8 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import NewProductModal from '../../../components/admin/NewProductModal.tsx';
+import ImportCsvModal from '../../../components/admin/ImportCsvModal.tsx';
+import ReimportModal from '../../../components/admin/ReimportModal.tsx';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { FileEdit, AlertTriangle, Image as ImageIcon, CheckCircle, Package, PauseCircle, DollarSign, ExternalLink, Check } from 'lucide-react';
@@ -173,9 +175,19 @@ const paginationItems = filteredPages.map((p, index) => ({
 					Categorías
 				</a>
 
-				<button id="btn-export-csv" class="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
+				<button id="btn-export-csv" class="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2 cursor-pointer">
 					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-					Exportar CSV
+					Exportar Excel
+				</button>
+
+				<button id="btn-reimport-csv" class="px-3.5 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-xl hover:bg-indigo-100 transition-colors shadow-xs flex items-center gap-2 cursor-pointer">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+					Actualizar / Re-importar Excel
+				</button>
+
+				<button id="btn-import-csv" class="px-3.5 py-2 bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-200 transition-colors shadow-xs flex items-center gap-2 cursor-pointer">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="12" y2="12"></line><line x1="15" y1="15" x2="12" y2="12"></line></svg>
+					Importar Nuevos
 				</button>
 
 				<button id="btn-nuevo-producto" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors shadow-md flex items-center gap-2 cursor-pointer">
@@ -640,6 +652,8 @@ const paginationItems = filteredPages.map((p, index) => ({
 
 	</main>
 	<NewProductModal client:load />
+	<ImportCsvModal client:load />
+	<ReimportModal client:load />
 </AdminLayout>
 
 
@@ -923,12 +937,33 @@ const paginationItems = filteredPages.map((p, index) => ({
 
 	// Single Export CSV Action
 	document.getElementById('btn-export-csv')?.addEventListener('click', async () => {
-		const res = await fetch('/api/products-raw.json');
-		if (!res.ok) {
-			alert('No se pudo exportar el catálogo. Intentá de nuevo.');
-			return;
+		const btn = document.getElementById('btn-export-csv') as HTMLButtonElement;
+		const originalText = btn ? btn.innerHTML : '';
+		if (btn) btn.innerText = 'Generando Excel...';
+
+		try {
+			const res = await fetch('/api/products-raw.json');
+			if (!res.ok) {
+				alert('No se pudo exportar el catálogo. Intentá de nuevo.');
+				return;
+			}
+			const data = await res.json();
+			const products = Array.isArray(data) ? data : (data.products || []);
+			const categoryMap = data.categoryMap || {};
+			exportProductsCsv(products, categoryMap);
+		} catch (e) {
+			alert('Error al exportar los productos.');
+		} finally {
+			if (btn) btn.innerHTML = originalText;
 		}
-		exportProductsCsv(await res.json());
+	});
+
+	document.getElementById('btn-import-csv')?.addEventListener('click', () => {
+		window.dispatchEvent(new CustomEvent('modal:import-csv'));
+	});
+
+	document.getElementById('btn-reimport-csv')?.addEventListener('click', () => {
+		window.dispatchEvent(new CustomEvent('modal:reimport-xlsx'));
 	});
 
 	// New Product Action - Abrir Modal selector de tipo de producto

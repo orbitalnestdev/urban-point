@@ -5,17 +5,11 @@ import { Query } from 'node-appwrite';
 export const prerender = false;
 
 /**
- * Catálogo completo para la exportación a CSV del admin. [M-08]
- *
- * El botón "Exportar" de /admin/catalogo ya llamaba a esta ruta, pero el
- * endpoint no existía: el fetch fallaba y caía a un alert('Exportando
- * productos...') seguido de un reload. Nunca exportó nada.
+ * Catálogo completo y mapa de categorías para la exportación a CSV del admin.
  */
 export const GET: APIRoute = async ({ locals }) => {
 	const user = locals.user;
 	if (!user || (user.role !== 'admin' && user.role !== 'gestion')) {
-		// El middleware sólo protege /admin y /canillita: las rutas de /api
-		// tienen que verificar por su cuenta.
 		return new Response(JSON.stringify({ error: 'No autorizado' }), {
 			status: 403,
 			headers: { 'Content-Type': 'application/json' }
@@ -27,8 +21,7 @@ export const GET: APIRoute = async ({ locals }) => {
 		const productos: any[] = [];
 		let offset = 0;
 
-		// Paginado: sin esto Appwrite devuelve sólo los primeros 25 y la
-		// exportación saldría truncada en silencio.
+		// Paginado de productos
 		while (true) {
 			const res = await databases.listDocuments('urbanpoint', 'products', [
 				Query.limit(100),
@@ -40,7 +33,18 @@ export const GET: APIRoute = async ({ locals }) => {
 			offset += 100;
 		}
 
-		return new Response(JSON.stringify(productos), {
+		// Categorías
+		const categoryMap: Record<string, string> = {};
+		try {
+			const catRes = await databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
+			catRes.documents.forEach((cat: any) => {
+				categoryMap[cat.$id] = cat.nombre || '';
+			});
+		} catch (e) {
+			console.warn('No se pudieron listar las categorías para la exportación:', e);
+		}
+
+		return new Response(JSON.stringify({ products: productos, categoryMap }), {
 			status: 200,
 			headers: { 'Content-Type': 'application/json' }
 		});
