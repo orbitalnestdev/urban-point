@@ -43,14 +43,25 @@ async function fetchOrdersLight() {
 	const MAX_BATCHES = 4; // tope de seguridad: 20.000 pedidos alcanzan y sobran
 	let docs: any[] = [];
 	let cursor: string | null = null;
+	// Query.select sobre relaciones (customer_id) puede ser rechazado por el
+	// servidor de Appwrite según versión: si falla, se reintenta sin select.
+	let usarSelect = true;
 	for (let i = 0; i < MAX_BATCHES; i++) {
 		const queries = [
-			Query.select(['customer_id', 'total', 'estado', '$createdAt']),
 			Query.orderDesc('$createdAt'),
 			Query.limit(BATCH)
 		];
+		if (usarSelect) queries.unshift(Query.select(['customer_id', 'total', 'estado', '$createdAt']));
 		if (cursor) queries.push(Query.cursorAfter(cursor));
-		const res = await databases.listDocuments('urbanpoint', 'orders', queries);
+		let res;
+		try {
+			res = await databases.listDocuments('urbanpoint', 'orders', queries);
+		} catch (e) {
+			if (!usarSelect) throw e;
+			usarSelect = false;
+			i--; // reintentar esta misma tanda sin select
+			continue;
+		}
 		docs.push(...res.documents);
 		if (res.documents.length < BATCH) break;
 		cursor = res.documents[res.documents.length - 1].$id;

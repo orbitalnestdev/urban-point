@@ -33,7 +33,14 @@ try {
 			]),
 			Query.orderDesc('$createdAt'),
 			Query.limit(1000)
-		]),
+		]).catch(() =>
+			// Query.select sobre relaciones puede ser rechazado según la versión
+			// del servidor de Appwrite: se reintenta sin select antes de fallar.
+			databases.listDocuments('urbanpoint', 'orders', [
+				Query.orderDesc('$createdAt'),
+				Query.limit(1000)
+			])
+		),
 		databases.listDocuments('urbanpoint', 'profiles', [
 			Query.limit(200)
 		]).catch(() => ({ documents: [] })),

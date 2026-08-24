@@ -169,7 +169,14 @@ try {
       Query.equal('estado', 'disponible'),
       Query.select(['profile_id', 'monto_centavos']),
       Query.limit(5000)
-    ]).catch(() => ({ documents: [] as any[] }))
+    ]).catch(() =>
+      // Query.select sobre la relación profile_id puede ser rechazado según la
+      // versión del servidor de Appwrite: se reintenta sin select.
+      databases.listDocuments('urbanpoint', 'commission_ledger', [
+        Query.equal('estado', 'disponible'),
+        Query.limit(5000)
+      ])
+    ).catch(() => ({ documents: [] as any[] }))
   ]);
   allLedgerDocs = ledgerRes.documents || [];
 
