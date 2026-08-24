@@ -16,7 +16,18 @@ let loginError = '';
 let loginSuccess = false;
 
 const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cookie'));
-const redirectParam = Astro.url.searchParams.get('redirect') || '';
+
+// SEGURIDAD (open redirect): el destino post-login llega por query string o
+// por el form, es decir, lo controla quien arma el link. Sólo aceptamos rutas
+// internas: tienen que empezar con '/' pero no con '//' (protocol-relative
+// hacia otro dominio) ni contener '\' (los navegadores normalizan '/\' a '//').
+const esRedirectSeguro = (url: string): boolean =>
+	url.startsWith('/') && !url.startsWith('//') && !url.includes('\\');
+
+// Si no valida, se descarta y aplican los fallbacks internos de siempre.
+const sanearRedirect = (url: string): string => (esRedirectSeguro(url) ? url : '');
+
+const redirectParam = sanearRedirect(Astro.url.searchParams.get('redirect') || '');
 
 if (Astro.request.method === 'GET') {
 	const sessionCookie = Astro.cookies.get('up_session')?.value;
@@ -35,7 +46,7 @@ if (Astro.request.method === 'GET') {
 			if (role === 'admin') return Astro.redirect('/admin');
 			if (role === 'canillita') return Astro.redirect('/canillita');
 			if (redirectParam) return Astro.redirect(redirectParam);
-			if (activeNodeSession && activeNodeSession.slug) return Astro.redirect(`/${activeNodeSession.slug}`);
+			if (activeNodeSession && activeNodeSession.slug) return Astro.redirect(sanearRedirect(`/${activeNodeSession.slug}`) || '/mi-cuenta');
 			return Astro.redirect('/mi-cuenta');
 		} catch (e) {
 			Astro.cookies.delete('up_session', { path: '/' });
@@ -49,7 +60,11 @@ if (Astro.request.method === 'POST') {
 		const actionType = formData.get('actionType')?.toString();
 		const email = formData.get('email')?.toString() || '';
 		const password = formData.get('password')?.toString() || '';
-		const targetRedirect = formData.get('redirectUrl')?.toString() || redirectParam || (activeNodeSession?.slug ? `/${activeNodeSession.slug}` : '');
+		// Mismo saneo que el query param: el hidden `redirectUrl` también lo
+		// puede manipular el cliente antes del POST.
+		const targetRedirect = sanearRedirect(formData.get('redirectUrl')?.toString() || '')
+			|| redirectParam
+			|| sanearRedirect(activeNodeSession?.slug ? `/${activeNodeSession.slug}` : '');
 		
 		const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
 		const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
@@ -197,9 +212,6 @@ if (Astro.request.method === 'POST') {
 					</div>
 				)}
 
-				<div id="successBox" class="hidden bg-emerald-50 border border-emerald-200 text-[#2D5A27] px-4 py-3 rounded-xl text-xs font-semibold mb-4"></div>
-				<div id="clientErrorBox" class="hidden bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-xs font-semibold mb-4"></div>
-
 				<!-- FORM CREAR CUENTA (Server Side POST) -->
 				<form id="registerForm" method="POST" class="space-y-4 hidden">
 					<input type="hidden" name="actionType" value="register" />
@@ -276,13 +288,23 @@ if (Astro.request.method === 'POST') {
 		registerForm?.classList.add('hidden');
 	});
 
+	// El botón se deshabilita al enviar: un doble click generaba dos POST
+	// (y en el registro, dos intentos de crear la misma cuenta).
 	registerForm?.addEventListener('submit', () => {
 		const btn = document.getElementById('regSubmitBtn') as HTMLButtonElement;
-		if (btn) btn.innerHTML = 'Creando...';
+		if (btn) {
+			btn.disabled = true;
+			btn.classList.add('opacity-60', 'cursor-not-allowed');
+			btn.innerHTML = 'Creando...';
+		}
 	});
 
 	loginForm?.addEventListener('submit', () => {
 		const btn = document.getElementById('loginSubmitBtn') as HTMLButtonElement;
-		if (btn) btn.innerHTML = 'Ingresando...';
+		if (btn) {
+			btn.disabled = true;
+			btn.classList.add('opacity-60', 'cursor-not-allowed');
+			btn.innerHTML = 'Ingresando...';
+		}
 	});
 </script>

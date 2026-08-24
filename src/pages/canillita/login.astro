@@ -50,14 +50,14 @@ if (Astro.request.method === 'POST') {
 		const sessionBody = await res.json();
 		const userId = sessionBody.userId;
 
-		Astro.cookies.set('up_session', sessionSecret, {
-			path: '/',
-			httpOnly: true,
-			secure: import.meta.env.PROD,
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24 * 30
-		});
+		// Sin secreto no hay sesión: si guardábamos "undefined" en la cookie
+		// se generaba un loop de redirección imposible de cortar.
+		if (!sessionSecret) {
+			throw new Error('No se pudo obtener el token de sesión del servidor.');
+		}
 
+		// Primero resolvemos el perfil y el rol; la cookie se persiste recién
+		// cuando confirmamos que la cuenta tiene permisos de canillita/admin.
 		const { databases } = createAdminClient();
 		let profiles = await databases.listDocuments('urbanpoint', 'profiles', [
 			Query.equal('user_id', userId)
@@ -79,8 +79,16 @@ if (Astro.request.method === 'POST') {
 		let role = profiles.documents.length > 0 ? profiles.documents[0].role : 'cliente';
 
 		if (role === 'canillita' || role === 'admin') {
+			Astro.cookies.set('up_session', sessionSecret, {
+				path: '/',
+				httpOnly: true,
+				secure: import.meta.env.PROD,
+				sameSite: 'lax',
+				maxAge: 60 * 60 * 24 * 30
+			});
 			return Astro.redirect('/canillita');
 		} else {
+			// No persistimos nada: esta cuenta no puede usar el panel
 			loginError = 'Tu cuenta no tiene permisos de Canillita asociados.';
 		}
 	} catch (e: any) {

@@ -17,19 +17,28 @@ import { buildCategoryTree } from '../../../lib/server/categoryUtils';
 
 import { getSiteSettings } from '../../../lib/server/settings';
 
-let siteSettings = await getSiteSettings();
+let siteSettings: any = {};
 
-try {
-	product = await databases.getDocument('urbanpoint', 'products', id as string);
-	const catRes = await databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
-	categories = catRes.documents;
+// Las cuatro consultas no dependen entre sí: en serie eran cuatro round-trips
+// encadenados. Sólo el getDocument del producto define si la página existe.
+const [settingsRes, productRes, catRes, allProdRes] = await Promise.allSettled([
+	getSiteSettings(),
+	databases.getDocument('urbanpoint', 'products', id as string),
+	databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]),
+	databases.listDocuments('urbanpoint', 'products', [Query.limit(100)])
+]);
 
-	const allProdRes = await databases.listDocuments('urbanpoint', 'products', [Query.limit(100)]);
-	allProducts = allProdRes.documents.filter(p => p.$id !== id);
-} catch (e) {
-
-	console.error(e);
+// Producto inexistente (o id inválido): volver al listado como antes.
+if (productRes.status === 'rejected') {
+	console.error(productRes.reason);
 	return Astro.redirect('/admin/catalogo');
+}
+product = productRes.value;
+
+if (settingsRes.status === 'fulfilled') siteSettings = settingsRes.value;
+if (catRes.status === 'fulfilled') categories = catRes.value.documents;
+if (allProdRes.status === 'fulfilled') {
+	allProducts = allProdRes.value.documents.filter(p => p.$id !== id);
 }
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });

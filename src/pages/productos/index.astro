@@ -224,16 +224,17 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 										<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Envío / Retiro</span>
 										<span class="text-xs font-extrabold text-[#2D5A27]">GRATIS en Punto</span>
 									</div>
-									<AddToCartBtn 
-										client:load 
+									<AddToCartBtn
+										client:load
 										item={{
 											id: prod.$id,
 											nombre: prod.nombre,
 											precio: precioMinorista,
-											imagen: prod.portada_url || '',
+											imagen: getOptimizedImageUrl(prod.portada_url || '', 200, 200, 75),
 											sku: prod.sku || prod.$id
 										}}
 										variant="plus"
+										disabled={typeof prod.stock === 'number' && prod.stock <= 0}
 									/>
 								</div>
 							</div>
@@ -246,7 +247,6 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 
 	<!-- Footer -->
 	<Footer />
-</Layout>
 
 	<script type="application/json" id="categories-json-data" set:html={toSafeJson(categories)} />
 

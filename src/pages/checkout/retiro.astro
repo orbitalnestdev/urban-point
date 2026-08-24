@@ -3,8 +3,7 @@ export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
 import Logo from '../../components/Logo.astro';
-import { createAdminClient } from '../../lib/server/appwrite';
-import { Query } from 'node-appwrite';
+import { getCachedCatalog } from '../../lib/server/catalogCache';
 
 import { parseActiveNodeCookie } from '../../lib/nodeSession';
 import { toSafeJson } from '../../lib/safeJson';
@@ -12,25 +11,18 @@ import { toSafeJson } from '../../lib/safeJson';
 let pickupPoints: any[] = [];
 let barrios: string[] = [];
 let activeNodeSession: any = null;
+// Distingue "no hay puntos" de "no pudimos cargarlos".
+let catalogoDegradado = false;
 
 try {
   activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cookie'));
 
-  const { databases } = createAdminClient();
-  let rawDocs: any[] = [];
-  let offset = 0;
-  while (true) {
-    const res = await databases.listDocuments('urbanpoint', 'pickup_points', [
-      Query.equal('estado', 'activo'),
-      Query.limit(100),
-      Query.offset(offset)
-    ]);
-    rawDocs.push(...res.documents);
-    if (res.documents.length < 100) break;
-    offset += 100;
-  }
+  // Se lee del caché compartido de catálogo (ya trae los puntos activos con
+  // lat/lng/slug/telefono) en vez de paginar pickup_points en cada request.
+  const cache = await getCachedCatalog();
+  catalogoDegradado = Boolean(cache.degradado);
 
-  pickupPoints = rawDocs.map(p => ({
+  pickupPoints = (cache.pickupPoints || []).map((p: any) => ({
     id: p.$id,
     nombre: p.nombre_comercial,
     direccion: p.direccion,
@@ -45,6 +37,7 @@ try {
   barrios = Array.from(new Set(pickupPoints.map(p => p.localidad))).filter(Boolean).sort();
 } catch (e) {
   console.error('Error cargando puntos de retiro para /checkout/retiro:', e);
+  catalogoDegradado = true;
 }
 
 const POPULAR_BARRIOS = ['Todos', 'Belgrano', 'Palermo', 'Recoleta', 'Caballito', 'Nuñez', 'Villa Crespo', 'Colegiales', 'Villa Urquiza'];
@@ -182,7 +175,19 @@ const POPULAR_BARRIOS = ['Todos', 'Belgrano', 'Palermo', 'Recoleta', 'Caballito'
 
               <!-- Cards List Container (Scrollable) -->
               <div id="points-list-container" class="flex-1 overflow-y-auto pr-1 space-y-3.5 custom-scrollbar pb-4">
-                <!-- Dynamically populated via Client JS -->
+                {catalogoDegradado && pickupPoints.length === 0 ? (
+                  <div class="p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl">
+                    <h3 class="text-base font-bold text-slate-900 leading-snug mb-1">
+                      No pudimos cargar los puntos de retiro
+                    </h3>
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                      Estamos teniendo un problema técnico. Probá recargar la página en unos minutos.
+                    </p>
+                  </div>
+                ) : (
+                  <!-- Dynamically populated via Client JS -->
+                  <Fragment />
+                )}
               </div>
             </div>
 
@@ -300,6 +305,11 @@ const POPULAR_BARRIOS = ['Todos', 'Belgrano', 'Palermo', 'Recoleta', 'Caballito'
       if (!jsonEl) return;
 
       const rawPoints = JSON.parse(jsonEl.textContent || '[]');
+
+      // Sin puntos no hay nada que renderizar: se corta acá para no pisar el
+      // banner de error/estado vacío que ya dejó el servidor en la lista.
+      if (rawPoints.length === 0) return;
+
       const barrioSelect = document.getElementById('barrio-select') as HTMLSelectElement;
       const searchInput = document.getElementById('address-search-input') as HTMLInputElement;
       const listContainer = document.getElementById('points-list-container');
@@ -307,6 +317,13 @@ const POPULAR_BARRIOS = ['Todos', 'Belgrano', 'Palermo', 'Recoleta', 'Caballito'
       const barrioChips = document.querySelectorAll('.barrio-chip');
 
       if (!mapEl || typeof L === 'undefined') return;
+
+      // Escape para interpolar datos de los puntos (los carga cada canillita)
+      // dentro de innerHTML sin riesgo de XSS.
+      const esc = (s: unknown): string =>
+        String(s ?? '').replace(/[&<>"']/g, (c) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string
+        );
 
       const map = L.map('map', { zoomControl: true }).setView([-34.5878, -58.4116], 12);
 
@@ -380,22 +397,22 @@ const POPULAR_BARRIOS = ['Todos', 'Belgrano', 'Palermo', 'Recoleta', 'Caballito'
           card.innerHTML = `
             <div class="space-y-2 text-left">
               <div class="flex items-center justify-between gap-2">
-                <h3 class="font-bold text-slate-900 text-sm leading-snug">${point.nombre}</h3>
+                <h3 class="font-bold text-slate-900 text-sm leading-snug">${esc(point.nombre)}</h3>
                 <span class="px-2 py-0.5 bg-[#E2EFE4] text-[#2D5A27] text-[10px] font-extrabold rounded-full shrink-0">
-                  ${point.localidad}
+                  ${esc(point.localidad)}
                 </span>
               </div>
               <div class="flex items-start gap-2 text-xs text-slate-600 font-medium">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[#2D5A27] shrink-0 mt-0.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                <span>${point.direccion}, ${point.localidad}</span>
+                <span>${esc(point.direccion)}, ${esc(point.localidad)}</span>
               </div>
               <div class="flex items-start gap-2 text-xs text-slate-500 font-medium pb-1">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[#2D5A27] shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                <span>${point.horarios || 'Lunes a Sábado - 9 a 20hs'}</span>
+                <span>${esc(point.horarios || 'Lunes a Sábado - 9 a 20hs')}</span>
               </div>
             </div>
             ${isSelected ? `
-              <button class="w-full mt-3 bg-[#2D5A27] text-white font-bold py-2.5 rounded-lg text-sm hover:bg-[#23471F] transition-colors" data-confirm-id="${point.id}">
+              <button class="w-full mt-3 bg-[#2D5A27] text-white font-bold py-2.5 rounded-lg text-sm hover:bg-[#23471F] transition-colors" data-confirm-id="${esc(point.id)}">
                 Retirar en este punto
               </button>
             ` : ''}

@@ -414,7 +414,10 @@ export async function sendOrderStatusNotificationEmail(
     const fromEmail = settings.smtp_from || env('SMTP_FROM') || `UrbanPoint <${settings.smtp_user}>`;
     const orderNum = order.numero || order.$id.substring(0, 6);
 
-    const isReadyForPickup = order.estado === 'listo_para_retirar';
+    // 'en_punto' es el estado canónico (ver orderStates.ts); el viejo
+    // 'listo_para_retirar' no existe, así que este mail nunca salía con el
+    // formato de retiro ni el código.
+    const isReadyForPickup = order.estado === 'en_punto' || order.estado === 'listo_para_retirar';
     const subject = isReadyForPickup
       ? `🛍️ ¡Tu pedido #${orderNum} está listo para retirar!`
       : `🚚 Tu pedido #${orderNum} cambió a estado: ${order.estado}`;

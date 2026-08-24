@@ -4,6 +4,7 @@ import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { ShoppingCart, Clock, PackageCheck, CheckCircle2, Store, Truck } from 'lucide-react';
 import Pagination from '../../../components/admin/Pagination.astro';
+import { ETIQUETAS, normalizarEstadoPedido, type EstadoPedido } from '../../../lib/orderStates';
 
 export const prerender = false;
 
@@ -21,9 +22,17 @@ let pagedOrders = [];
 
 try {
 	const [resOrders, resProfiles, resPoints] = await Promise.all([
+		// Con 200 pedidos los contadores de pestañas y el badge de "totales"
+		// mentían apenas la tienda pasaba ese volumen. Se suben a 1000 pero
+		// pidiendo sólo los campos que la tabla usa, para no inflar el payload.
 		databases.listDocuments('urbanpoint', 'orders', [
+			Query.select([
+				'numero', 'estado', 'fulfillment', 'total', 'customer_id',
+				'pickup_point_id', 'canillita_id', 'comision_total_centavos',
+				'pickup_code_hash', '$createdAt'
+			]),
 			Query.orderDesc('$createdAt'),
-			Query.limit(200)
+			Query.limit(1000)
 		]),
 		databases.listDocuments('urbanpoint', 'profiles', [
 			Query.limit(200)
@@ -69,15 +78,12 @@ try {
 
 	let filtered = [...allOrders];
 
+	// Los filtros agrupan SOLO estados canónicos (los del enum de orders):
+	// los alias muertos (listo, en_transito, enviado, preparado, confirmado,
+	// nuevo, etc.) no existen en la base y sólo ensuciaban la lógica.
 	if (estadoFilter && estadoFilter !== 'todos') {
-		if (estadoFilter === 'pendiente_pago') {
-			filtered = filtered.filter(o => o.estado === 'pendiente_pago' || o.estado === 'pendiente' || o.estado === 'nuevo');
-		} else if (estadoFilter === 'pagado') {
-			filtered = filtered.filter(o => o.estado === 'pagado' || o.estado === 'confirmado');
-		} else if (estadoFilter === 'preparando') {
-			filtered = filtered.filter(o => o.estado === 'preparando' || o.estado === 'preparado');
-		} else if (estadoFilter === 'despachado') {
-			filtered = filtered.filter(o => o.estado === 'despachado' || o.estado === 'en_camino' || o.estado === 'en_transito' || o.estado === 'enviado' || o.estado === 'en_punto' || o.estado === 'listo' || o.estado === 'listo_retiro');
+		if (estadoFilter === 'despachado') {
+			filtered = filtered.filter(o => o.estado === 'despachado' || o.estado === 'en_punto');
 		} else if (estadoFilter === 'entregado') {
 			filtered = filtered.filter(o => o.estado === 'entregado' || o.estado === 'retirado');
 		} else if (estadoFilter === 'cancelado') {
@@ -115,42 +121,37 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 
 const counts = {
 	todos: allOrders.length,
-	pendiente_pago: allOrders.filter(o => o.estado === 'pendiente_pago' || o.estado === 'pendiente' || o.estado === 'nuevo').length,
-	pagado: allOrders.filter(o => o.estado === 'pagado' || o.estado === 'confirmado').length,
-	preparando: allOrders.filter(o => o.estado === 'preparando' || o.estado === 'preparado').length,
-	despachado: allOrders.filter(o => o.estado === 'despachado' || o.estado === 'en_camino' || o.estado === 'en_transito' || o.estado === 'enviado' || o.estado === 'en_punto' || o.estado === 'listo' || o.estado === 'listo_retiro').length,
+	pendiente_pago: allOrders.filter(o => o.estado === 'pendiente_pago').length,
+	pagado: allOrders.filter(o => o.estado === 'pagado').length,
+	preparando: allOrders.filter(o => o.estado === 'preparando').length,
+	despachado: allOrders.filter(o => o.estado === 'despachado' || o.estado === 'en_punto').length,
 	entregado: allOrders.filter(o => o.estado === 'entregado' || o.estado === 'retirado').length,
 	cancelado: allOrders.filter(o => o.estado === 'cancelado' || o.estado === 'reembolsado').length
 };
 
+// Etiquetas y colores derivados de la máquina de estados canónica: la versión
+// casera de esta página no conocía en_punto, retirado ni reembolsado y esos
+// pedidos aparecían con el estado crudo sin color.
+const CLASES_ESTADO: Record<EstadoPedido, string> = {
+	pendiente_pago: 'bg-amber-50 text-amber-700 border-amber-200',
+	pagado: 'bg-blue-50 text-blue-700 border-blue-200',
+	preparando: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+	despachado: 'bg-purple-50 text-purple-700 border-purple-200',
+	en_punto: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+	entregado: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+	retirado: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+	cancelado: 'bg-rose-50 text-rose-700 border-rose-200',
+	reembolsado: 'bg-rose-50 text-rose-700 border-rose-200'
+};
+
 const getStatusLabel = (estado: string) => {
-	switch(estado) {
-		case 'pendiente':
-		case 'pendiente_pago': return 'Pago Pendiente';
-		case 'pagado': return 'A Preparar';
-		case 'preparando':
-		case 'preparado': return 'En Preparación';
-		case 'despachado':
-		case 'en_camino': return 'Despachado / Listo';
-		case 'entregado': return 'Entregado';
-		case 'cancelado': return 'Cancelado';
-		default: return estado;
-	}
+	const canonico = normalizarEstadoPedido(estado);
+	return canonico ? ETIQUETAS[canonico] : estado;
 };
 
 const getStatusClass = (estado: string) => {
-	switch(estado) {
-		case 'pendiente':
-		case 'pendiente_pago': return 'bg-amber-50 text-amber-700 border-amber-200';
-		case 'pagado': return 'bg-blue-50 text-blue-700 border-blue-200';
-		case 'preparando':
-		case 'preparado': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-		case 'despachado':
-		case 'en_camino': return 'bg-purple-50 text-purple-700 border-purple-200';
-		case 'entregado': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-		case 'cancelado': return 'bg-rose-50 text-rose-700 border-rose-200';
-		default: return 'bg-slate-50 text-slate-700 border-slate-200';
-	}
+	const canonico = normalizarEstadoPedido(estado);
+	return canonico ? CLASES_ESTADO[canonico] : 'bg-slate-50 text-slate-700 border-slate-200';
 };
 ---
 
@@ -166,7 +167,7 @@ const getStatusClass = (estado: string) => {
 				<h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
 					Gestión de Pedidos
 					<span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-						{allOrders.length} totales
+						{allOrders.length >= 1000 ? `últimos ${allOrders.length}` : `${allOrders.length} totales`}
 					</span>
 				</h1>
 			</div>

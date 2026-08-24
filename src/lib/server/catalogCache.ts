@@ -59,7 +59,14 @@ export const getCachedCatalog = async () => {
         direccion: p.direccion,
         localidad: p.localidad,
         provincia: p.provincia,
-        horarios: p.horarios
+        horarios: p.horarios,
+        // Campos que necesitan /puntos-de-retiro y /checkout/retiro para el
+        // mapa y el contacto: así esas páginas pueden leer del caché en vez
+        // de paginar pickup_points en cada request.
+        lat: p.lat,
+        lng: p.lng,
+        slug: p.slug || '',
+        telefono: p.telefono || ''
       }));
 
     cache.lastFetch = now;

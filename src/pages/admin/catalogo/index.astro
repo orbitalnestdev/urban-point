@@ -14,8 +14,13 @@ import { buildCategoryTree, getCategoryDisplayName } from '../../../lib/server/c
 export const prerender = false;
 
 const searchQuery = Astro.url.searchParams.get('q') || '';
-const estadoFilter = Astro.url.searchParams.get('estado') || '';
+// Default 'todos' (no ''): la pestaña "Todos" tiene id 'todos' y con el
+// default vacío ninguna pestaña quedaba marcada como activa al entrar.
+const estadoFilter = Astro.url.searchParams.get('estado') || 'todos';
 const categoriaFilter = Astro.url.searchParams.get('categoria') || '';
+// stock=sin_stock: filtro real para la card "Publicados sin stock", que antes
+// linkeaba a ?estado=activo y mostraba también los productos CON stock.
+const stockFilter = Astro.url.searchParams.get('stock') || '';
 const minPrice = Astro.url.searchParams.get('precioMin') || '';
 const maxPrice = Astro.url.searchParams.get('precioMax') || '';
 const soloBorradores = Astro.url.searchParams.get('borradores') === 'true';
@@ -67,21 +72,23 @@ if (searchQuery.trim()) {
 		const sku = String(p.sku || '').toLowerCase();
 		const skuClean = sku.replace(/[^a-z0-9]/g, '');
 		const desc = String(p.descripcion || '').toLowerCase();
-		
-		return nombre.includes(qRaw) || 
-			   sku.includes(qRaw) || 
+
+		return nombre.includes(qRaw) ||
+			   sku.includes(qRaw) ||
 			   (qClean.length > 0 && skuClean.includes(qClean)) ||
 			   desc.includes(qRaw);
 	});
+}
 
-	if (estadoFilter && estadoFilter !== 'todos') {
-		const inState = filteredProducts.filter(p => p.estado === estadoFilter);
-		if (inState.length > 0) {
-			filteredProducts = inState;
-		}
-	}
-} else if (estadoFilter && estadoFilter !== 'todos') {
+// Búsqueda y estado siempre se intersectan. Antes, con búsqueda activa, el
+// filtro de estado se ignoraba en silencio si no había coincidencias: la
+// pestaña "Borradores" podía mostrar productos publicados sin ningún aviso.
+if (estadoFilter && estadoFilter !== 'todos') {
 	filteredProducts = filteredProducts.filter(p => p.estado === estadoFilter);
+}
+
+if (stockFilter === 'sin_stock') {
+	filteredProducts = filteredProducts.filter(p => (p.stock || 0) === 0);
 }
 
 if (categoriaFilter && categoriaFilter !== 'todos') {
@@ -143,6 +150,15 @@ const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
 function getPageUrl(targetPage: number) {
 	const params = new URLSearchParams(Astro.url.searchParams);
 	params.set('page', targetPage.toString());
+	return `/admin/catalogo?${params.toString()}`;
+}
+
+// URL de cada pestaña de estado preservando el resto de los filtros activos
+// (categoría, precios, búsqueda...): antes cambiar de pestaña los descartaba.
+function getTabUrl(estadoId: string) {
+	const params = new URLSearchParams(Astro.url.searchParams);
+	params.set('estado', estadoId);
+	params.delete('page'); // cambiar de pestaña vuelve a la primera página
 	return `/admin/catalogo?${params.toString()}`;
 }
 
@@ -222,7 +238,7 @@ const paginationItems = filteredPages.map((p, index) => ({
 				)}
 
 				{numSinStock > 0 && (
-					<div class="bg-rose-50/70 border border-rose-200 p-4 rounded-2xl relative cursor-pointer hover:shadow-md transition-all" onclick="window.location.href='/admin/catalogo?estado=activo'">
+					<div class="bg-rose-50/70 border border-rose-200 p-4 rounded-2xl relative cursor-pointer hover:shadow-md transition-all" onclick="window.location.href='/admin/catalogo?estado=activo&stock=sin_stock'">
 						<p class="absolute top-4 right-4 text-3xl font-black text-rose-700">{numSinStock}</p>
 						<div class="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mb-2 font-bold"><AlertTriangle className="w-4 h-4" /></div>
 						<h3 class="font-extrabold text-slate-900 text-sm">Publicados sin stock</h3>
@@ -301,8 +317,8 @@ const paginationItems = filteredPages.map((p, index) => ({
 						{ id: 'pausado', label: 'Pausados', count: pausados },
 						{ id: 'borrador', label: 'Borradores', count: numBorradores }
 					].map(tab => (
-						<a 
-							href={`/admin/catalogo?estado=${tab.id}${searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ''}`}
+						<a
+							href={getTabUrl(tab.id)}
 							class={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
 								estadoFilter === tab.id 
 									? 'bg-slate-900 text-white shadow-sm' 

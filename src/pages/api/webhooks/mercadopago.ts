@@ -8,8 +8,10 @@ import { sendOrderNotificationEmails } from '../../../lib/server/mailer';
 import {
 	resolverComisiones,
 	cancelarOrdenYRestaurarStock,
-	revertirComisiones
+	revertirComisiones,
+	restaurarStockDeOrden
 } from '../../../lib/commissions';
+import { obtenerTokenPlataformaValido } from '../../../lib/server/mercadopagoOAuth';
 
 
 export const prerender = false;
@@ -45,7 +47,13 @@ function firmaValida(request: Request, dataId: string, secret: string): boolean 
 	const edadSegundos = Math.abs(Date.now() / 1000 - Number(ts));
 	if (!Number.isFinite(edadSegundos) || edadSegundos > 300) return false;
 
-	const manifiesto = `id:${dataId};request-id:${requestId ?? ''};ts:${ts};`;
+	// Según la especificación de MP, cada segmento del manifiesto se incluye
+	// sólo si su valor existe, y data.id alfanumérico va en minúsculas.
+	// Con `request-id:;` fijo, la firma nunca validaba cuando faltaba el header.
+	let manifiesto = '';
+	if (dataId) manifiesto += `id:${dataId.toLowerCase()};`;
+	if (requestId) manifiesto += `request-id:${requestId};`;
+	manifiesto += `ts:${ts};`;
 	const esperado = crypto.createHmac('sha256', secret).update(manifiesto).digest('hex');
 
 	const a = Buffer.from(esperado, 'utf8');
@@ -80,9 +88,12 @@ export const POST: APIRoute = async ({ request }) => {
 			return new Response('Firma inválida', { status: 401 });
 		}
 
-		const mpToken = env('MP_ACCESS_TOKEN');
+		// Mismo token con el que se creó la preferencia (OAuth de plataforma si
+		// está vinculado, si no MP_ACCESS_TOKEN): consultar el pago con un token
+		// de otra cuenta hacía fallar Payment.get y el pedido nunca se acreditaba.
+		const mpToken = await obtenerTokenPlataformaValido();
 		if (!mpToken) {
-			console.error('MP_ACCESS_TOKEN no configurado: no se puede consultar el pago.');
+			console.error('Token de Mercado Pago no configurado: no se puede consultar el pago.');
 			return new Response('Pasarela no configurada', { status: 503 });
 		}
 
@@ -95,7 +106,12 @@ export const POST: APIRoute = async ({ request }) => {
 			return new Response('OK', { status: 200 });
 		}
 
-		await aplicarEstadoDePago(orderId, paymentData.status ?? '', String(paymentId));
+		await aplicarEstadoDePago(
+			orderId,
+			paymentData.status ?? '',
+			String(paymentId),
+			paymentData.transaction_amount ?? null
+		);
 		return new Response('OK', { status: 200 });
 	} catch (error: any) {
 		console.error('Webhook Error:', error);
@@ -110,7 +126,12 @@ export const POST: APIRoute = async ({ request }) => {
  * MP reintenta los webhooks y puede entregarlos fuera de orden, así que
  * reprocesar el mismo evento no puede duplicar el pedido ni la comisión.
  */
-async function aplicarEstadoDePago(orderId: string, mpStatus: string, paymentId: string) {
+async function aplicarEstadoDePago(
+	orderId: string,
+	mpStatus: string,
+	paymentId: string,
+	transactionAmountPesos: number | null = null
+) {
 	const order = await db.getDocument('urbanpoint', 'orders', orderId);
 
 	switch (mpStatus) {
@@ -119,6 +140,23 @@ async function aplicarEstadoDePago(orderId: string, mpStatus: string, paymentId:
 				console.log(`Orden ${orderId} ya estaba en "${order.estado}": no se reprocesa.`);
 				return;
 			}
+
+			// Verificar el importe: sin este control un pago parcial (o de otra
+			// preferencia) se aceptaba como pago completo del pedido.
+			if (transactionAmountPesos !== null && order.total) {
+				const pagadoCentavos = Math.round(transactionAmountPesos * 100);
+				if (pagadoCentavos < order.total) {
+					console.error(
+						`Pago ${paymentId} por ${pagadoCentavos} centavos no cubre el total ${order.total} de la orden ${orderId}: no se acredita.`
+					);
+					await db.updateDocument('urbanpoint', 'orders', orderId, {
+						mp_payment_id: paymentId,
+						mp_status: `monto_insuficiente:${mpStatus}`
+					}).catch(() => {});
+					return;
+				}
+			}
+
 			await db.updateDocument('urbanpoint', 'orders', orderId, {
 				estado: 'pagado',
 				paid_at: new Date().toISOString(),
@@ -139,8 +177,18 @@ async function aplicarEstadoDePago(orderId: string, mpStatus: string, paymentId:
 					precio_unitario: it.precio_unitario,
 					subtotal: it.subtotal
 				}));
+				// Los atributos customer_email/guest_email no se escriben nunca:
+				// el email real del cliente sale de su profile (customer_id).
 				let customerEmail = order.customer_email || order.guest_email;
 				let customerName = order.customer_name || order.guest_name;
+				const custId = typeof order.customer_id === 'string' ? order.customer_id : order.customer_id?.$id;
+				if (!customerEmail && custId) {
+					const custProf: any = await db.getDocument('urbanpoint', 'profiles', custId).catch(() => null);
+					if (custProf) {
+						customerEmail = custProf.email || '';
+						customerName = customerName || custProf.nombre || '';
+					}
+				}
 				let canillitaEmail = '';
 				let canillitaNombre = '';
 				let pickupNodeName = '';
@@ -185,6 +233,8 @@ async function aplicarEstadoDePago(orderId: string, mpStatus: string, paymentId:
 			if (order.estado === 'reembolsado') return;
 			// La comisión se devengó contra un cobro que ya no existe.
 			await revertirComisiones(orderId, `Reversa por reembolso del pago ${paymentId}`);
+			// El stock descontado al acreditarse el pago también tiene que volver.
+			await restaurarStockDeOrden(orderId);
 			await db.updateDocument('urbanpoint', 'orders', orderId, {
 				estado: 'reembolsado',
 				mp_payment_id: paymentId,

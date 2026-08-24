@@ -13,6 +13,72 @@ interface CachedSession {
 }
 const sessionAuthCache = new Map<string, CachedSession>();
 const SESSION_CACHE_TTL_MS = 60 * 1000; // 60 segundos
+const SESSION_CACHE_MAX = 500; // tope para que el Map no crezca sin límite
+
+/**
+ * Invalida la entrada cacheada de una sesión. Los endpoints de logout la
+ * llaman para que un secreto revocado no siga siendo aceptado hasta 60 s.
+ */
+export function invalidateSessionCache(secret?: string | null) {
+	if (secret) sessionAuthCache.delete(secret);
+}
+
+function cacheSession(secret: string, user: any, profile: any) {
+	if (sessionAuthCache.size >= SESSION_CACHE_MAX) {
+		// Se descarta la entrada más vieja (orden de inserción del Map).
+		const oldest = sessionAuthCache.keys().next().value;
+		if (oldest) sessionAuthCache.delete(oldest);
+	}
+	sessionAuthCache.set(secret, { user, profile, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
+}
+
+/**
+ * Sesiones simuladas de desarrollo (ver /api/dev/switch-user).
+ * Formatos aceptados, SOLO en dev:
+ *   dev_mock_admin_session            → legado, equivale a rol admin
+ *   dev_mock_session:<rol>            → usuario sintético con ese rol
+ *   dev_mock_session:profile:<id>     → impersonar un profile real por $id
+ */
+async function resolveDevMockSession(sessionSecret: string): Promise<{ user: any; profile: any } | null> {
+	if (!import.meta.env.DEV) return null;
+
+	let role: string | null = null;
+	let profileId: string | null = null;
+
+	if (sessionSecret === 'dev_mock_admin_session') {
+		role = 'admin';
+	} else if (sessionSecret.startsWith('dev_mock_session:')) {
+		const parts = sessionSecret.split(':');
+		if (parts[1] === 'profile' && parts[2]) profileId = parts[2];
+		else if (['admin', 'gestion', 'canillita', 'cliente'].includes(parts[1])) role = parts[1];
+	}
+
+	if (profileId) {
+		const { databases } = createAdminClient();
+		const profile = await databases.getDocument('urbanpoint', 'profiles', profileId);
+		return {
+			user: { $id: profile.user_id || `dev-user-${profile.$id}`, email: profile.email || '' },
+			profile
+		};
+	}
+
+	if (role) {
+		// Perfil sintético: no toca la base, sirve para probar rutas y permisos
+		// aunque no haya APPWRITE_API_KEY configurada localmente.
+		return {
+			user: { $id: `dev-user-${role}`, email: `dev-${role}@urbanpoint.test` },
+			profile: {
+				$id: `dev-profile-${role}`,
+				user_id: `dev-user-${role}`,
+				role,
+				nombre: `Dev ${role.charAt(0).toUpperCase()}${role.slice(1)}`,
+				email: `dev-${role}@urbanpoint.test`
+			}
+		};
+	}
+
+	return null;
+}
 
 export const onRequest = defineMiddleware(async (context, next) => {
 	const { pathname } = context.url;
@@ -43,13 +109,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
 		let profile: any;
 
 		const cached = sessionAuthCache.get(sessionSecret);
-		if (cached && cached.expiresAt > Date.now()) {
-			user = cached.user;
-			profile = cached.profile;
+		const cachedValid = !!cached && cached.expiresAt > Date.now();
+		const devMock = cachedValid ? null : await resolveDevMockSession(sessionSecret).catch(() => null);
+		if (cachedValid) {
+			user = cached!.user;
+			profile = cached!.profile;
+		} else if (devMock) {
+			user = devMock.user;
+			profile = devMock.profile;
+			cacheSession(sessionSecret, user, profile);
 		} else {
-			if (import.meta.env.DEV && sessionSecret === 'dev_mock_admin_session') {
-				user = { $id: '6a6b75790014f4940f25', email: 'azcurraely@gmail.com' };
-			} else {
+			{
 				const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || DEFAULT_ENDPOINT;
 				const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || DEFAULT_PROJECT_ID;
 
@@ -58,11 +128,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
 					.setProject(projectId)
 					.setSession(sessionSecret)
 					.addHeader('X-Fallback-Cookies', `a_session_${projectId}=${sessionSecret}`);
-				
+
 				const account = new Account(authClient);
 				user = await account.get();
 			}
-			
+
 			const { databases } = createAdminClient();
 			let profiles = await databases.listDocuments('urbanpoint', 'profiles', [
 				Query.equal('user_id', user.$id)
@@ -86,11 +156,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 			}
 			
 			profile = profiles.documents[0];
-			sessionAuthCache.set(sessionSecret, {
-				user,
-				profile,
-				expiresAt: Date.now() + SESSION_CACHE_TTL_MS
-			});
+			cacheSession(sessionSecret, user, profile);
 		}
 
 		
@@ -142,7 +208,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
 		console.error("Middleware Auth Error:", error);
 		if (sessionSecret) sessionAuthCache.delete(sessionSecret);
 		context.cookies.delete('up_session', { path: '/' });
-		return context.redirect(pathname.startsWith('/canillita') ? '/canillita/login' : '/login');
+		// Sólo se fuerza el login en rutas protegidas; en páginas públicas una
+		// sesión vencida no debe expulsar al visitante de la tienda.
+		if (isProtectedPage) {
+			return context.redirect(pathname.startsWith('/canillita') ? '/canillita/login' : '/login');
+		}
+		return next();
 	}
 });
 

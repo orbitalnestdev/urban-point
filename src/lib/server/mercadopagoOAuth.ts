@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
+import { Query } from 'node-appwrite';
 import { createAdminClient } from './appwrite';
 import { env } from './env';
-import { getSiteSettings, saveSiteSetting } from './settings';
+import { saveSiteSetting } from './settings';
 
 export interface MPOAuthTokens {
 	access_token: string;
@@ -22,7 +23,14 @@ export interface MPStatePayload {
 }
 
 function getSecretKey(): string {
-	const secret = env('ORDER_ACCESS_SECRET') || env('APPWRITE_API_KEY') || 'mp-oauth-fallback-secret';
+	const secret = env('ORDER_ACCESS_SECRET') || env('APPWRITE_API_KEY');
+	if (!secret) {
+		// Con el viejo fallback constante ('mp-oauth-fallback-secret') el state
+		// HMAC era forjable por cualquiera: CSRF sobre la vinculación de MP.
+		throw new Error(
+			'ORDER_ACCESS_SECRET o APPWRITE_API_KEY deben estar configuradas para firmar el state OAuth.'
+		);
+	}
 	return secret;
 }
 
@@ -182,10 +190,20 @@ export async function refrescarTokenMP(refreshToken: string): Promise<MPOAuthTok
  */
 export async function obtenerTokenPlataformaValido(): Promise<string | null> {
 	try {
-		const settings = await getSiteSettings();
-		const settingsMap = settings as unknown as Record<string, any>;
+		// Se leen las claves crudas de la colección: getSiteSettings() devuelve
+		// un objeto tipado cerrado que NO incluye mp_status / mp_refresh_token /
+		// mp_token_expires_at, así que la rama OAuth nunca se ejecutaba y la
+		// vinculación de Mercado Pago no tenía ningún efecto.
+		const { databases } = createAdminClient();
+		const docs = await databases.listDocuments('urbanpoint', 'settings', [
+			Query.equal('key', ['mp_status', 'mp_access_token', 'mp_refresh_token', 'mp_token_expires_at']),
+			Query.limit(10)
+		]);
+		const settingsMap: Record<string, any> = {};
+		for (const doc of docs.documents) settingsMap[doc.key] = doc.value;
+
 		const mpStatus = settingsMap.mp_status;
-		const mpAccessToken = settingsMap.mp_access_token || settings.mp_access_token;
+		const mpAccessToken = settingsMap.mp_access_token;
 		const mpRefreshToken = settingsMap.mp_refresh_token;
 		const mpExpiresAtStr = settingsMap.mp_token_expires_at;
 

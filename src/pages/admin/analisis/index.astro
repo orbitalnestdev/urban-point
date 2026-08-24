@@ -14,16 +14,18 @@ let pickupPoints: any[] = [];
 let categories: any[] = [];
 
 try {
-	const resOrders = await databases.listDocuments('urbanpoint', 'orders', [
-		Query.orderDesc('$createdAt'),
-		Query.limit(500)
+	// Las tres queries son independientes: correrlas en serie triplicaba la
+	// latencia de la página sin necesidad.
+	const [resOrders, resPoints, resCats] = await Promise.all([
+		databases.listDocuments('urbanpoint', 'orders', [
+			Query.orderDesc('$createdAt'),
+			Query.limit(500)
+		]),
+		databases.listDocuments('urbanpoint', 'pickup_points', [Query.limit(100)]),
+		databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)])
 	]);
 	orders = resOrders.documents.filter(o => o.estado !== 'cancelado');
-
-	const resPoints = await databases.listDocuments('urbanpoint', 'pickup_points');
 	pickupPoints = resPoints.documents;
-
-	const resCats = await databases.listDocuments('urbanpoint', 'categories');
 	categories = resCats.documents;
 } catch (e) {
 	console.error("Analysis Error:", e);
@@ -59,10 +61,15 @@ for (const pt of pickupPoints) {
 
 for (const o of retiroOrders) {
 	const ptId = typeof o.pickup_point_id === 'string' ? o.pickup_point_id : o.pickup_point_id?.$id;
-	if (ptId && pointSalesMap[ptId]) {
-		pointSalesMap[ptId].ventasCentavos += (o.total || 0);
-		pointSalesMap[ptId].pedidosCount += 1;
+	if (!ptId) continue;
+	// Si el punto no vino en la lista inicial (o la relación viene expandida con
+	// otro id), igual lo sumamos: antes esas ventas se descartaban en silencio.
+	if (!pointSalesMap[ptId]) {
+		const nombreExpandido = typeof o.pickup_point_id === 'object' ? o.pickup_point_id?.nombre_comercial : null;
+		pointSalesMap[ptId] = { nombre: nombreExpandido || 'Punto sin datos', ventasCentavos: 0, pedidosCount: 0 };
 	}
+	pointSalesMap[ptId].ventasCentavos += (o.total || 0);
+	pointSalesMap[ptId].pedidosCount += 1;
 }
 
 const pointRanking = Object.values(pointSalesMap)

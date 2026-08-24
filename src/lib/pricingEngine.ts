@@ -69,9 +69,15 @@ export function resolveLevelMarkupPercent(
 	const mode = (product?.[`${levelKey}_mode`] as LevelMode) || 'inherit';
 
 	if (mode === 'percent') {
-		const productPercent = Number(product?.[`${levelKey}_percent`]);
-		if (Number.isFinite(productPercent)) {
-			return productPercent;
+		// Number(null) === 0: sin este guard, un producto en modo 'percent' con
+		// el porcentaje sin cargar quedaba con 0% de markup (venta = costo) en
+		// lugar de caer a la regla de categoría o al default global.
+		const rawPercent = product?.[`${levelKey}_percent`];
+		if (rawPercent !== undefined && rawPercent !== null && rawPercent !== '') {
+			const productPercent = Number(rawPercent);
+			if (Number.isFinite(productPercent)) {
+				return productPercent;
+			}
 		}
 	}
 
@@ -113,15 +119,12 @@ export function calculateLevelPriceCentavos(
 		const fixedPriceVal = product?.[`${levelKey}_fixed_price`] ?? product?.[`precio_${levelKey}`];
 		const fixedCentavos = Number(fixedPriceVal);
 		if (Number.isFinite(fixedCentavos) && fixedCentavos >= 0) {
-			const rounded = applyRoundingCentavos(
-				fixedCentavos,
-				settings?.round_to ?? 0,
-				settings?.round_mode ?? 'nearest'
-			);
+			// Un precio fijo es una decisión explícita del admin: no se le aplica
+			// la regla de redondeo global (que sí corresponde a los calculados).
 			return {
 				mode: 'fixed',
 				exactCentavos: fixedCentavos,
-				roundedCentavos: rounded,
+				roundedCentavos: Math.round(fixedCentavos),
 				appliedPercent: null
 			};
 		}
@@ -218,7 +221,16 @@ export function resolveProductPriceForUser(
 
 	// Fallback to public price
 	const pPub = Number(product?.price_publico ?? product?.precio);
-	const unitPriceCentavos = Number.isFinite(pPub) && pPub > 0 ? Math.round(pPub) : 0;
+	let unitPriceCentavos = Number.isFinite(pPub) && pPub > 0 ? Math.round(pPub) : 0;
+
+	// La vitrina muestra el precio promocional (ver precioDeVentaCentavos en
+	// pricing.ts): el checkout tiene que cobrar ese mismo número. Sin esto se
+	// mostraba la promo pero se cobraba el precio de lista.
+	const promo = Number(product?.precio_promocional);
+	if (Number.isFinite(promo) && promo > 0 && Math.round(promo) < unitPriceCentavos) {
+		unitPriceCentavos = Math.round(promo);
+	}
+
 	return { unitPriceCentavos, appliedLevel: 'publico' };
 }
 
@@ -236,6 +248,12 @@ export function sanitizeProductForUser(product: any, userRole?: string | null): 
 	copy.precio = unitPriceCentavos;
 	copy.price_publico = unitPriceCentavos;
 	copy.applied_level = appliedLevel;
+
+	// La promo es sólo del nivel público. Dejarla en un producto ya resuelto a
+	// precio canillita/distribuidor generaba promos fantasma (se comparaba una
+	// promo pública contra el precio de otro nivel). Para el nivel público
+	// también se limpia: unitPriceCentavos ya la tiene aplicada.
+	delete copy.precio_promocional;
 
 	// Remover información confidencial/privada si no es admin o gestión
 	const role = userRole?.toLowerCase();

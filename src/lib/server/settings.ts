@@ -118,7 +118,33 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     analytics_pixel_code: ''
 };
 
+/**
+ * Caché en memoria de settings. Footer y FloatingWhatsApp llaman a
+ * getSiteSettings() en cada render de página pública: sin caché eso eran dos
+ * consultas idénticas a Appwrite por vista. Se cachea la promesa (deduplica
+ * llamadas concurrentes del mismo render) con TTL corto, y saveSiteSetting()
+ * invalida para que el panel de configuración vea sus cambios al instante.
+ */
+let settingsCachePromise: Promise<SiteSettings> | null = null;
+let settingsCacheAt = 0;
+const SETTINGS_CACHE_TTL_MS = 60 * 1000;
+
+export function invalidateSettingsCache(): void {
+    settingsCachePromise = null;
+    settingsCacheAt = 0;
+}
+
 export async function getSiteSettings(): Promise<SiteSettings> {
+    const now = Date.now();
+    if (settingsCachePromise && now - settingsCacheAt < SETTINGS_CACHE_TTL_MS) {
+        return settingsCachePromise;
+    }
+    settingsCacheAt = now;
+    settingsCachePromise = fetchSiteSettings();
+    return settingsCachePromise;
+}
+
+async function fetchSiteSettings(): Promise<SiteSettings> {
     try {
         const { databases } = createAdminClient();
         const docs = await databases.listDocuments('urbanpoint', 'settings', [Query.limit(100)]);
@@ -189,6 +215,8 @@ export async function getSiteSettings(): Promise<SiteSettings> {
         // Un fallo de backend no puede quedar mudo: devolver los defaults sin
         // avisar hace que un incidente se vea igual que una tienda configurada.
         console.error('No se pudo leer la colección settings, se usan los valores por defecto:', error);
+        // No se cachea el error: el próximo request reintenta contra la base.
+        invalidateSettingsCache();
         return DEFAULT_SETTINGS;
     }
 }
@@ -217,6 +245,7 @@ export async function getClavesConfiguradas(): Promise<Set<string>> {
 export async function saveSiteSetting(key: string, value: any): Promise<void> {
     const { databases } = createAdminClient();
     const strVal = typeof value === 'boolean' ? (value ? 'true' : 'false') : String(value);
+    invalidateSettingsCache();
 
     try {
         await databases.getDocument('urbanpoint', 'settings', key);

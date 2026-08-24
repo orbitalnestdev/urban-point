@@ -11,26 +11,19 @@ const { databases } = createAdminClient();
 let categories: any[] = [];
 let products: any[] = [];
 
-async function fetchAllDocs(coll: string) {
-	let docs: any[] = [];
-	let offset = 0;
-	while (true) {
-		const res = await databases.listDocuments('urbanpoint', coll, [
-			Query.limit(100),
-			Query.offset(offset)
-		]);
-		docs.push(...res.documents);
-		if (res.documents.length < 100) break;
-		offset += 100;
-	}
-	return docs;
-}
-
 try {
-	[categories, products] = await Promise.all([
-		fetchAllDocs('categories'),
-		fetchAllDocs('products')
+	// Para contar productos por categoría no hace falta bajar el catálogo entero
+	// con todos sus campos: con la relación `categoria_id` alcanza. Las dos
+	// queries no dependen entre sí, así que van en paralelo.
+	const [catRes, prodRes] = await Promise.all([
+		databases.listDocuments('urbanpoint', 'categories', [Query.limit(1000)]),
+		databases.listDocuments('urbanpoint', 'products', [
+			Query.select(['categoria_id']),
+			Query.limit(5000)
+		])
 	]);
+	categories = catRes.documents;
+	products = prodRes.documents;
 } catch (e) {
 	console.error('Error cargando categorías:', e);
 }

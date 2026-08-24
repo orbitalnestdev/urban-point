@@ -14,15 +14,13 @@ export const prerender = false;
 		</p>
 		
 		<div class="flex gap-4">
-			<a href="/tienda" class="bg-indigo-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/20">
+			<a href="/productos" class="bg-indigo-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/20">
 				Volver a la Tienda
 			</a>
 		</div>
 	</div>
 </Layout>
 
-<script>
-	import { clearCart } from '../../store/cart';
-	// Limpiamos el carrito local
-	clearCart();
-</script>
+{/* Acá NO se vacía el carrito: un pago pendiente puede terminar rechazado y
+    el cliente necesita reintentar con lo que ya tenía cargado. El carrito se
+    limpia recién en /checkout/success, cuando el pedido queda confirmado. */}

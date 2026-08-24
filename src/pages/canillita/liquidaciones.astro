@@ -13,37 +13,54 @@ if (!user || (user.role !== 'canillita' && user.role !== 'admin')) {
 
 const { databases: db } = createAdminClient();
 
-// Stats unificadas por función de servidor
-const stats = await getCanillitaStats(user.profileId);
-
-// Historial de payouts con sus asientos incluidos
-const payoutsRes = await db.listDocuments('urbanpoint', 'payouts', [
-  Query.equal('profile_id', user.profileId),
-  Query.orderDesc('pagado_at'),
-  Query.limit(50)
-]);
-
-const payouts = payoutsRes.documents;
-
-// Obtener asientos asignados a cada payout
-const payoutIds = payouts.map(p => p.$id);
+let stats = {
+  comisionesMesCentavos: 0,
+  totalPendienteCentavos: 0,
+  totalLiquidadoCentavos: 0,
+  ventasAtribuidasMesCount: 0,
+  entregasPendientesCount: 0
+};
+let payouts: any[] = [];
 let ledgerByPayout: Record<string, any[]> = {};
+let loadError = false;
 
-if (payoutIds.length > 0) {
-  const ledgerRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
-    Query.equal('payout_id', payoutIds),
-    Query.limit(500)
+try {
+  // Stats y payouts no dependen entre sí: en paralelo
+  const [statsRes, payoutsRes] = await Promise.all([
+    getCanillitaStats(user.profileId),
+    db.listDocuments('urbanpoint', 'payouts', [
+      Query.equal('profile_id', user.profileId),
+      Query.orderDesc('pagado_at'),
+      Query.limit(50)
+    ])
   ]);
-  for (const item of ledgerRes.documents) {
-    const pId = typeof item.payout_id === 'string' ? item.payout_id : item.payout_id?.$id;
-    if (pId) {
-      if (!ledgerByPayout[pId]) ledgerByPayout[pId] = [];
-      ledgerByPayout[pId].push(item);
+
+  stats = statsRes;
+  payouts = payoutsRes.documents;
+
+  // Obtener asientos asignados a cada payout (máx. 50 ids, no hace falta trocear)
+  const payoutIds = payouts.map(p => p.$id);
+  if (payoutIds.length > 0) {
+    const ledgerRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
+      Query.equal('payout_id', payoutIds),
+      Query.limit(500)
+    ]);
+    for (const item of ledgerRes.documents) {
+      const pId = typeof item.payout_id === 'string' ? item.payout_id : item.payout_id?.$id;
+      if (pId) {
+        if (!ledgerByPayout[pId]) ledgerByPayout[pId] = [];
+        ledgerByPayout[pId].push(item);
+      }
     }
   }
+} catch (e) {
+  // Antes cualquier falla acá tiraba un 500 crudo; mejor un banner amable.
+  console.error('Liquidaciones Canillita Error:', e);
+  loadError = true;
 }
 
-const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+// Panel financiero: los centavos importan, no se truncan.
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 ---
 
 <Layout title="Mis Cobros | Panel Canillita">
@@ -59,7 +76,15 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 
   <main class="min-h-[calc(100vh-64px)] bg-slate-50 py-10">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 space-y-8">
-      
+
+      {/* Error de carga: distinto del estado sin liquidaciones */}
+      {loadError && (
+        <div class="bg-rose-50 border border-rose-200 rounded-2xl p-5 flex items-start gap-3">
+          <svg class="w-5 h-5 text-rose-600 shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          <p class="text-sm font-bold text-rose-800">No pudimos cargar tus datos, recargá la página.</p>
+        </div>
+      )}
+
       {/* Saldo Pendiente */}
       <div class="bg-indigo-600 rounded-3xl p-8 text-white shadow-xl shadow-indigo-600/15 relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>

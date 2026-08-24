@@ -5,19 +5,20 @@ import { CheckCircle, AlertTriangle, Store, Phone, MessageSquare, Newspaper, Tru
 
 export const prerender = false;
 
-let settings = await getSiteSettings();
 let successMessage = '';
 let errorMessage = '';
 
 const mpStatusParam = Astro.url.searchParams.get('mp');
 const mpErrorParam = Astro.url.searchParams.get('mp_error');
-const settingsMap = settings as unknown as Record<string, any>;
-const isMpConnected = settingsMap.mp_status === 'conectado';
 
 if (Astro.request.method === 'POST') {
 	try {
 		const formData = await Astro.request.formData();
-		
+
+		// El form manda ~32 claves: guardarlas una por una en serie eran ~64
+		// round-trips encadenados contra Appwrite (varios segundos por submit).
+		// Se juntan todas las escrituras y se esperan de una sola vez.
+		const guardados: Promise<unknown>[] = [];
 		for (const [key, value] of formData.entries()) {
 			if (key && !key.startsWith('__')) {
 				const strVal = value.toString();
@@ -25,14 +26,11 @@ if (Astro.request.method === 'POST') {
 				if (key === 'smtp_pass' && !strVal.trim()) {
 					continue;
 				}
-				await saveSiteSetting(key, strVal);
+				guardados.push(saveSiteSetting(key, strVal));
 			}
 		}
+		await Promise.all(guardados);
 
-
-
-		// Re-fetch updated settings
-		settings = await getSiteSettings();
 		successMessage = 'Configuración guardada correctamente. Todos los cambios impactaron en la tienda.';
 	} catch (e: any) {
 		console.error("Error saving settings:", e);
@@ -40,8 +38,15 @@ if (Astro.request.method === 'POST') {
 	}
 }
 
-// Qué se está viendo realmente: valores guardados o defaults del código.
-const clavesConfiguradas = await getClavesConfiguradas();
+// Se leen DESPUÉS del POST para reflejar lo recién guardado, y en paralelo
+// porque no dependen entre sí. Qué se está viendo realmente: valores
+// guardados o defaults del código.
+const [settings, clavesConfiguradas] = await Promise.all([
+	getSiteSettings(),
+	getClavesConfiguradas()
+]);
+const settingsMap = settings as unknown as Record<string, any>;
+const isMpConnected = settingsMap.mp_status === 'conectado';
 const sinConfigurar = clavesConfiguradas.size === 0;
 ---
 

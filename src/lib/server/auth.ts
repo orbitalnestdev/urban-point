@@ -30,10 +30,52 @@ export function requireRole(ctx: { locals: App.Locals }, ...roles: UserRole[]): 
     return user;
 }
 
-export const getClientProfile = async (cookies: any) => {
-    const sessionSecret = cookies.get('up_session')?.value;
+/**
+ * Devuelve el profile del cliente logueado, o null si no hay sesión de cliente.
+ *
+ * Acepta el contexto completo (Astro o ctx de una action, con locals+cookies)
+ * o, por compatibilidad, sólo el objeto cookies. Con contexto completo reusa
+ * el usuario que el middleware ya autenticó y cacheó — evita repetir
+ * account.get() + listDocuments en cada página de /mi-cuenta — y memoiza el
+ * resultado en locals para que layout y página compartan una única consulta.
+ */
+export const getClientProfile = async (ctxOrCookies: any) => {
+    const hasCtx = !!ctxOrCookies && typeof ctxOrCookies === 'object' && 'cookies' in ctxOrCookies;
+    const cookies = hasCtx ? ctxOrCookies.cookies : ctxOrCookies;
+    const locals = hasCtx ? ctxOrCookies.locals : undefined;
+
+    const sessionUser = locals?.user as SessionUser | undefined;
+    if (sessionUser) {
+        if (sessionUser.role !== 'cliente') return null;
+
+        // Usuario sintético del switch de desarrollo: no existe en la base.
+        if (import.meta.env.DEV && sessionUser.profileId.startsWith('dev-profile-')) {
+            return {
+                $id: sessionUser.profileId,
+                user_id: sessionUser.id,
+                role: 'cliente',
+                nombre: sessionUser.name,
+                email: sessionUser.email
+            };
+        }
+
+        if (!locals.__clientProfilePromise) {
+            locals.__clientProfilePromise = (async () => {
+                try {
+                    const { databases } = createAdminClient();
+                    return await databases.getDocument('urbanpoint', 'profiles', sessionUser.profileId);
+                } catch (e) {
+                    return null;
+                }
+            })();
+        }
+        return locals.__clientProfilePromise;
+    }
+
+    // Camino legado (llamadas que sólo pasan cookies): autentica contra Appwrite.
+    const sessionSecret = cookies?.get?.('up_session')?.value;
     if (!sessionSecret) return null;
-    
+
     try {
         const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
         const projectId = process.env.PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a6a5321001439f06817';
@@ -42,19 +84,19 @@ export const getClientProfile = async (cookies: any) => {
             .setEndpoint(endpoint)
             .setProject(projectId)
             .setSession(sessionSecret);
-        
+
         const account = new Account(authClient);
         const user = await account.get();
-        
+
         const { databases } = createAdminClient();
         const profiles = await databases.listDocuments('urbanpoint', 'profiles', [
             Query.equal('user_id', user.$id)
         ]);
-        
+
         if (profiles.documents.length === 0 || profiles.documents[0].role !== 'cliente') {
             return null;
         }
-        
+
         return profiles.documents[0];
     } catch (e) {
         return null;

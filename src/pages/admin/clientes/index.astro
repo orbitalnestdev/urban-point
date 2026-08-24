@@ -32,6 +32,32 @@ async function fetchAllDocs(coll: string, baseQueries: any[] = []) {
 	return docs;
 }
 
+/**
+ * Trae los pedidos sólo con los campos que esta página usa (Query.select) y
+ * en tandas grandes por cursor. Antes se bajaba la colección ENTERA con todos
+ * sus campos, paginando de a 100 en serie: era la causa principal de la
+ * lentitud del directorio.
+ */
+async function fetchOrdersLight() {
+	const BATCH = 5000;
+	const MAX_BATCHES = 4; // tope de seguridad: 20.000 pedidos alcanzan y sobran
+	let docs: any[] = [];
+	let cursor: string | null = null;
+	for (let i = 0; i < MAX_BATCHES; i++) {
+		const queries = [
+			Query.select(['customer_id', 'total', 'estado', '$createdAt']),
+			Query.orderDesc('$createdAt'),
+			Query.limit(BATCH)
+		];
+		if (cursor) queries.push(Query.cursorAfter(cursor));
+		const res = await databases.listDocuments('urbanpoint', 'orders', queries);
+		docs.push(...res.documents);
+		if (res.documents.length < BATCH) break;
+		cursor = res.documents[res.documents.length - 1].$id;
+	}
+	return docs;
+}
+
 let currentPage = 1;
 let pageSize = 25;
 let totalFiltered = 0;
@@ -40,14 +66,16 @@ let totalPages = 1;
 try {
 	const [rawProfiles, rawOrders] = await Promise.all([
 		fetchAllDocs('profiles', [Query.notEqual('role', 'admin'), Query.orderDesc('$createdAt')]),
-		fetchAllDocs('orders')
+		fetchOrdersLight()
 	]);
 
 	const ordersByCustomer: Record<string, any[]> = {};
 	for (const o of rawOrders) {
-		if (o.customer_id) {
-			if (!ordersByCustomer[o.customer_id]) ordersByCustomer[o.customer_id] = [];
-			ordersByCustomer[o.customer_id].push(o);
+		// La relación puede venir como string plano o como documento expandido.
+		const cId = typeof o.customer_id === 'string' ? o.customer_id : o.customer_id?.$id;
+		if (cId) {
+			if (!ordersByCustomer[cId]) ordersByCustomer[cId] = [];
+			ordersByCustomer[cId].push(o);
 		}
 	}
 

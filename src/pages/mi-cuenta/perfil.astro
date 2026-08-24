@@ -5,7 +5,7 @@ import { createAdminClient } from '../../lib/server/appwrite';
 
 export const prerender = false;
 
-const profile = await getClientProfile(Astro.cookies);
+const profile = await getClientProfile(Astro);
 if (!profile) return Astro.redirect('/login');
 
 let successMsg = '';

@@ -1,0 +1,69 @@
+---
+/**
+ * Barra flotante para cambiar de usuario en DESARROLLO.
+ * En producción no renderiza nada (y el endpoint que usa responde 404).
+ */
+const isDev = import.meta.env.DEV;
+const currentUser = Astro.locals?.user ?? null;
+const currentPath = Astro.url.pathname + Astro.url.search;
+
+const roles = [
+	{ id: 'admin', label: 'Admin' },
+	{ id: 'gestion', label: 'Gestión' },
+	{ id: 'canillita', label: 'Canillita' },
+	{ id: 'cliente', label: 'Cliente' }
+];
+---
+
+{isDev && (
+	<div class="fixed bottom-3 left-3 z-[9999] font-sans text-[11px]" id="devUserSwitcher">
+		<details class="group">
+			<summary class="list-none cursor-pointer select-none inline-flex items-center gap-2 bg-slate-900/95 text-white border border-slate-700 rounded-full pl-3 pr-4 py-2 shadow-xl hover:bg-slate-800 transition-colors">
+				<span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+				<span class="font-bold uppercase tracking-wide">Dev</span>
+				<span class="text-slate-300">
+					{currentUser ? `${currentUser.name || 'Usuario'} (${currentUser.role})` : 'Visitante'}
+				</span>
+			</summary>
+			<div class="absolute bottom-full left-0 mb-2 w-56 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl p-3 space-y-2">
+				<p class="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Entrar como</p>
+				<div class="grid grid-cols-2 gap-1.5">
+					{roles.map(r => (
+						<form method="POST" action="/api/dev/switch-user">
+							<input type="hidden" name="role" value={r.id} />
+							<button
+								type="submit"
+								class:list={[
+									'w-full px-2 py-1.5 rounded-lg font-bold transition-colors border',
+									currentUser?.role === r.id
+										? 'bg-emerald-600 border-emerald-500 text-white'
+										: 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+								]}
+							>{r.label}</button>
+						</form>
+					))}
+				</div>
+				<form method="POST" action="/api/dev/switch-user" class="pt-1 border-t border-slate-700/60 space-y-1.5">
+					<label class="block text-slate-400 font-bold uppercase tracking-wider text-[10px]">Profile real ($id)</label>
+					<div class="flex gap-1.5">
+						<input
+							type="text"
+							name="profile"
+							placeholder="ID de profiles…"
+							class="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
+						/>
+						<input type="hidden" name="redirect" value={currentPath} />
+						<button type="submit" class="px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold">Ir</button>
+					</div>
+				</form>
+				<form method="POST" action="/api/dev/switch-user">
+					<input type="hidden" name="role" value="salir" />
+					<input type="hidden" name="redirect" value={currentPath} />
+					<button type="submit" class="w-full px-2 py-1.5 rounded-lg bg-rose-900/60 border border-rose-800 text-rose-200 hover:bg-rose-900 font-bold transition-colors">
+						Salir (visitante)
+					</button>
+				</form>
+			</div>
+		</details>
+	</div>
+)}

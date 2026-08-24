@@ -13,8 +13,11 @@ export const prerender = false;
 			Tuvimos un problema al procesar tu pago. Por favor, intentá con otro medio de pago o comunícate con la entidad emisora de tu tarjeta.
 		</p>
 		
-		<div class="flex gap-4">
-			<a href="/tienda" class="bg-indigo-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/20">
+		<div class="flex flex-col sm:flex-row gap-4">
+			<a href="/carrito" class="bg-indigo-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/20">
+				Reintentar pago
+			</a>
+			<a href="/productos" class="bg-white text-slate-700 border-2 border-slate-200 font-bold px-8 py-3 rounded-xl hover:border-slate-300 hover:text-slate-900 transition-colors">
 				Volver al Catálogo
 			</a>
 		</div>

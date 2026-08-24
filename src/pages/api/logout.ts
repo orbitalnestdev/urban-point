@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { Client, Account } from 'node-appwrite';
+import { invalidateSessionCache } from '../../middleware';
 
 const DEFAULT_ENDPOINT = 'https://aw.orbitalnest.net/v1';
 const DEFAULT_PROJECT_ID = '6a6a5321001439f06817';
@@ -24,6 +25,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         }
     }
     
+    invalidateSessionCache(sessionSecret);
     cookies.delete('up_session', { path: '/' });
     return redirect('/');
 };

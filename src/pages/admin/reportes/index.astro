@@ -1,13 +1,13 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import { ShoppingCart, Newspaper, CreditCard, Package } from 'lucide-react';
+import { ShoppingCart, Newspaper, CreditCard, Package, Calendar } from 'lucide-react';
 
 export const prerender = false;
 ---
 
 <AdminLayout title="Centro de Reportes">
 	<main class="p-8 max-w-[1600px] mx-auto space-y-6">
-		
+
 		<header class="flex flex-col md:flex-row md:items-center justify-between gap-4">
 			<div>
 				<div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
@@ -20,8 +20,26 @@ export const prerender = false;
 			</div>
 		</header>
 
+		{/* Filtro de rango de fechas: se agrega a la URL de cada descarga.
+		    Sin completar, el endpoint usa los últimos 30 días. */}
+		<div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-end gap-4">
+			<div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 sm:pb-2">
+				<Calendar className="w-4 h-4 text-indigo-600" />
+				Rango de Fechas
+			</div>
+			<div>
+				<label for="reporte-desde" class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Desde</label>
+				<input type="date" id="reporte-desde" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-indigo-600" />
+			</div>
+			<div>
+				<label for="reporte-hasta" class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Hasta</label>
+				<input type="date" id="reporte-hasta" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-indigo-600" />
+			</div>
+			<p class="text-[11px] text-slate-400 font-medium sm:pb-2">Si no elegís fechas, se exportan los últimos 30 días. El inventario siempre es la foto actual.</p>
+		</div>
+
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-			
+
 			{/* 1. Reporte de Ventas */}
 			<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
 				<div class="flex items-center gap-3 border-b border-slate-100 pb-3">
@@ -30,10 +48,10 @@ export const prerender = false;
 					</div>
 					<div>
 						<h3 class="font-black text-slate-900 text-sm">Reporte de Ventas</h3>
-						<p class="text-xs text-slate-500">Histórico de pedidos, montos, clientes y modalidad de entrega.</p>
+						<p class="text-xs text-slate-500">Histórico de pedidos, montos, estados y modalidad de entrega.</p>
 					</div>
 				</div>
-				<a href="/api/products-raw.json" download="ventas_urbanpoint.csv" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shadow-sm inline-block">
+				<a href="/api/admin/reports?type=ventas" data-report-link class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shadow-sm inline-block">
 					Descargar CSV Ventas
 				</a>
 			</div>
@@ -46,10 +64,10 @@ export const prerender = false;
 					</div>
 					<div>
 						<h3 class="font-black text-slate-900 text-sm">Reporte de Comisiones</h3>
-						<p class="text-xs text-slate-500">Devengamientos por canillita, porcentaje aplicado y estado de pago.</p>
+						<p class="text-xs text-slate-500">Devengamientos por canillita, tipo de comisión y estado de pago.</p>
 					</div>
 				</div>
-				<a href="/api/products-raw.json" download="comisiones_urbanpoint.csv" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shadow-sm inline-block">
+				<a href="/api/admin/reports?type=comisiones" data-report-link class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shadow-sm inline-block">
 					Descargar CSV Comisiones
 				</a>
 			</div>
@@ -65,7 +83,7 @@ export const prerender = false;
 						<p class="text-xs text-slate-500">Histórico de transferencias pagadas a canillitas con comprobante.</p>
 					</div>
 				</div>
-				<a href="/api/products-raw.json" download="liquidaciones_urbanpoint.csv" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shadow-sm inline-block">
+				<a href="/api/admin/reports?type=liquidaciones" data-report-link class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shadow-sm inline-block">
 					Descargar CSV Liquidaciones
 				</a>
 			</div>
@@ -81,7 +99,7 @@ export const prerender = false;
 						<p class="text-xs text-slate-500">Detalle de productos, stock disponible y valorización económica.</p>
 					</div>
 				</div>
-				<a href="/api/products-raw.json" download="inventario_urbanpoint.csv" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shadow-sm inline-block">
+				<a href="/api/admin/reports?type=inventario" data-report-link class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shadow-sm inline-block">
 					Descargar CSV Inventario
 				</a>
 			</div>
@@ -89,4 +107,26 @@ export const prerender = false;
 		</div>
 
 	</main>
+
+	<script>
+		// Los inputs de fecha se propagan como query params (desde/hasta) a los
+		// cuatro links de descarga; sin fechas, el endpoint usa su default.
+		const inputDesde = document.getElementById('reporte-desde') as HTMLInputElement | null;
+		const inputHasta = document.getElementById('reporte-hasta') as HTMLInputElement | null;
+		const links = document.querySelectorAll<HTMLAnchorElement>('[data-report-link]');
+
+		function actualizarLinks() {
+			links.forEach(link => {
+				const url = new URL(link.href, window.location.origin);
+				if (inputDesde?.value) url.searchParams.set('desde', inputDesde.value);
+				else url.searchParams.delete('desde');
+				if (inputHasta?.value) url.searchParams.set('hasta', inputHasta.value);
+				else url.searchParams.delete('hasta');
+				link.href = url.pathname + url.search;
+			});
+		}
+
+		inputDesde?.addEventListener('change', actualizarLinks);
+		inputHasta?.addEventListener('change', actualizarLinks);
+	</script>
 </AdminLayout>

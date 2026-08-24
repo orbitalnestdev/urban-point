@@ -13,7 +13,7 @@ export interface Props {
 
 const { title, activeTab = 'dashboard' } = Astro.props;
 
-const profile = await getClientProfile(Astro.cookies);
+const profile = await getClientProfile(Astro);
 
 if (!profile) {
 	// getClientProfile devuelve null para todo rol que no sea 'cliente', así

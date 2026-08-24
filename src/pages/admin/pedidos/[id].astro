@@ -2,7 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
-import { ETIQUETAS, type EstadoPedido } from '../../../lib/orderStates';
+import { ETIQUETAS, estaPago, normalizarEstadoPedido, transicionesPosibles, type EstadoPedido } from '../../../lib/orderStates';
 import { toSafeJson } from '../../../lib/safeJson';
 
 export const prerender = false;
@@ -100,12 +100,45 @@ if (!Array.isArray(timelineEvents)) {
 	timelineEvents = [];
 }
 
-const isPaid = order.estado === 'pagado' || order.estado === 'entregado';
+// Estado canónico actual: de acá salen el "pagado" y las acciones posibles.
+const estadoActual: EstadoPedido = normalizarEstadoPedido(order.estado) || 'pendiente_pago';
+// estaPago cubre todos los estados cobrados (preparando, despachado, en_punto,
+// retirado...): la comparación manual dejaba media máquina de estados afuera.
+const isPaid = estaPago(estadoActual);
 
-// Cálculo robusto de totales en centavos (evita discrepancias si en órdenes antiguas o de prueba se guardó total en pesos o en centavos)
+// Botones de acción derivados de la máquina de estados: sólo se ofrecen
+// transiciones válidas. Antes los botones mandaban alias inexistentes
+// ('confirmado', 'preparado', 'listo', 'enviado') y "Cancelar" aparecía
+// incluso en pedidos terminales.
+const esRetiro = order.fulfillment === 'retiro';
+const ETIQUETAS_ACCION: Partial<Record<EstadoPedido, string>> = {
+	pagado: 'Confirmar pago',
+	preparando: 'Marcar en preparación',
+	despachado: 'Marcar despachado',
+	en_punto: 'Marcar listo en punto',
+	entregado: 'Marcar entregado',
+	retirado: 'Marcar como retirado'
+};
+const transicionesValidas = transicionesPosibles(estadoActual);
+const accionesAvance = transicionesValidas.filter(e => {
+	// Cancelar y reembolsar no son "avances": cancelado tiene su propio botón
+	// y el reembolso se maneja fuera de esta botonera.
+	if (e === 'cancelado' || e === 'reembolsado') return false;
+	// Cada modalidad tiene su camino: un retiro no se despacha a domicilio y
+	// un envío no pasa por el punto canillita.
+	if (esRetiro && e === 'despachado') return false;
+	if (esRetiro && e === 'entregado' && transicionesValidas.includes('retirado')) return false;
+	if (!esRetiro && (e === 'en_punto' || e === 'retirado')) return false;
+	return true;
+});
+const puedeCancelar = transicionesValidas.includes('cancelado');
+
+// Los montos del pedido están SIEMPRE en centavos: la heurística vieja
+// (`> 50000 ? tal cual : * 100`) hacía que un pedido de $400 (40000 centavos)
+// se mostrara como $40.000.
 const itemsSubtotalCents = orderItems.reduce((acc: number, item: any) => acc + (item.subtotal || ((item.precio_unitario || 0) * (item.cantidad || 1))), 0);
-const orderSubtotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents : (order.subtotal ? (order.subtotal > 50000 ? order.subtotal : order.subtotal * 100) : 0);
-const orderTotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents + ((order.costo_envio_centavos || (order.costo_envio ? order.costo_envio * 100 : 0)) || 0) : (order.total ? (order.total > 50000 ? order.total : order.total * 100) : 0);
+const orderSubtotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents : (order.subtotal || 0);
+const orderTotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents + (order.costo_envio || 0) : (order.total || 0);
 ---
 
 <AdminLayout title={`Pedido ORD-${order.numero || order.$id.substring(0, 8)}`}>
@@ -125,7 +158,7 @@ const orderTotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents + ((order.co
 					</h1>
 					<span class="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold rounded-full flex items-center gap-1">
 						<span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-						{order.estado === 'pendiente_pago' ? 'Nuevo' : (order.estado || 'Nuevo')}
+						{ETIQUETAS[estadoActual]}
 					</span>
 					<span class="px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-full border border-slate-200 flex items-center gap-1">
 						<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon></svg>
@@ -142,10 +175,7 @@ const orderTotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents + ((order.co
 					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
 					Remito
 				</button>
-				<button class="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
-					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-					Exportar
-				</button>
+				{/* El botón "Exportar" se eliminó: no tenía handler ni endpoint detrás. */}
 			</div>
 		</div>
 
@@ -190,36 +220,24 @@ const orderTotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents + ((order.co
 			</div>
 
 			<div class="flex items-center gap-3 flex-wrap">
-				{/* Acción principal del estado */}
-				{currentStep === 1 && (
-					<button id="btn-avanzar-estado" data-order-id={order.$id} data-next="confirmado" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md transition-colors flex items-center gap-2">
-						Confirmar Pago
+				{/* Acciones derivadas de transicionesPosibles: nunca se ofrece una
+				    transición que la máquina de estados va a rechazar. */}
+				{accionesAvance.map(destino => (
+					<button data-order-id={order.$id} data-next={destino} class="btn-avanzar-estado px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md transition-colors flex items-center gap-2 cursor-pointer">
+						{ETIQUETAS_ACCION[destino] || `Pasar a ${ETIQUETAS[destino]}`}
 					</button>
-				)}
-				{currentStep === 2 && (
-					<button id="btn-avanzar-estado" data-order-id={order.$id} data-next="preparado" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md transition-colors flex items-center gap-2">
-						Marcar en preparación
-					</button>
-				)}
-				{currentStep === 3 && (
-					<button id="btn-avanzar-estado" data-order-id={order.$id} data-next={order.fulfillment === 'retiro' ? 'listo' : 'enviado'} class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md transition-colors flex items-center gap-2">
-						{order.fulfillment === 'retiro' ? 'Marcar listo en punto' : 'Marcar enviado'}
-					</button>
-				)}
-				{currentStep === 4 && (
-					<button id="btn-avanzar-estado" data-order-id={order.$id} data-next={order.fulfillment === 'retiro' ? 'retirado' : 'entregado'} class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md transition-colors flex items-center gap-2">
-						{order.fulfillment === 'retiro' ? 'Marcar como retirado' : 'Marcar entregado'}
-					</button>
-				)}
+				))}
 
 				<button id="btn-open-editar-lineas" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
 					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
 					Editar líneas
 				</button>
-				<button id="btn-cancelar-pedido" data-order-id={order.$id} class="px-4 py-2.5 bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl hover:bg-rose-100 transition-colors flex items-center gap-1.5">
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-					Cancelar
-				</button>
+				{puedeCancelar && (
+					<button id="btn-cancelar-pedido" data-order-id={order.$id} class="px-4 py-2.5 bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl hover:bg-rose-100 transition-colors flex items-center gap-1.5">
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+						Cancelar
+					</button>
+				)}
 			</div>
 		</div>
 
@@ -484,7 +502,9 @@ const orderTotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents + ((order.co
 		</div>
 	</main>
 
-	<div id="order-meta-data" data-order-id={order.$id} data-items={JSON.stringify(orderItems)}></div>
+	{/* toSafeJson escapa </script> y <!-- : con JSON.stringify crudo un nombre
+	    de producto malicioso podía romper el HTML e inyectar markup. */}
+	<div id="order-meta-data" data-order-id={order.$id} data-items={toSafeJson(orderItems)}></div>
 
 	{/* Modal Editar Líneas del Pedido */}
 	<div id="modal-editar-lineas" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -534,23 +554,24 @@ const orderTotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents + ((order.co
 <script>
 	import { actions } from 'astro:actions';
 
-	// Avanzar Estado
-	document.getElementById('btn-avanzar-estado')?.addEventListener('click', async (e) => {
-		const btn = e.currentTarget as HTMLButtonElement;
-		const orderId = btn.dataset.orderId;
-		const nextState = btn.dataset.next;
-		if (!orderId || !nextState) return;
+	// Avanzar Estado (puede haber más de un botón: p. ej. entregado o retirado)
+	document.querySelectorAll<HTMLButtonElement>('.btn-avanzar-estado').forEach(btn => {
+		btn.addEventListener('click', async () => {
+			const orderId = btn.dataset.orderId;
+			const nextState = btn.dataset.next;
+			if (!orderId || !nextState) return;
 
-		btn.disabled = true;
-		btn.innerText = 'Actualizando...';
+			btn.disabled = true;
+			btn.innerText = 'Actualizando...';
 
-		const { data, error } = await actions.updateOrderStatus({ orderId, nuevoEstado: nextState as any });
-		if (error || !data?.success) {
-			alert('Error al actualizar estado: ' + (error?.message || data?.error));
-			btn.disabled = false;
-			return;
-		}
-		window.location.reload();
+			const { data, error } = await actions.updateOrderStatus({ orderId, nuevoEstado: nextState as any });
+			if (error || !data?.success) {
+				alert('Error al actualizar estado: ' + (error?.message || data?.error));
+				btn.disabled = false;
+				return;
+			}
+			window.location.reload();
+		});
 	});
 
 	// Cancelar Pedido

@@ -1,10 +1,12 @@
 ---
 export const prerender = false;
-import Layout from '../../../layouts/Layout.astro';
+// AdminLayout en lugar del Layout público: esta página quedaba fuera del
+// panel, con un nav propio inconsistente y sin el sidebar de administración.
+import AdminLayout from '../../../layouts/AdminLayout.astro';
 import CommissionSimulator from '../../../components/admin/CommissionSimulator';
 import { Query } from 'node-appwrite';
 import { createAdminClient } from '../../../lib/server/appwrite';
-import { Plus, Percent, DollarSign, Settings } from 'lucide-react';
+import { Plus, Percent, DollarSign } from 'lucide-react';
 
 const user = Astro.locals.user;
 if (!user || user.role !== 'admin') {
@@ -13,37 +15,25 @@ if (!user || user.role !== 'admin') {
 
 const { databases } = createAdminClient();
 
-// 1. Fetch active rules
-const rules = await databases.listDocuments('urbanpoint', 'commission_rules', [
-  Query.equal('activo', true),
-  Query.orderDesc('$createdAt')
+// Reglas, productos y canillitas no dependen entre sí: en paralelo.
+const [rules, productsRes, canillitasRes] = await Promise.all([
+  databases.listDocuments('urbanpoint', 'commission_rules', [
+    Query.equal('activo', true),
+    Query.orderDesc('$createdAt')
+  ]),
+  databases.listDocuments('urbanpoint', 'products', [Query.limit(50)]),
+  databases.listDocuments('urbanpoint', 'pickup_points', [
+    Query.equal('estado', 'activo'),
+    Query.limit(50)
+  ])
 ]);
 
-// 2. Fetch products and canillitas for simulator
-const productsRes = await databases.listDocuments('urbanpoint', 'products', [Query.limit(50)]);
 const products = productsRes.documents.map(p => ({ id: p.$id, name: p.nombre }));
-
-const canillitasRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-  Query.equal('estado', 'activo'),
-  Query.limit(50)
-]);
 const canillitas = canillitasRes.documents.map(c => ({ id: typeof c.profile_id === 'string' ? c.profile_id : c.profile_id.$id, name: c.nombre_comercial }));
 ---
 
-<Layout title="Gestión de Comisiones | UrbanPoint Admin">
-  <nav class="w-full z-50 bg-slate-900 border-b border-slate-800">
-		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-			<div class="flex items-center gap-2 text-white">
-				<Settings className="w-5 h-5 text-indigo-400" />
-				<span class="text-xl font-extrabold tracking-tight">Admin | Comisiones</span>
-			</div>
-			<div class="flex items-center gap-4">
-        <a href="/admin" class="text-slate-300 hover:text-white transition-colors text-sm">Volver al Panel</a>
-			</div>
-		</div>
-	</nav>
-
-  <main class="min-h-[calc(100vh-64px)] bg-slate-50 py-12">
+<AdminLayout title="Gestión de Comisiones">
+  <main class="bg-slate-50 py-12">
     <div class="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
       
       {/* Left Column: Rules List */}
@@ -100,4 +90,4 @@ const canillitas = canillitasRes.documents.map(c => ({ id: typeof c.profile_id =
       
     </div>
   </main>
-</Layout>
+</AdminLayout>

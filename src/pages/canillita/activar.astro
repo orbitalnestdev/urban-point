@@ -7,7 +7,8 @@ import { createAdminClient } from '../../lib/server/appwrite';
 import { ChevronLeft } from 'lucide-react';
 
 const user = Astro.locals.user;
-if (!user || user.role !== 'canillita') {
+// El admin también puede entrar, coherente con el resto del panel
+if (!user || (user.role !== 'canillita' && user.role !== 'admin')) {
   return Astro.redirect('/');
 }
 
@@ -17,12 +18,11 @@ const points = await databases.listDocuments('urbanpoint', 'pickup_points', [
   Query.equal('profile_id', user.profileId)
 ]);
 
-if (points.documents.length === 0) {
-  return Astro.redirect('/');
-}
+// Sin punto asignado NO redirigimos a '/': eso generaba un loop sin salida.
+// Mostramos un mensaje claro y sin formulario.
+const point = points.documents.length > 0 ? points.documents[0] : null;
 
-const point = points.documents[0];
-if (point.estado === 'activo') {
+if (point && point.estado === 'activo') {
   return Astro.redirect('/canillita');
 }
 ---
@@ -40,7 +40,19 @@ if (point.estado === 'activo') {
 
 	<main class="min-h-[calc(100vh-64px)] bg-slate-50 py-12">
 		<div class="max-w-3xl mx-auto px-6">
-			<ActivationForm client:only="react" />
+			{point ? (
+				<ActivationForm client:only="react" />
+			) : (
+				<div class="bg-white rounded-3xl p-10 text-center shadow-xl border border-slate-100 space-y-4">
+					<div class="w-16 h-16 rounded-full bg-amber-100 text-amber-700 mx-auto flex items-center justify-center">
+						<svg class="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+					</div>
+					<h2 class="text-2xl font-extrabold text-slate-900">Todavía no tenés un punto de retiro</h2>
+					<p class="text-slate-600 text-sm leading-relaxed max-w-md mx-auto">
+						Tu cuenta todavía no tiene un punto de retiro asignado. Escribinos para completar el alta y activar tu kiosco.
+					</p>
+				</div>
+			)}
 		</div>
 	</main>
 </Layout>

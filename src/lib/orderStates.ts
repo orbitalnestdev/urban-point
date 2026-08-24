@@ -86,7 +86,9 @@ export function puedeEntregarse(estado: EstadoPedido): boolean {
 
 /** Un pedido cobrado: a partir de acá se devengan comisiones. */
 export function estaPago(estado: EstadoPedido): boolean {
-	return !['pendiente_pago', 'cancelado'].includes(estado);
+	// 'reembolsado' también queda fuera: el cobro ya no existe, así que no
+	// puede devengar comisiones ni volver a descontar stock.
+	return !['pendiente_pago', 'cancelado', 'reembolsado'].includes(estado);
 }
 
 /** Estados en los que el pedido ya no se puede mover. */

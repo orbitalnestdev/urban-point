@@ -109,9 +109,11 @@ const accountText = user?.role === 'canillita' ? 'Panel Canillita' : (user?.role
             <circle cx="20" cy="21" r="1"></circle>
             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
           </svg>
-          <span 
-            id="cart-badge-count" 
-            class="absolute -top-1 -right-1 w-4 h-4 bg-[#2D5A27] text-white font-extrabold text-[10px] rounded-full flex items-center justify-center shadow-sm"
+          <!-- Arranca oculto: mostrar "0" permanente es ruido; el script lo
+               muestra recién cuando hay al menos un ítem en el carrito. -->
+          <span
+            id="cart-badge-count"
+            class="hidden absolute -top-1 -right-1 w-4 h-4 bg-[#2D5A27] text-white font-extrabold text-[10px] rounded-full items-center justify-center shadow-sm"
           >
             0
           </span>
@@ -120,8 +122,10 @@ const accountText = user?.role === 'canillita' ? 'Panel Canillita' : (user?.role
     </div>
   </div>
 
-  <!-- Cart Drawer Component Mounted Globally -->
-  <CartDrawer client:load />
+  <!-- Cart Drawer Component Mounted Globally.
+       client:idle: se monta en todas las páginas públicas y no necesita
+       hidratarse antes del primer frame — con load bloqueaba de entrada. -->
+  <CartDrawer client:idle />
 </header>
 
 <script>
@@ -136,11 +140,19 @@ const accountText = user?.role === 'canillita' ? 'Panel Canillita' : (user?.role
     });
   }
 
+  // El badge sólo se muestra cuando hay ítems: con 0 queda oculto.
+  const actualizarBadge = (count: number) => {
+    const badge = document.getElementById('cart-badge-count');
+    if (!badge) return;
+    badge.textContent = count.toString();
+    badge.classList.toggle('hidden', count <= 0);
+    badge.classList.toggle('flex', count > 0);
+  };
+
   // Listen to cart update event to update badge count
   window.addEventListener('cart:updated', (e: any) => {
-    const badge = document.getElementById('cart-badge-count');
-    if (badge && e.detail && typeof e.detail.count === 'number') {
-      badge.textContent = e.detail.count.toString();
+    if (e.detail && typeof e.detail.count === 'number') {
+      actualizarBadge(e.detail.count);
     }
   });
 
@@ -157,8 +169,7 @@ const accountText = user?.role === 'canillita' ? 'Panel Canillita' : (user?.role
         }
       }
     }
-    const badge = document.getElementById('cart-badge-count');
-    if (badge) badge.textContent = totalCount.toString();
+    actualizarBadge(totalCount);
   } catch (e) {}
 
   // Rotating Announcement Bar Ticker Animation

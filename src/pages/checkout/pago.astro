@@ -4,11 +4,19 @@ import Layout from '../../layouts/Layout.astro';
 import Logo from '../../components/Logo.astro';
 import { getSiteSettings } from '../../lib/server/settings';
 import { parseActiveNodeCookie } from '../../lib/nodeSession';
+import { toSafeJson } from '../../lib/safeJson';
 
 const settings = await getSiteSettings();
 const mpEnabled = settings.mp_enabled;
 const transferenciaEnabled = settings.transferencia_enabled;
 const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cookie'));
+
+// Config de envío en CENTAVOS, la misma que usa createCheckout server-side:
+// el total que se muestra tiene que ser el que se cobra.
+const envioConfig = {
+	shippingCostCentavos: settings.shipping_cost_centavos || 0,
+	freeShippingThresholdCentavos: settings.free_shipping_threshold_centavos || 0
+};
 ---
 
 <Layout title="Pago y Confirmación | UrbanPoint Checkout">
@@ -118,7 +126,10 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
 
         <!-- Submit Button -->
         <div class="pt-6 mt-6 relative z-10 border-t border-slate-100">
-            <button 
+            <!-- Banner de error inline: reemplaza los alert(), que se pierden
+                 apenas se cierran y no dejan rastro de qué falló. -->
+            <div id="checkout-error-banner" class="hidden mb-4 bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-semibold" role="alert"></div>
+            <button
                 id="btn-confirm-purchase" 
                 class="w-full bg-[#2D5A27] hover:bg-[#23471F] text-white font-black py-5 px-6 rounded-2xl shadow-[0_8px_25px_rgba(45,90,39,0.3)] transition-all hover:-translate-y-1 active:translate-y-0 flex items-center justify-center gap-3 text-lg cursor-pointer"
             >
@@ -135,18 +146,42 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
     </div>
   </main>
 
+  <script type="application/json" id="envio-config-json" set:html={toSafeJson(envioConfig)} />
+
   <script>
     import { cartItems, checkoutData } from '../../store/cart';
     import { actions } from 'astro:actions';
 
     const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 
+    // Escape para interpolar datos (carrito, dirección, punto de retiro)
+    // dentro de innerHTML sin riesgo de XSS.
+    const esc = (s: unknown): string =>
+        String(s ?? '').replace(/[&<>"']/g, (c) =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string
+        );
+
     document.addEventListener('DOMContentLoaded', async () => {
         const itemsContainer = document.getElementById('checkout-summary-items');
         const totalEl = document.getElementById('checkout-total-price');
         const pointDetailsEl = document.getElementById('selected-point-details');
         const confirmBtn = document.getElementById('btn-confirm-purchase') as HTMLButtonElement;
-        
+        const errorBanner = document.getElementById('checkout-error-banner');
+
+        const mostrarError = (msg: string) => {
+            if (errorBanner) {
+                errorBanner.textContent = msg;
+                errorBanner.classList.remove('hidden');
+                errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        };
+
+        // Config de envío en centavos, inyectada server-side desde settings.
+        let envioConfig = { shippingCostCentavos: 0, freeShippingThresholdCentavos: 0 };
+        try {
+            envioConfig = JSON.parse(document.getElementById('envio-config-json')?.textContent || '{}');
+        } catch (e) {}
+
         // 1. Load Cart
         const cart = cartItems.get();
         const items = Object.values(cart);
@@ -167,7 +202,7 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
                         ${item.cantidad}x
                     </div>
                     <div class="flex-1 min-w-0 pr-4">
-                        <span class="text-slate-800 font-semibold leading-snug block break-words">${item.nombre}</span>
+                        <span class="text-slate-800 font-semibold leading-snug block break-words">${esc(item.nombre)}</span>
                     </div>
                     <div class="shrink-0 text-right">
                         <span class="font-black text-slate-900 block">${formateador.format(subtotal)}</span>
@@ -186,11 +221,15 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
 
         if (isEnvio) {
             // El total mostrado tiene que ser el que se cobra. createCheckout
-            // liquida `input.costoEnvio || 0` (actions/index.ts:708), así que
-            // acá se refleja lo mismo. Antes había un literal de 150000: la
-            // pantalla sumaba $1.500 de envío que el servidor nunca cobraba, y
-            // ese número no salía de ninguna configuración cargada.
-            const envioCosto = Number(currentCheckout.costoEnvio) || 0;
+            // ahora IGNORA cualquier costoEnvio del cliente y lo calcula desde
+            // settings (en CENTAVOS, gratis si el subtotal alcanza el umbral):
+            // acá se replica exactamente ese cálculo para mostrar lo mismo.
+            const subtotalCentavos = Math.round(totalSum * 100);
+            const umbral = Number(envioConfig.freeShippingThresholdCentavos) || 0;
+            const envioCentavos = umbral > 0 && subtotalCentavos >= umbral
+                ? 0
+                : (Number(envioConfig.shippingCostCentavos) || 0);
+            const envioCosto = envioCentavos / 100;
             totalSum += envioCosto;
 
             if (pointDetailsEl) {
@@ -200,8 +239,8 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
                     </div>
                     <div>
                         <p class="font-extrabold text-slate-900">Envío a Domicilio</p>
-                        <p class="text-xs text-slate-600 mt-0.5">${currentCheckout.direccionEnvio || 'Dirección no especificada'}</p>
-                        <p class="text-xs font-semibold text-blue-600 mt-1">Costo de envío: ${formateador.format(envioCosto)}</p>
+                        <p class="text-xs text-slate-600 mt-0.5">${esc(currentCheckout.direccionEnvio || 'Dirección no especificada')}</p>
+                        <p class="text-xs font-semibold text-blue-600 mt-1">Costo de envío: ${envioCentavos === 0 ? 'GRATIS' : formateador.format(envioCosto)}</p>
                     </div>
                 `;
             }
@@ -238,8 +277,8 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                         </div>
                         <div>
-                            <p class="font-extrabold text-slate-900">${point.nombre_comercial}</p>
-                            <p class="text-xs text-slate-600 mt-0.5">${point.direccion}, ${point.localidad}</p>
+                            <p class="font-extrabold text-slate-900">${esc(point.nombre_comercial)}</p>
+                            <p class="text-xs text-slate-600 mt-0.5">${esc(point.direccion)}, ${esc(point.localidad)}</p>
                             <p class="text-xs font-semibold text-[#2D5A27] mt-1">Retiro GRATIS</p>
                         </div>
                     `;
@@ -295,35 +334,44 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
 
         // 4. Handle Submit
         if (confirmBtn) {
+            // Se guarda el label original para restaurarlo tal cual si falla
+            // (antes quedaba "Finalizar Compra", un texto que nunca existió).
+            const labelOriginal = confirmBtn.innerHTML;
+
             confirmBtn.addEventListener('click', async () => {
                 confirmBtn.disabled = true;
                 confirmBtn.innerHTML = 'Procesando...';
+                if (errorBanner) errorBanner.classList.add('hidden');
+
+                const restaurarBoton = () => {
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerHTML = labelOriginal;
+                };
 
                 try {
                     const finalCheckout = checkoutData.get();
                     const payload = items.map(i => ({ productId: i.id, cantidad: i.cantidad }));
 
+                    // Ya no se manda costoEnvio: el backend lo ignora y lo
+                    // calcula siempre server-side desde settings.
                     const { data, error } = await actions.createCheckout({
                         items: payload,
                         fulfillment: (finalCheckout.fulfillment as 'retiro' | 'envio') || 'retiro',
                         pickupPointId: finalCheckout.pickupPointId,
                         direccionEnvio: finalCheckout.direccionEnvio,
-                        costoEnvio: finalCheckout.costoEnvio ? Number(finalCheckout.costoEnvio) : undefined,
                         paymentMethod: finalCheckout.paymentMethod
                     });
 
                     if (error || !data?.success || !data?.init_point) {
-                        alert(error?.message || data?.error || 'Error procesando checkout');
-                        confirmBtn.disabled = false;
-                        confirmBtn.innerHTML = 'Finalizar Compra';
+                        mostrarError(error?.message || data?.error || 'No pudimos procesar tu compra. Probá de nuevo en unos minutos.');
+                        restaurarBoton();
                         return;
                     }
 
                     window.location.href = data.init_point;
                 } catch (e) {
-                    alert('Error de conexión');
-                    confirmBtn.disabled = false;
-                    confirmBtn.innerHTML = 'Finalizar Compra';
+                    mostrarError('Error de conexión. Revisá tu internet e intentá de nuevo.');
+                    restaurarBoton();
                 }
             });
         }

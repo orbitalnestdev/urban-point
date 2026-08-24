@@ -19,8 +19,13 @@ export default function ActivationForm() {
       setError('Debes aceptar los términos y condiciones para continuar.');
       return;
     }
-    if (formData.cbu.length < 10) {
-      setError('El CBU/CVU debe tener al menos 10 dígitos.');
+    // Aceptamos CBU/CVU de 22 dígitos exactos o alias alfanumérico de 6 a 20
+    // caracteres (letras, números, puntos y guiones), como promete el label.
+    const cbu = formData.cbu.trim();
+    const esCbuCvu = /^\d{22}$/.test(cbu);
+    const esAlias = /^[a-zA-Z0-9.-]{6,20}$/.test(cbu);
+    if (!esCbuCvu && !esAlias) {
+      setError('Ingresá un CBU/CVU de 22 dígitos o un alias de 6 a 20 caracteres.');
       return;
     }
 
@@ -83,9 +88,9 @@ export default function ActivationForm() {
           <input 
             type="text" 
             required
-            placeholder="Ingresá los 22 números"
+            placeholder="22 dígitos o tu alias (ej: mi.alias.mp)"
             value={formData.cbu}
-            onChange={(e) => setFormData({...formData, cbu: e.target.value.replace(/\D/g,'')})}
+            onChange={(e) => setFormData({...formData, cbu: e.target.value.replace(/[^a-zA-Z0-9.-]/g,'')})}
             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-mono"
             maxLength={22}
           />
@@ -116,7 +121,7 @@ export default function ActivationForm() {
             className="mt-1 w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" 
           />
           <label htmlFor="terms" className="text-sm text-slate-600 cursor-pointer">
-            Confirmo que mis horarios de atención precargados son correctos y me comprometo a recibir y entregar paquetes dentro de esa franja horaria. Acepto los <a href="#" className="text-indigo-600 underline">términos y condiciones</a> del programa.
+            Confirmo que mis horarios de atención precargados son correctos y me comprometo a recibir y entregar paquetes dentro de esa franja horaria. Acepto los términos y condiciones del programa.
           </label>
         </div>
 

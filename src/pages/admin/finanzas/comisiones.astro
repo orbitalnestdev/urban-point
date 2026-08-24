@@ -6,17 +6,23 @@ import { Query } from 'node-appwrite';
 export const prerender = false;
 
 const { databases } = createAdminClient();
-let ledgers = [];
-let pickupPoints = [];
+let ledgers: any[] = [];
+let pickupPoints: any[] = [];
 
 try {
-	const res = await databases.listDocuments('urbanpoint', 'commission_ledger', [
-		Query.equal('estado', 'pendiente'),
-		Query.orderDesc('$createdAt')
+	// liquidarComisiones() paga SOLO los asientos 'disponible' (confirmados por
+	// entrega). Lo 'pendiente' todavía espera confirmación: se muestra aparte
+	// para que el número de "a liquidar" coincida con lo que realmente se paga.
+	// Las dos queries no dependen entre sí: se corren en paralelo.
+	const [res, resPP] = await Promise.all([
+		databases.listDocuments('urbanpoint', 'commission_ledger', [
+			Query.equal('estado', ['pendiente', 'disponible']),
+			Query.orderDesc('$createdAt'),
+			Query.limit(5000)
+		]),
+		databases.listDocuments('urbanpoint', 'pickup_points', [Query.limit(500)])
 	]);
 	ledgers = res.documents;
-	
-	const resPP = await databases.listDocuments('urbanpoint', 'pickup_points');
 	pickupPoints = resPP.documents;
 } catch (e) {
 	console.error(e);
@@ -24,24 +30,37 @@ try {
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
-const totalPendiente = ledgers.reduce((acc, l) => acc + l.monto_centavos, 0) / 100;
+const disponibles = ledgers.filter(l => l.estado === 'disponible');
+const pendientesConfirmacion = ledgers.filter(l => l.estado === 'pendiente');
+const totalDisponible = disponibles.reduce((acc, l) => acc + (l.monto_centavos || 0), 0) / 100;
+const totalPorConfirmar = pendientesConfirmacion.reduce((acc, l) => acc + (l.monto_centavos || 0), 0) / 100;
 
-// Agrupar por profile_id
-const groupedLedgers = ledgers.reduce((acc, l) => {
-	const pid = l.profile_id?.$id;
+// Appwrite puede devolver la relación como objeto expandido o como string plano:
+// usar sólo `?.$id` descartaba las filas donde venía como string.
+const relId = (rel: any): string | null =>
+	typeof rel === 'string' ? rel : rel?.$id || null;
+
+// Agrupar por profile_id, separando lo liquidable de lo que espera confirmación.
+const groupedLedgers = ledgers.reduce((acc: Record<string, any>, l: any) => {
+	const pid = relId(l.profile_id);
 	if (!pid) return acc;
 	if (!acc[pid]) {
 		acc[pid] = {
-			profile: l.profile_id,
-			pickup_point: pickupPoints.find(p => p.profile_id?.$id === pid),
-			total_centavos: 0,
-			count: 0,
-			ledgers: []
+			profile: typeof l.profile_id === 'string' ? null : l.profile_id,
+			pickup_point: pickupPoints.find(p => relId(p.profile_id) === pid),
+			disponible_centavos: 0,
+			pendiente_centavos: 0,
+			count_disponible: 0,
+			count_pendiente: 0
 		};
 	}
-	acc[pid].total_centavos += l.monto_centavos;
-	acc[pid].count += 1;
-	acc[pid].ledgers.push(l);
+	if (l.estado === 'disponible') {
+		acc[pid].disponible_centavos += l.monto_centavos || 0;
+		acc[pid].count_disponible += 1;
+	} else {
+		acc[pid].pendiente_centavos += l.monto_centavos || 0;
+		acc[pid].count_pendiente += 1;
+	}
 	return acc;
 }, {});
 
@@ -55,57 +74,62 @@ const groups = Object.values(groupedLedgers);
 				<div class="flex items-center gap-2 text-sm text-slate-500 mb-1">
 					<span>Finanzas</span> <span class="text-slate-300">/</span> <span class="text-slate-900 font-medium">Comisiones</span>
 				</div>
-				<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Liquidación de Comisiones</h1>
-				<p class="text-slate-500 font-medium mt-1">Gestioná los pagos a tu red de Canillitas (Puntos de Retiro).</p>
+				<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Comisiones de la Red</h1>
+				<p class="text-slate-500 font-medium mt-1">Vista de control. Para pagar, usá la pantalla de liquidaciones.</p>
 			</div>
 			<div class="flex items-center gap-2">
-				<button class="px-6 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition-colors shadow-md">Liquidar Todo ({formateador.format(totalPendiente)})</button>
+				{/* Esta página es de solo lectura: el pago real se hace en /admin/liquidaciones. */}
+				<a href="/admin/liquidaciones" class="px-6 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition-colors shadow-md">
+					Ir a Liquidaciones &rarr;
+				</a>
 			</div>
 		</header>
 
 		{/* Top Metric Cards */}
 		<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
 			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Comisiones Pendientes</h3>
-				<p class="text-3xl font-black text-amber-600">{formateador.format(totalPendiente)}</p>
-			</div>
-			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm opacity-50">
-				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Comisiones Pagadas (Mes)</h3>
-				<p class="text-3xl font-black text-emerald-600">--</p>
+				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">A Liquidar (Confirmado)</h3>
+				<p class="text-3xl font-black text-emerald-600">{formateador.format(totalDisponible)}</p>
+				<p class="text-xs text-slate-400 mt-2">Asientos disponibles: entregas ya confirmadas.</p>
 			</div>
 			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Puntos a liquidar</h3>
+				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Por Confirmar</h3>
+				<p class="text-3xl font-black text-amber-600">{formateador.format(totalPorConfirmar)}</p>
+				<p class="text-xs text-slate-400 mt-2">Devengado, a la espera de la entrega.</p>
+			</div>
+			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+				<h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2">Canillitas con Saldo</h3>
 				<p class="text-3xl font-black text-slate-900">{groups.length}</p>
 			</div>
 		</div>
 
-		{/* Tabla de Liquidaciones */}
+		{/* Tabla resumen por canillita */}
 		<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
 			<table class="w-full text-left border-collapse">
 				<thead>
 					<tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
-						<th class="p-4 w-12 text-center"><input type="checkbox" class="rounded border-slate-300" /></th>
 						<th class="p-4">Canillita (Punto de Retiro)</th>
-						<th class="p-4 text-center">Ventas Pendientes</th>
-						<th class="p-4 text-right">Monto a Liquidar</th>
+						<th class="p-4 text-center">Ventas Confirmadas</th>
+						<th class="p-4 text-right">A Liquidar</th>
+						<th class="p-4 text-right">Por Confirmar</th>
 						<th class="p-4 text-center">Acciones</th>
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-slate-100">
-					
+
 					{groups.map((group: any) => (
 						<tr class="hover:bg-slate-50">
-							<td class="p-4 text-center"><input type="checkbox" class="rounded border-slate-300" /></td>
 							<td class="p-4">
-								<p class="font-bold text-slate-900">{group.pickup_point?.nombre_comercial || group.profile.nombre}</p>
+								<p class="font-bold text-slate-900">{group.pickup_point?.nombre_comercial || group.profile?.nombre || 'Canillita'}</p>
 								<p class="text-xs text-slate-500">
 									{group.pickup_point?.cbu ? `CBU: ${group.pickup_point.cbu}` : 'Sin CBU cargado'}
 								</p>
 							</td>
-							<td class="p-4 text-center font-bold text-slate-900">{group.count}</td>
-							<td class="p-4 text-right font-black text-amber-600">{formateador.format(group.total_centavos / 100)}</td>
+							<td class="p-4 text-center font-bold text-slate-900">{group.count_disponible}</td>
+							<td class="p-4 text-right font-black text-emerald-600">{formateador.format(group.disponible_centavos / 100)}</td>
+							<td class="p-4 text-right font-bold text-amber-600">{formateador.format(group.pendiente_centavos / 100)}</td>
 							<td class="p-4 text-center">
-								<button class="px-3 py-1.5 bg-emerald-50 text-emerald-700 font-bold rounded-lg text-xs hover:bg-emerald-100 transition-colors">Marcar Pagado</button>
+								<a href="/admin/liquidaciones" class="px-3 py-1.5 bg-emerald-50 text-emerald-700 font-bold rounded-lg text-xs hover:bg-emerald-100 transition-colors">Liquidar &rarr;</a>
 							</td>
 						</tr>
 					))}

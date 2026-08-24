@@ -2,6 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
+import { ETIQUETAS, normalizarEstadoPedido, type EstadoPedido } from '../../../lib/orderStates';
 
 export const prerender = false;
 
@@ -15,13 +16,17 @@ let preferredPoint = null;
 let referringCanillita = null;
 
 try {
-	profile = await databases.getDocument('urbanpoint', 'profiles', id as string);
-
-	const ordersRes = await databases.listDocuments('urbanpoint', 'orders', [
-		Query.equal('customer_id', id as string),
-		Query.orderDesc('$createdAt'),
-		Query.limit(100)
+	// Perfil y pedidos no dependen entre sí: en serie eran dos round-trips
+	// encadenados al pedo.
+	const [profileDoc, ordersRes] = await Promise.all([
+		databases.getDocument('urbanpoint', 'profiles', id as string),
+		databases.listDocuments('urbanpoint', 'orders', [
+			Query.equal('customer_id', id as string),
+			Query.orderDesc('$createdAt'),
+			Query.limit(100)
+		])
 	]);
+	profile = profileDoc;
 	orders = ordersRes.documents;
 
 	totalSpentCentavos = orders
@@ -45,21 +50,27 @@ try {
 	}
 
 	const topPtId = Object.keys(ptCountMap).sort((a, b) => ptCountMap[b] - ptCountMap[a])[0];
-	if (topPtId) {
-		try {
-			preferredPoint = await databases.getDocument('urbanpoint', 'pickup_points', topPtId);
-		} catch (e) {}
-	}
 
-	if (lastRefCodeId) {
-		try {
-			const refDoc = await databases.getDocument('urbanpoint', 'referral_codes', lastRefCodeId);
-			const ownerId = typeof refDoc.owner_id === 'string' ? refDoc.owner_id : refDoc.owner_id?.$id;
-			if (ownerId) {
-				referringCanillita = await databases.getDocument('urbanpoint', 'profiles', ownerId);
-			}
-		} catch (e) {}
-	}
+	// El punto preferido y la cadena código de referido → canillita son
+	// independientes entre sí: se resuelven en paralelo. Sólo el perfil del
+	// canillita depende de verdad del código, por eso queda encadenado adentro.
+	[preferredPoint, referringCanillita] = await Promise.all([
+		topPtId
+			? databases.getDocument('urbanpoint', 'pickup_points', topPtId).catch(() => null)
+			: Promise.resolve(null),
+		lastRefCodeId
+			? (async () => {
+				try {
+					const refDoc = await databases.getDocument('urbanpoint', 'referral_codes', lastRefCodeId);
+					const ownerId = typeof refDoc.owner_id === 'string' ? refDoc.owner_id : refDoc.owner_id?.$id;
+					if (!ownerId) return null;
+					return await databases.getDocument('urbanpoint', 'profiles', ownerId);
+				} catch (e) {
+					return null;
+				}
+			})()
+			: Promise.resolve(null)
+	]);
 } catch (e) {
 	console.error("Error loading customer profile:", e);
 	return Astro.redirect('/admin/clientes');
@@ -67,15 +78,29 @@ try {
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
+// Colores por estado canónico. La versión anterior no conocía despachado,
+// en_punto, retirado ni reembolsado y esos pedidos salían grises con el
+// valor crudo del enum como texto.
+const CLASES_ESTADO: Record<EstadoPedido, string> = {
+	pendiente_pago: 'bg-amber-50 text-amber-700 border-amber-200',
+	pagado: 'bg-blue-50 text-blue-700 border-blue-200',
+	preparando: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+	despachado: 'bg-purple-50 text-purple-700 border-purple-200',
+	en_punto: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+	entregado: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+	retirado: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+	cancelado: 'bg-rose-50 text-rose-700 border-rose-200',
+	reembolsado: 'bg-rose-50 text-rose-700 border-rose-200'
+};
+
 const getStatusClass = (estado: string) => {
-	switch(estado) {
-		case 'pendiente_pago': return 'bg-amber-50 text-amber-700 border-amber-200';
-		case 'pagado': return 'bg-blue-50 text-blue-700 border-blue-200';
-		case 'preparando': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-		case 'entregado': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-		case 'cancelado': return 'bg-rose-50 text-rose-700 border-rose-200';
-		default: return 'bg-slate-50 text-slate-700 border-slate-200';
-	}
+	const canonico = normalizarEstadoPedido(estado);
+	return canonico ? CLASES_ESTADO[canonico] : 'bg-slate-50 text-slate-700 border-slate-200';
+};
+
+const getStatusLabel = (estado: string) => {
+	const canonico = normalizarEstadoPedido(estado);
+	return canonico ? ETIQUETAS[canonico] : estado;
 };
 ---
 
@@ -194,7 +219,7 @@ const getStatusClass = (estado: string) => {
 									</td>
 									<td class="p-3 text-center">
 										<span class={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusClass(o.estado)}`}>
-											{o.estado}
+											{getStatusLabel(o.estado)}
 										</span>
 									</td>
 									<td class="p-3 text-center">

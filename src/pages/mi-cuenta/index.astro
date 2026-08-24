@@ -4,7 +4,7 @@ import { getClientProfile } from '../../lib/server/auth';
 
 export const prerender = false;
 
-const profile = await getClientProfile(Astro.cookies);
+const profile = await getClientProfile(Astro);
 if (!profile) return Astro.redirect('/login');
 
 const userName = profile.nombre ? profile.nombre.split(' ')[0] : profile.email.split('@')[0];

@@ -10,7 +10,9 @@ const estadoParam = Astro.url.searchParams.get('estado') || 'solicitado';
 
 let applications: any[] = [];
 try {
-	const queries = [Query.orderDesc('$createdAt')];
+	// Sin límite explícito Appwrite devuelve 25: con más solicitudes, el resto
+	// quedaba invisible sin ningún aviso.
+	const queries = [Query.orderDesc('$createdAt'), Query.limit(500)];
 	if (estadoParam !== 'todos') {
 		queries.unshift(Query.equal('estado', estadoParam));
 	}

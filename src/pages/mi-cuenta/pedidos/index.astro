@@ -7,15 +7,18 @@ import { ETIQUETAS, type EstadoPedido } from '../../../lib/orderStates';
 
 export const prerender = false;
 
-const profile = await getClientProfile(Astro.cookies);
+const profile = await getClientProfile(Astro);
 if (!profile) return Astro.redirect('/login');
 
 let orders: any[] = [];
 try {
 	const { databases } = createAdminClient();
+	// Límite explícito: el default de Appwrite es 25 y cortaba el historial
+	// en silencio a partir del pedido 26.
 	const res = await databases.listDocuments('urbanpoint', 'orders', [
 		Query.equal('customer_id', profile.$id),
-		Query.orderDesc('$createdAt')
+		Query.orderDesc('$createdAt'),
+		Query.limit(100)
 	]);
 	orders = res.documents;
 } catch (e) {

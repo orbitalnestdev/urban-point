@@ -58,6 +58,48 @@ export async function resolverComisiones(orderId: string) {
 			throw new Error('La orden no está pagada.');
 		}
 
+		// Evitar re-procesamiento duplicado de comisiones para la misma orden
+		const existingLedgers = await db.listDocuments('urbanpoint', 'commission_ledger', [
+			Query.equal('order_id', orderId),
+			Query.limit(1)
+		]);
+		if (existingLedgers.documents.length > 0 || order.stock_descontado) {
+			console.log(`Comisiones ya procesadas anteriormente para la orden ${orderId}`);
+			return { success: true, alreadyProcessed: true };
+		}
+
+		const itemsRes = await db.listDocuments('urbanpoint', 'order_items', [
+			Query.equal('order_id', orderId),
+			Query.limit(500)
+		]);
+
+		// El descuento de stock corre para TODOS los niveles de precio. Antes
+		// estaba después del corte por tier: los pedidos canillita/distribuidor
+		// se pagaban y entregaban sin tocar inventario (y al cancelarse, el
+		// stock se "restauraba" inflándolo con unidades nunca descontadas).
+		for (const item of itemsRes.documents) {
+			const productId = typeof item.product_id === 'string' ? item.product_id : item.product_id?.$id;
+			if (!productId) continue;
+			try {
+				const product = await db.getDocument('urbanpoint', 'products', productId);
+				await db.updateDocument('urbanpoint', 'products', productId, {
+					stock: Math.max(0, (product.stock || 0) - item.cantidad)
+				});
+			} catch (e) {
+				console.error(`No se pudo descontar stock del producto ${productId} (orden ${orderId}):`, e);
+			}
+		}
+
+		// Marca de idempotencia para pedidos que no generan asientos (tiers sin
+		// comisión o sin regla aplicable). Si el atributo booleano
+		// 'stock_descontado' no existe en la colección orders, se loguea y se
+		// sigue: el guard por transición de estado cubre el caso normal.
+		try {
+			await db.updateDocument('urbanpoint', 'orders', orderId, { stock_descontado: true });
+		} catch (e) {
+			console.warn(`No se pudo marcar stock_descontado en la orden ${orderId} (agregá el atributo booleano a la colección orders):`);
+		}
+
 		// DECISIÓN CERRADA 1: Comisión y margen son excluyentes.
 		// Solo los pedidos con price_tier = 'publico' generan asiento en commission_ledger.
 		// Los pedidos a precio canillita o distribuidor tienen comisión cero, sin excepción.
@@ -66,22 +108,9 @@ export async function resolverComisiones(orderId: string) {
 			await db.updateDocument('urbanpoint', 'orders', orderId, {
 				comision_total_centavos: 0
 			});
-			console.log(`Orden ${orderId} en nivel '${priceTier}': comisión 0 (excluyente con margen).`);
+			console.log(`Orden ${orderId} en nivel '${priceTier}': comisión 0 (excluyente con margen). Stock descontado.`);
 			return { success: true, zeroCommissionTier: priceTier };
 		}
-
-		// Evitar re-procesamiento duplicado de comisiones para la misma orden
-		const existingLedgers = await db.listDocuments('urbanpoint', 'commission_ledger', [
-			Query.equal('order_id', orderId)
-		]);
-		if (existingLedgers.documents.length > 0) {
-			console.log(`Comisiones ya procesadas anteriormente para la orden ${orderId}`);
-			return { success: true, alreadyProcessed: true };
-		}
-
-		const itemsRes = await db.listDocuments('urbanpoint', 'order_items', [
-			Query.equal('order_id', orderId)
-		]);
 
 		// Identificar al comprador si existe
 		const customerProfileId = order.customer_id ? (typeof order.customer_id === 'string' ? order.customer_id : order.customer_id.$id) : null;
@@ -115,12 +144,6 @@ export async function resolverComisiones(orderId: string) {
 			
 			const baseCents = item.subtotal || (item.precio_unitario * item.cantidad);
 
-			// Descontar stock real del producto
-			const nuevoStock = Math.max(0, (product.stock || 0) - item.cantidad);
-			await db.updateDocument('urbanpoint', 'products', productId, {
-				stock: nuevoStock
-			});
-
 			// Devengo 1: Logística
 			if (pickupProfileId) {
 				const rule = await evaluateCommissionRule(db, pickupProfileId, categoryId);
@@ -143,7 +166,11 @@ export async function resolverComisiones(orderId: string) {
 
 			// Devengo 2: Referido (Anti-fraude: Validar que no sea autoreferido del mismo comprador)
 			const isSelfReferral = customerProfileId && customerProfileId === referrerProfileId;
-			if (referrerProfileId && !isSelfReferral) {
+			// Si el referido es el mismo dueño del punto de retiro, ya cobró el
+			// fee de logística por este ítem: acreditarle además la comisión de
+			// referido duplicaba el pago al mismo perfil por la misma venta.
+			const yaCobraLogistica = pickupProfileId && pickupProfileId === referrerProfileId;
+			if (referrerProfileId && !isSelfReferral && !yaCobraLogistica) {
 				const rule = await evaluateCommissionRule(db, referrerProfileId, categoryId);
 				if (rule) {
 					const cents = calculateAmount(baseCents, rule);
@@ -254,18 +281,19 @@ export interface CanillitaStats {
  * Utilizada tanto por el Panel de Canillita (/canillita) como por el Panel de Administración.
  */
 export async function getCanillitaStats(profileId: string): Promise<CanillitaStats> {
-	// 1. Puntos de retiro asociados al canillita
-	const pointsRes = await db.listDocuments('urbanpoint', 'pickup_points', [
-		Query.equal('profile_id', profileId),
-		Query.limit(50)
+	// 1 + 2 en paralelo: puntos de retiro e historial de comisiones
+	const [pointsRes, ledgerRes] = await Promise.all([
+		db.listDocuments('urbanpoint', 'pickup_points', [
+			Query.equal('profile_id', profileId),
+			Query.limit(50)
+		]),
+		db.listDocuments('urbanpoint', 'commission_ledger', [
+			Query.equal('profile_id', profileId),
+			Query.orderDesc('$createdAt'),
+			Query.limit(1000)
+		])
 	]);
 	const pickupPointIds = pointsRes.documents.map(p => p.$id);
-
-	// 2. Historial de comisiones del canillita
-	const ledgerRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
-		Query.equal('profile_id', profileId),
-		Query.limit(1000)
-	]);
 	const ledgers = ledgerRes.documents;
 
 	const now = new Date();
@@ -302,16 +330,16 @@ export async function getCanillitaStats(profileId: string): Promise<CanillitaSta
 	);
 	const ventasAtribuidasMesCount = orderIdsThisMonth.size;
 
-	// Entregas pendientes en su punto de retiro
+	// Entregas pendientes en su punto de retiro: se filtra por estado en la
+	// query y se usa el total del servidor, sin transferir los documentos.
 	let entregasPendientesCount = 0;
 	if (pickupPointIds.length > 0) {
 		const pendingOrdersRes = await db.listDocuments('urbanpoint', 'orders', [
 			Query.equal('pickup_point_id', pickupPointIds),
-			Query.limit(500)
+			Query.equal('estado', ['pagado', 'preparando', 'en_punto']),
+			Query.limit(1)
 		]);
-		entregasPendientesCount = pendingOrdersRes.documents.filter(o => 
-			o.estado === 'pagado' || o.estado === 'preparando' || o.estado === 'en_punto'
-		).length;
+		entregasPendientesCount = pendingOrdersRes.total;
 	}
 
 	return {
@@ -351,17 +379,30 @@ export async function liquidarComisiones(input: LiquidacionInput) {
 		};
 	}
 
-	const ledgersRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
-		Query.equal('profile_id', input.profileId),
-		Query.limit(500)
-	]);
+	// Sólo se paga lo confirmado ('disponible', es decir con pedido entregado).
+	// Liquidar asientos 'pendiente' pagaba comisiones de pedidos que podían
+	// cancelarse después, dejando la reversa contra un saldo ya cobrado.
+	// Se pagina con cursor: el viejo limit(500) sin paginar liquidaba un
+	// subconjunto arbitrario cuando había más asientos.
+	const asientosDisponibles: any[] = [];
+	let cursor: string | null = null;
+	while (true) {
+		const queries = [
+			Query.equal('profile_id', input.profileId),
+			Query.equal('estado', 'disponible'),
+			Query.limit(100)
+		];
+		if (cursor) queries.push(Query.cursorAfter(cursor));
+		const page = await db.listDocuments('urbanpoint', 'commission_ledger', queries);
+		asientosDisponibles.push(...page.documents);
+		if (page.documents.length < 100) break;
+		cursor = page.documents[page.documents.length - 1].$id;
+	}
 
-	const pendientes = ledgersRes.documents.filter(
-		d => (d.estado === 'pendiente' || d.estado === 'disponible') && d.tipo !== 'reversa'
-	);
+	const pendientes = asientosDisponibles.filter(d => d.tipo !== 'reversa');
 
 	if (pendientes.length === 0) {
-		throw new Error('No hay comisiones pendientes de liquidar para este canillita.');
+		throw new Error('No hay comisiones confirmadas para liquidar. Las comisiones se confirman cuando el pedido se entrega.');
 	}
 
 	const montoCentavos = pendientes.reduce(
@@ -411,6 +452,37 @@ export async function liquidarComisiones(input: LiquidacionInput) {
 	return { payoutId: payout.$id, montoCentavos, idempotencySkipped: false };
 }
 
+/**
+ * Devuelve al inventario las unidades de una orden cuyo stock ya se descontó.
+ * Reutilizada por la cancelación y por el reembolso del webhook de MP (que
+ * antes revertía comisiones pero nunca devolvía el stock).
+ */
+export async function restaurarStockDeOrden(orderId: string) {
+	const itemsRes = await db.listDocuments('urbanpoint', 'order_items', [
+		Query.equal('order_id', orderId),
+		Query.limit(500)
+	]);
+
+	for (const item of itemsRes.documents) {
+		const productId = typeof item.product_id === 'string' ? item.product_id : item.product_id?.$id;
+		if (!productId) continue;
+		try {
+			const product = await db.getDocument('urbanpoint', 'products', productId);
+			await db.updateDocument('urbanpoint', 'products', productId, {
+				stock: (product.stock || 0) + item.cantidad
+			});
+		} catch (e) {
+			console.warn(`No se pudo restaurar el stock del producto ${productId}:`, e);
+		}
+	}
+
+	try {
+		await db.updateDocument('urbanpoint', 'orders', orderId, { stock_descontado: false });
+	} catch (e) {
+		// El atributo puede no existir en el esquema; no es bloqueante.
+	}
+}
+
 export async function cancelarOrdenYRestaurarStock(orderId: string) {
 	try {
 		const order = await db.getDocument('urbanpoint', 'orders', orderId);
@@ -426,23 +498,8 @@ export async function cancelarOrdenYRestaurarStock(orderId: string) {
 		// 2. Restaurar stock, sólo si llegó a descontarse. El descuento ocurre
 		//    en resolverComisiones, que corre recién cuando la orden se paga:
 		//    devolver stock de una orden nunca pagada inflaba el inventario.
-		if (order.estado !== 'pendiente_pago') {
-			const itemsRes = await db.listDocuments('urbanpoint', 'order_items', [
-				Query.equal('order_id', orderId),
-				Query.limit(500)
-			]);
-
-			for (const item of itemsRes.documents) {
-				const productId = typeof item.product_id === 'string' ? item.product_id : item.product_id.$id;
-				try {
-					const product = await db.getDocument('urbanpoint', 'products', productId);
-					await db.updateDocument('urbanpoint', 'products', productId, {
-						stock: (product.stock || 0) + item.cantidad
-					});
-				} catch (e) {
-					console.warn(`No se pudo restaurar el stock del producto ${productId}:`, e);
-				}
-			}
+		if (order.stock_descontado === true || order.estado !== 'pendiente_pago') {
+			await restaurarStockDeOrden(orderId);
 		}
 
 		// 3. Recién ahora se marca la orden como cancelada.

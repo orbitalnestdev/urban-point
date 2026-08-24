@@ -1,9 +1,12 @@
 ---
 export const prerender = false;
-import Layout from '../../../layouts/Layout.astro';
+// AdminLayout en lugar del Layout público: la página quedaba fuera del panel,
+// con un nav propio inconsistente y sin el sidebar de administración.
+import AdminLayout from '../../../layouts/AdminLayout.astro';
 import RuleForm from '../../../components/admin/RuleForm';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { ChevronLeft } from 'lucide-react';
+import { Query } from 'node-appwrite';
 
 const user = Astro.locals.user;
 if (!user || user.role !== 'admin') {
@@ -12,34 +15,26 @@ if (!user || user.role !== 'admin') {
 
 const { databases } = createAdminClient();
 
-import { Query } from 'node-appwrite';
-
-// Fetch data for selects
-const categoriasRes = await databases.listDocuments('urbanpoint', 'categories', [Query.limit(50)]);
-const categorias = categoriasRes.documents.map(c => ({ id: c.$id, name: c.nombre }));
-
-const canillitasRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-  Query.equal('estado', 'activo'),
-  Query.limit(50)
+// Categorías y canillitas no dependen entre sí: en paralelo.
+const [categoriasRes, canillitasRes] = await Promise.all([
+  databases.listDocuments('urbanpoint', 'categories', [Query.limit(50)]),
+  databases.listDocuments('urbanpoint', 'pickup_points', [
+    Query.equal('estado', 'activo'),
+    Query.limit(50)
+  ])
 ]);
+
+const categorias = categoriasRes.documents.map(c => ({ id: c.$id, name: c.nombre }));
 const canillitas = canillitasRes.documents.map(c => ({ id: typeof c.profile_id === 'string' ? c.profile_id : c.profile_id.$id, name: c.nombre_comercial }));
 ---
 
-<Layout title="Nueva Regla | UrbanPoint Admin">
-  <nav class="w-full z-50 bg-slate-900 border-b border-slate-800">
-		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-			<div class="flex items-center gap-4 text-white">
-        <a href="/admin/comisiones" class="text-slate-400 hover:text-white transition-colors">
-          <ChevronLeft className="w-5 h-5" />
-        </a>
-				<span class="text-xl font-extrabold tracking-tight">Admin | Nueva Regla</span>
-			</div>
-		</div>
-	</nav>
-
-  <main class="min-h-[calc(100vh-64px)] bg-slate-50 py-12">
+<AdminLayout title="Nueva Regla de Comisión">
+  <main class="bg-slate-50 py-12">
     <div class="max-w-3xl mx-auto px-6">
       <div class="mb-8">
+        <a href="/admin/comisiones" class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors mb-3">
+          <ChevronLeft className="w-4 h-4" /> Volver a Comisiones
+        </a>
         <h1 class="text-3xl font-bold text-slate-900">Crear Regla de Comisión</h1>
         <p class="text-slate-500 mt-1">Configura cuánto se paga por referido y por fee de logística.</p>
       </div>
@@ -47,4 +42,4 @@ const canillitas = canillitasRes.documents.map(c => ({ id: typeof c.profile_id =
       <RuleForm client:only="react" canillitas={canillitas} categorias={categorias} />
     </div>
   </main>
-</Layout>
+</AdminLayout>

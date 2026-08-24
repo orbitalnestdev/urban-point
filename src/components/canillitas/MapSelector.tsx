@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Search, MapPin } from 'lucide-react';
+import { Search, MapPin, Loader2, AlertCircle } from 'lucide-react';
 
 interface MapSelectorProps {
   lat: number;
@@ -14,10 +14,17 @@ export default function MapSelector({ lat, lng, onChange }: MapSelectorProps) {
   const markerInstance = useRef<L.Marker | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  // Mensaje de error inline (reemplaza los alert()) e indicador de carga
+  // mientras resolvemos la dirección al soltar el marcador.
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const [isGeocoding, setIsGeocoding] = useState(false);
 
   const performReverseGeocoding = async (lat: number, lng: number) => {
+    setIsGeocoding(true);
+    setGeoError(null);
     try {
         const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
+        if (!res.ok) throw new Error(`Reverse geocoding HTTP ${res.status}`);
         const data = await res.json();
         if (data && data.features && data.features.length > 0) {
             const props = data.features[0].properties;
@@ -28,6 +35,9 @@ export default function MapSelector({ lat, lng, onChange }: MapSelectorProps) {
         }
     } catch (e) {
         console.error("Reverse geocoding error", e);
+        setGeoError('No pudimos obtener la dirección de ese punto. Completá los campos a mano o intentá de nuevo.');
+    } finally {
+        setIsGeocoding(false);
     }
     return undefined;
   };
@@ -94,8 +104,10 @@ export default function MapSelector({ lat, lng, onChange }: MapSelectorProps) {
     if (!searchQuery.trim()) return;
     
     setIsSearching(true);
+    setGeoError(null);
     try {
       const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery + ', Argentina')}&limit=1`);
+      if (!res.ok) throw new Error(`Geocoding HTTP ${res.status}`);
       const data = await res.json();
       if (data && data.features && data.features.length > 0) {
         const newLng = parseFloat(data.features[0].geometry.coordinates[0]);
@@ -107,10 +119,11 @@ export default function MapSelector({ lat, lng, onChange }: MapSelectorProps) {
         
         onChange(newLat, newLng, { direccion, localidad, provincia });
       } else {
-        alert('No se encontró la dirección. Intentá agregar tu ciudad (Ej: Callao 722, CABA).');
+        setGeoError('No se encontró la dirección. Intentá agregar tu ciudad (Ej: Callao 722, CABA).');
       }
     } catch (err) {
       console.error(err);
+      setGeoError('No pudimos buscar la dirección. Revisá tu conexión e intentá de nuevo.');
     } finally {
       setIsSearching(false);
     }
@@ -129,17 +142,33 @@ export default function MapSelector({ lat, lng, onChange }: MapSelectorProps) {
             className="w-full pl-11 pr-12 py-3 bg-white/95 backdrop-blur-sm border border-slate-200 shadow-md rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2D5A27] transition-shadow"
           />
           <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <button 
+          <button
             type="submit"
             disabled={isSearching}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-[#2D5A27] text-white rounded-lg hover:bg-[#23471F] transition-colors disabled:opacity-50"
           >
-            <Search className="w-4 h-4" />
+            {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
           </button>
         </form>
+
+        {/* Error inline, consistente con el estilo del form (antes era un alert) */}
+        {geoError && (
+          <div className="mt-2 bg-red-50/95 backdrop-blur-sm border border-red-100 shadow-md rounded-xl px-3.5 py-2.5 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-xs font-medium text-red-700">{geoError}</p>
+          </div>
+        )}
+
+        {/* Indicador mientras resolvemos la dirección del punto elegido */}
+        {isGeocoding && (
+          <div className="mt-2 bg-white/95 backdrop-blur-sm border border-slate-200 shadow-md rounded-xl px-3.5 py-2.5 flex items-center gap-2">
+            <Loader2 className="w-4 h-4 text-[#2D5A27] animate-spin shrink-0" />
+            <p className="text-xs font-medium text-slate-600">Obteniendo la dirección del punto...</p>
+          </div>
+        )}
       </div>
-      
-      <div ref={mapRef} style={{ height: '100%', width: '100%', zIndex: 0, borderRadius: 'inherit' }} />
+
+      <div ref={mapRef} style={{ height: '100%', width: '100%', zIndex: 0, borderRadius: 'inherit', opacity: isGeocoding ? 0.7 : 1, transition: 'opacity 150ms' }} />
     </div>
   );
 }

@@ -12,6 +12,9 @@ const preferenceId = Astro.url.searchParams.get('preference_id');
 const orderId = Astro.url.searchParams.get('order_id');
 
 let order = null;
+// Se distingue "no hay pedido" de "hay pedido pero no es tuyo" para no
+// felicitar a nadie por una compra que no pudimos verificar.
+let accesoDenegado = false;
 
 const { databases: db } = createAdminClient();
 
@@ -39,7 +42,7 @@ try {
 
 		let esElComprador = false;
 		if (!desdeEsteNavegador) {
-			const profile = await getClientProfile(Astro.cookies);
+			const profile = await getClientProfile(Astro);
 			const dueño = typeof candidato.customer_id === 'string'
 				? candidato.customer_id
 				: candidato.customer_id?.$id;
@@ -49,23 +52,50 @@ try {
 		if (desdeEsteNavegador || esElComprador) {
 			order = candidato;
 		} else {
+			accesoDenegado = true;
 			console.warn(`Acceso denegado al pedido ${candidato.$id} desde /checkout/success.`);
 		}
 	}
 } catch (e) {
 	console.error('Error fetching order', e);
 }
+
+// El estado manda: con pago a convenir el pedido llega en 'pendiente_pago' y
+// no corresponde anunciar "exitoso" como si ya estuviera cobrado.
+const esPagoAConvenir = Boolean(order && order.estado === 'pendiente_pago');
+
+const titulo = accesoDenegado
+	? 'Pedido no disponible'
+	: esPagoAConvenir
+		? 'Pedido registrado — pago a coordinar'
+		: '¡Pedido exitoso!';
+
+const subtitulo = accesoDenegado
+	? 'No pudimos verificar este pedido desde este dispositivo. Si la compra es tuya, ingresá a tu cuenta para ver el detalle.'
+	: esPagoAConvenir
+		? 'Registramos tu pedido. El pago lo coordinás directamente al momento del retiro (efectivo o transferencia).'
+		: 'Tu pedido ha sido procesado correctamente y ya está siendo preparado.';
 ---
 
-<Layout title="¡Pedido Exitoso! | UrbanPoint">
+<Layout title={`${titulo} | UrbanPoint`}>
 	<div class="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center">
-		<div class="w-20 h-20 bg-[#F2F7F3] text-[#2D5A27] rounded-full flex items-center justify-center mb-6 shadow-lg shadow-[#2D5A27]/20 border border-[#D4E5D6]">
-			<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-		</div>
+		{accesoDenegado ? (
+			<div class="w-20 h-20 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-slate-300/20 border border-slate-200">
+				<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+			</div>
+		) : esPagoAConvenir ? (
+			<div class="w-20 h-20 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-amber-500/20 border border-amber-200">
+				<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+			</div>
+		) : (
+			<div class="w-20 h-20 bg-[#F2F7F3] text-[#2D5A27] rounded-full flex items-center justify-center mb-6 shadow-lg shadow-[#2D5A27]/20 border border-[#D4E5D6]">
+				<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+			</div>
+		)}
 		{order && <span id="order-confirmado" data-order={order.$id} class="hidden"></span>}
-		<h1 class="text-4xl font-extrabold text-slate-900 mb-4">¡Pedido exitoso!</h1>
+		<h1 class="text-4xl font-extrabold text-slate-900 mb-4">{titulo}</h1>
 		<p class="text-lg text-slate-600 max-w-md mx-auto mb-8">
-			Tu pedido ha sido procesado correctamente y ya está siendo preparado.
+			{subtitulo}
 		</p>
 		
 		{order && order.pickup_code_hash && (
@@ -95,9 +125,18 @@ try {
 			</div>
 		)}
 		
-		<a href="/productos" class="bg-[#2D5A27] text-white font-bold px-8 py-3 rounded-xl hover:bg-[#23471F] transition-colors shadow-lg shadow-[#2D5A27]/20">
-			Volver al Catálogo
-		</a>
+		<div class="flex flex-col sm:flex-row gap-4">
+			{accesoDenegado && (
+				<a href="/mi-cuenta/pedidos" class="bg-[#2D5A27] text-white font-bold px-8 py-3 rounded-xl hover:bg-[#23471F] transition-colors shadow-lg shadow-[#2D5A27]/20">
+					Ver mis pedidos
+				</a>
+			)}
+			<a href="/productos" class={accesoDenegado
+				? 'bg-white text-slate-700 border-2 border-slate-200 font-bold px-8 py-3 rounded-xl hover:border-slate-300 hover:text-slate-900 transition-colors'
+				: 'bg-[#2D5A27] text-white font-bold px-8 py-3 rounded-xl hover:bg-[#23471F] transition-colors shadow-lg shadow-[#2D5A27]/20'}>
+				Volver al Catálogo
+			</a>
+		</div>
 	</div>
 </Layout>
 

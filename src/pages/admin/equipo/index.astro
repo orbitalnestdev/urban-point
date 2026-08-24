@@ -115,14 +115,15 @@ if (Astro.request.method === 'POST') {
     }
 }
 
-// Fetch real team members (admin & gestion roles)
+// El staff se filtra en la query misma: traer 100 perfiles cualesquiera y
+// filtrar en memoria descartaba admins si la tienda superaba los 100 usuarios.
 try {
     const res = await databases.listDocuments('urbanpoint', 'profiles', [
+        Query.equal('role', ['admin', 'gestion']),
         Query.orderDesc('$createdAt'),
         Query.limit(100)
     ]);
-    // Filter profiles that belong to store staff (admin or gestion)
-    teamMembers = res.documents.filter(p => p.role === 'admin' || p.role === 'gestion');
+    teamMembers = res.documents;
 } catch (e) {
     console.error("Error fetching team members:", e);
 }

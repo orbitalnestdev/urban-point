@@ -5,7 +5,7 @@ import Layout from '../layouts/Layout.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import AddToCartBtn from '../components/shop/AddToCartBtn';
-import { getCachedCatalog } from '../lib/server/catalogCache';
+import { getCachedCatalog, getOptimizedImageUrl } from '../lib/server/catalogCache';
 import { createAdminClient } from '../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { serializeActiveNodeCookie, REF_COOKIE_NAME, REF_COOKIE_MAX_AGE } from '../lib/nodeSession';
@@ -54,11 +54,16 @@ try {
     telefono: activeNode.telefono || ''
   };
 
-  // Set HTTP Cookie for 30 days session persistence by default
+  // Set HTTP Cookie for 30 days session persistence by default.
+  // httpOnly: el servidor es el único que la escribe y la lee (el cliente usa
+  // su copia en localStorage); sin esto era reescribible desde document.cookie
+  // y el checkout confiaba en su contenido para atribuir la venta.
   Astro.cookies.set('up_active_node', serializeActiveNodeCookie(activeNodeData), {
     path: '/',
     maxAge: 30 * 24 * 60 * 60,
-    sameSite: 'lax'
+    sameSite: 'lax',
+    httpOnly: true,
+    secure: import.meta.env.PROD
   });
 
   // If node has an associated Canillita Profile, automatically attach their referral code
@@ -324,7 +329,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 									<!-- Image Container -->
 									<a href={`/productos/${prod.slug}`} class="block aspect-square rounded-2xl bg-slate-50 mb-4 overflow-hidden relative cursor-pointer group-hover:opacity-95 p-3 flex items-center justify-center">
 										{prod.portada_url ? (
-											<img src={prod.portada_url} alt={prod.nombre} loading="lazy" decoding="async" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
+											<img src={getOptimizedImageUrl(prod.portada_url, 400, 400, 80)} alt={prod.nombre} loading="lazy" decoding="async" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
 										) : (
 											<div class="w-full h-full flex items-center justify-center text-slate-300">
 												<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
@@ -373,7 +378,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 										<span class="text-[11px] font-bold text-[#2D5A27]">3 cuotas sin interés</span>
 										<span class="text-[11px] text-slate-500 font-medium">de {formateador.format(Math.round(precioMinorista / 3))}</span>
 									</div>
-									<AddToCartBtn client:load item={{ id: prod.$id, sku: prod.sku || prod.$id, nombre: prod.nombre, precio: precioMinorista, imagen: prod.portada_url || '' }} variant="plus" />
+									<AddToCartBtn client:load item={{ id: prod.$id, sku: prod.sku || prod.$id, nombre: prod.nombre, precio: precioMinorista, imagen: getOptimizedImageUrl(prod.portada_url || '', 200, 200, 75) }} variant="plus" disabled={typeof prod.stock === 'number' && prod.stock <= 0} />
 								</div>
 							</div>
 						);
@@ -579,13 +584,11 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 					pill.classList.remove('bg-white', 'text-slate-700', 'border', 'border-slate-200');
 					pill.classList.add('active', 'bg-[#2D5A27]', 'text-white');
 
+					// OJO: este script viaja is:inline (sin compilar), tiene que ser
+					// JS puro — un cast de TypeScript acá rompe el filtro en el navegador.
 					prodItems.forEach(item => {
 						const itemCat = item.getAttribute('data-cat-id');
-						if (catId === 'all' || itemCat === catId) {
-							(item as HTMLElement).style.display = 'flex';
-						} else {
-							(item as HTMLElement).style.display = 'none';
-						}
+						item.style.display = (catId === 'all' || itemCat === catId) ? 'flex' : 'none';
 					});
 				});
 			});

@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import '../styles/design-system.css';
 import FloatingWhatsApp from '../components/FloatingWhatsApp.astro';
+import DevUserSwitcher from '../components/DevUserSwitcher.astro';
 import { parseActiveNodeCookie } from '../lib/nodeSession';
 
 interface Props {
@@ -40,6 +41,7 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
 
 		<slot />
 		<FloatingWhatsApp />
+		<DevUserSwitcher />
 		
 		<script>
 			// El código de referido lo persiste el middleware en una cookie

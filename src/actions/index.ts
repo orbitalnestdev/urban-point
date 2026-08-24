@@ -1,5 +1,6 @@
 import { defineAction } from 'astro:actions';
 import { z } from 'astro:schema';
+import { randomBytes } from 'node:crypto';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { Client, Databases, ID, Users, Query, Account } from 'node-appwrite';
 import { getClientProfile, requireRole } from '../lib/server/auth';
@@ -13,6 +14,7 @@ import { parseActiveNodeValue, NODE_COOKIE_NAME, REF_COOKIE_NAME } from '../lib/
 import { precioDeVentaCentavos } from '../lib/pricing';
 import { esSlugReservado, limpiarSlugNodo } from '../lib/slugs';
 import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
+import { invalidateSessionCache } from '../middleware';
 
 
 import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, confirmarComisionesDeOrden } from '../lib/commissions';
@@ -71,10 +73,13 @@ const users = new Proxy({} as Users, {
  */
 async function sincronizarSaldoDisponible(profileId: string) {
 	try {
+		// 'pendiente' + 'disponible': tras una entrega los asientos pasan a
+		// 'disponible' (confirmarComisionesDeOrden); contar sólo 'pendiente'
+		// ponía el saldo en 0 justo cuando la comisión se confirmaba.
 		const pendientes = await db.listDocuments('urbanpoint', 'commission_ledger', [
 			Query.equal('profile_id', profileId),
-			Query.equal('estado', 'pendiente'),
-			Query.limit(500)
+			Query.equal('estado', ['pendiente', 'disponible']),
+			Query.limit(5000)
 		]);
 		const saldo = pendientes.documents.reduce((acc, cur) => acc + (cur.monto_centavos || 0), 0);
 		await db.updateDocument('urbanpoint', 'profiles', profileId, {
@@ -174,6 +179,21 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
+				// Dedup: una solicitud abierta por email alcanza. Sin este control,
+				// el endpoint público generaba documentos y mails a admins sin
+				// límite (spam trivial contra /_actions/registerCanillita).
+				const yaExiste = await db.listDocuments('urbanpoint', 'canillita_applications', [
+					Query.equal('email', input.email.trim().toLowerCase()),
+					Query.equal('estado', 'solicitado'),
+					Query.limit(1)
+				]);
+				if (yaExiste.documents.length > 0) {
+					return {
+						success: false,
+						error: 'Ya tenemos una solicitud pendiente con ese email. Te vamos a contactar a la brevedad.'
+					};
+				}
+
 				const doc = await db.createDocument(
 					'urbanpoint',
 					'canillita_applications',
@@ -183,7 +203,7 @@ export const server = {
 						apellido: input.apellido,
 						dni: input.dni,
 						telefono: input.telefono,
-						email: input.email,
+						email: input.email.trim().toLowerCase(),
 						nombre_comercial: input.nombre_comercial,
 						direccion: input.direccion,
 						localidad: input.localidad || 'CABA',
@@ -416,13 +436,15 @@ export const server = {
 
 				const newCode = await generateUniqueReferralCode(nombre, apellido);
 
-				// Desactivar anteriores
+				// Desactivar anteriores (sin Query.limit, Appwrite devuelve sólo 25
+				// y quedaban códigos viejos activos en paralelo).
 				const prevCodes = await db.listDocuments('urbanpoint', 'referral_codes', [
-					Query.equal('owner_id', input.profileId)
+					Query.equal('owner_id', input.profileId),
+					Query.limit(500)
 				]);
-				for (const c of prevCodes.documents) {
-					await db.updateDocument('urbanpoint', 'referral_codes', c.$id, { activo: false });
-				}
+				await Promise.all(prevCodes.documents.map(c =>
+					db.updateDocument('urbanpoint', 'referral_codes', c.$id, { activo: false })
+				));
 
 				const newDoc = await db.createDocument('urbanpoint', 'referral_codes', ID.unique(), {
 					code: newCode,
@@ -550,18 +572,14 @@ export const server = {
 					throw new Error('Solo admin puede eliminar puntos de retiro');
 				}
 
+				// Sólo se opera sobre pickup_points. La cascada anterior, ante un
+				// fallo, terminaba borrando un documento con el MISMO id en
+				// canillita_applications o incluso en profiles: un fallback
+				// destructivo que podía destruir el perfil de un usuario.
 				try {
 					await db.deleteDocument('urbanpoint', 'pickup_points', input.id);
 				} catch (e1) {
-					try {
-						await db.updateDocument('urbanpoint', 'pickup_points', input.id, { estado: 'baja' });
-					} catch (e2) {
-						try {
-							await db.deleteDocument('urbanpoint', 'canillita_applications', input.id);
-						} catch (e3) {
-							await db.deleteDocument('urbanpoint', 'profiles', input.id);
-						}
-					}
+					await db.updateDocument('urbanpoint', 'pickup_points', input.id, { estado: 'baja' });
 				}
 
 				return { success: true };
@@ -630,17 +648,27 @@ export const server = {
 				// Validate pickup point ownership if caller is canillita
 				if (ctx.locals.user.role === 'canillita') {
 					const userPoints = await db.listDocuments('urbanpoint', 'pickup_points', [
-						Query.equal('profile_id', ctx.locals.user.profileId)
+						Query.equal('profile_id', ctx.locals.user.profileId),
+						Query.limit(100)
 					]);
 					const userPointIds = userPoints.documents.map(p => p.$id);
 					const orderPointId = typeof order.pickup_point_id === 'string' ? order.pickup_point_id : order.pickup_point_id?.$id;
-					
-					if (orderPointId && !userPointIds.includes(orderPointId)) {
+
+					// Denegar por defecto: un pedido sin punto de retiro (p. ej.
+					// envío a domicilio) no lo puede cerrar un canillita. Antes la
+					// guardia sólo corría si orderPointId era truthy.
+					if (!orderPointId || !userPointIds.includes(orderPointId)) {
 						throw new Error('Este pedido no pertenece a tu punto de retiro.');
+					}
+
+					// El código de retiro es obligatorio para el canillita cuando el
+					// pedido tiene uno: omitirlo en el POST salteaba la verificación.
+					if (order.pickup_code_hash && !input.pickupCode?.trim()) {
+						throw new Error('Ingresá el código de retiro que te muestra el cliente.');
 					}
 				}
 
-				if (input.pickupCode && order.pickup_code_hash && input.pickupCode.trim().toUpperCase() !== order.pickup_code_hash.trim().toUpperCase()) {
+				if (input.pickupCode?.trim() && order.pickup_code_hash && input.pickupCode.trim().toUpperCase() !== order.pickup_code_hash.trim().toUpperCase()) {
 					throw new Error('El código de retiro ingresado es incorrecto.');
 				}
 
@@ -678,8 +706,8 @@ export const server = {
 		input: z.object({
 			items: z.array(z.object({
 				productId: z.string(),
-				cantidad: z.number().min(1)
-			})),
+				cantidad: z.number().int().min(1).max(999)
+			})).min(1),
 			pickupPointId: z.string().optional(),
 			fulfillment: z.enum(['retiro', 'envio']).optional(),
 			direccionEnvio: z.string().optional(),
@@ -692,7 +720,7 @@ export const server = {
 			try {
 				let profileId = null;
 				try {
-					const profile = await getClientProfile(ctx.cookies);
+					const profile = await getClientProfile(ctx);
 					if (profile) profileId = profile.$id;
 				} catch (e) {
 					console.error("No profile attached to checkout:", e);
@@ -730,13 +758,26 @@ export const server = {
 
 				const userRole = ctx.locals.user?.role || 'cliente';
 
+				// Ítems duplicados se consolidan: [{X,5},{X,5}] con stock 5 pasaba
+				// las dos validaciones por separado y creaba una orden por 10.
+				const itemsPorProducto = new Map<string, number>();
+				for (const item of input.items) {
+					itemsPorProducto.set(item.productId, (itemsPorProducto.get(item.productId) || 0) + item.cantidad);
+				}
+				const itemsConsolidados = [...itemsPorProducto.entries()].map(([productId, cantidad]) => ({ productId, cantidad }));
+
 				// Re-fetch all products securely from backend to avoid price manipulation
 				const prefItems = [];
 				const orderItemsData = [];
 				let totalCentavos = 0;
-				
-				for (const item of input.items) {
-					const p = await db.getDocument('urbanpoint', 'products', item.productId);
+
+				const productos = await Promise.all(
+					itemsConsolidados.map(item => db.getDocument('urbanpoint', 'products', item.productId))
+				);
+
+				for (let i = 0; i < itemsConsolidados.length; i++) {
+					const item = itemsConsolidados[i];
+					const p = productos[i];
 					if (p.estado !== 'activo' || p.stock < item.cantidad) {
 						throw new Error(`El producto ${p.nombre} no está disponible o no hay stock suficiente.`);
 					}
@@ -768,10 +809,30 @@ export const server = {
 					totalCentavos += subtotalCentavos;
 				}
 
-				const costoEnvio = input.costoEnvio || 0;
+				// El costo de envío se calcula SIEMPRE en el servidor desde settings.
+				// input.costoEnvio venía del cliente sin validar: permitía mandar un
+				// negativo y bajar el total, y además nunca se cobraba en MP.
+				let costoEnvio = 0;
+				if ((input.fulfillment || 'retiro') === 'envio') {
+					const settings = await getSiteSettings();
+					const umbralGratis = settings.free_shipping_threshold_centavos || 0;
+					costoEnvio = umbralGratis > 0 && totalCentavos >= umbralGratis
+						? 0
+						: (settings.shipping_cost_centavos || 0);
+				}
 				const grandTotal = totalCentavos + costoEnvio;
 
-				const pickupCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+				if (costoEnvio > 0) {
+					prefItems.push({
+						id: 'envio',
+						title: 'Costo de envío',
+						quantity: 1,
+						unit_price: costoEnvio / 100,
+						currency_id: 'ARS'
+					});
+				}
+
+				const pickupCode = randomBytes(4).toString('hex').substring(0, 6).toUpperCase();
 
 				// Nodo de origen para la atribución de la venta.
 				const activeNodeSession = parseActiveNodeValue(
@@ -793,19 +854,30 @@ export const server = {
 					price_tier: effectiveTier
 				};
 
+				// La cookie del nodo activo no es de confianza (viaja sin firma y
+				// sin httpOnly): se valida contra la base y los datos de la orden
+				// salen del documento real, no de lo que diga la cookie.
 				if (activeNodeSession) {
-					orderPayload.origin_node_id = activeNodeSession.id;
-					orderPayload.origin_node_name = activeNodeSession.nombre;
-					orderPayload.origin_slug = activeNodeSession.slug;
-					if (activeNodeSession.canillitaId) {
-						orderPayload.origin_canillita_id = activeNodeSession.canillitaId;
+					try {
+						const nodeDoc = await db.getDocument('urbanpoint', 'pickup_points', activeNodeSession.id);
+						if (nodeDoc.estado === 'activo' || !nodeDoc.estado) {
+							orderPayload.origin_node_id = nodeDoc.$id;
+							orderPayload.origin_node_name = nodeDoc.nombre_comercial || activeNodeSession.nombre;
+							orderPayload.origin_slug = nodeDoc.slug || activeNodeSession.slug;
+							const nodeOwner = typeof nodeDoc.profile_id === 'string' ? nodeDoc.profile_id : nodeDoc.profile_id?.$id;
+							if (nodeOwner) {
+								orderPayload.origin_canillita_id = nodeOwner;
+							}
+						}
+					} catch (e) {
+						console.warn('Nodo activo de la cookie inexistente, se ignora:', activeNodeSession.id);
 					}
 				}
 
 				if (resolvedCanillitaId) {
 					orderPayload.canillita_id = resolvedCanillitaId;
 				}
-				const finalPickupPointId = input.pickupPointId || (activeNodeSession ? activeNodeSession.id : null);
+				const finalPickupPointId = input.pickupPointId || orderPayload.origin_node_id || null;
 				if (finalPickupPointId) {
 					orderPayload.pickup_point_id = finalPickupPointId;
 					orderPayload.pickup_node_id = finalPickupPointId;
@@ -824,15 +896,18 @@ export const server = {
 				otorgarAccesoAPedido(ctx.cookies, orderDoc.$id);
 
 				// Create the Order Items
-				for (const oi of orderItemsData) {
-					await db.createDocument('urbanpoint', 'order_items', ID.unique(), {
+				await Promise.all(orderItemsData.map(oi =>
+					db.createDocument('urbanpoint', 'order_items', ID.unique(), {
 						order_id: orderDoc.$id,
 						...oi
-					});
-				}
+					})
+				));
 
-				// Resolve names & emails for SMTP notifications
-				(async () => {
+				// Resolve names & emails for SMTP notifications.
+				// Sólo para pedidos "a convenir": los pagados por MP se notifican
+				// desde el webhook al acreditarse; mandar acá también generaba un
+				// mail duplicado que encima decía "Pagado" sobre un pendiente_pago.
+				if (input.paymentMethod === 'a_convenir') (async () => {
 					try {
 						let customerName = '';
 						let customerEmail = '';
@@ -882,14 +957,25 @@ export const server = {
 
 
 				if (input.paymentMethod === 'a_convenir') {
+					// La UI oculta esta opción cuando está deshabilitada, pero la
+					// action es un POST público: hay que validar acá también.
+					const settingsPago = await getSiteSettings();
+					if (!settingsPago.transferencia_enabled) {
+						await db.updateDocument('urbanpoint', 'orders', orderDoc.$id, { estado: 'cancelado' }).catch(() => {});
+						return { success: false, error: 'El pago a convenir no está habilitado.' };
+					}
 					return { success: true, init_point: `/checkout/success?order_id=${orderDoc.$id}` };
 				}
 
 				const mpAccessToken = await obtenerTokenPlataformaValido();
 
 				if (!mpAccessToken) {
-					// Fallback to fake checkout if no token
-					return { success: true, init_point: 'https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=TEST-123' };
+					// Antes se devolvía un link de sandbox falso con success: true y
+					// el cliente creía que iba a pagar. Mejor decir la verdad.
+					return {
+						success: false,
+						error: 'Mercado Pago no está configurado. Elegí otro medio de pago o contactanos.'
+					};
 				}
 
 				const mp = new MercadoPagoConfig({ accessToken: mpAccessToken, options: { timeout: 5000 } });
@@ -906,7 +992,10 @@ export const server = {
 							failure: `${baseUrl}/checkout/failure?order_id=${orderDoc.$id}`,
 							pending: `${baseUrl}/checkout/pending?order_id=${orderDoc.$id}`
 						},
-						auto_return: 'approved'
+						auto_return: 'approved',
+						// Sin esto el webhook dependía sólo de la config del panel
+						// de MP: si faltaba, ningún pago se acreditaba jamás.
+						notification_url: `${baseUrl}/api/webhooks/mercadopago`
 					}
 				});
 
@@ -916,7 +1005,14 @@ export const server = {
 					mp_preference_id: result.id
 				});
 
-				return { success: true, init_point: result.sandbox_init_point || result.init_point };
+				// NUNCA priorizar el sandbox: la API devuelve ambos campos siempre
+				// y con el orden invertido todos los compradores de producción
+				// terminaban en el checkout de pruebas (no se cobraba nada).
+				const useSandbox = import.meta.env.DEV || env('MP_USE_SANDBOX') === 'true';
+				return {
+					success: true,
+					init_point: (useSandbox && result.sandbox_init_point) ? result.sandbox_init_point : result.init_point
+				};
 			} catch (error: any) {
 				console.error("Checkout Error:", error);
 				return { success: false, error: error.message };
@@ -998,7 +1094,10 @@ export const server = {
 
 				return { success: true, redirectUrl };
 			} catch (error: any) {
-				return { success: false, error: error.message || 'Credenciales inválidas' };
+				// Mensaje genérico: el error crudo de Appwrite permite enumerar
+				// qué cuentas existen.
+				console.error('auth_login:', error?.message);
+				return { success: false, error: 'Email o contraseña incorrectos.' };
 			}
 		}
 	}),
@@ -1021,6 +1120,7 @@ export const server = {
 			} catch (e) {
 				// Ignore if session is already invalid
 			}
+			invalidateSessionCache(ctx.cookies.get('up_session')?.value);
 			ctx.cookies.delete('up_session', { path: '/' });
 			return { success: true };
 		}
@@ -1180,10 +1280,13 @@ export const server = {
 				thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 				const dateString = thirtyDaysAgo.toISOString();
 
+				// Todo estado post-pago cuenta como venta: filtrar sólo 'pagado'
+				// hacía desaparecer de la facturación los pedidos que avanzaban
+				// (preparando, despachado, en_punto, entregado, retirado).
 				const ordersRes = await db.listDocuments('urbanpoint', 'orders', [
 					Query.greaterThanEqual('$createdAt', dateString),
-					Query.equal('estado', 'pagado'),
-					Query.limit(500)
+					Query.equal('estado', ['pagado', 'preparando', 'despachado', 'en_punto', 'entregado', 'retirado']),
+					Query.limit(5000)
 				]);
 				const totalVendido = ordersRes.documents.reduce((acc, curr) => acc + (curr.total || 0), 0);
 
@@ -1289,7 +1392,10 @@ export const server = {
 				}
 
 				const order = await db.getDocument('urbanpoint', 'orders', input.orderId);
-				const estadoActual = order.estado as EstadoPedido;
+				// Normalizar también el estado actual: una fila con un alias
+				// histórico ('listo_retiro', 'preparado'…) hacía que TRANSICIONES
+				// devolviera undefined y la orden quedara congelada para siempre.
+				const estadoActual = normalizarEstadoPedido(order.estado) ?? (order.estado as EstadoPedido);
 
 				if (estadoActual === targetState) {
 					return { success: true, sinCambios: true };
@@ -1313,6 +1419,17 @@ export const server = {
 					await db.updateDocument('urbanpoint', 'orders', input.orderId, {
 						estado: targetState
 					});
+
+					// Al cerrar la entrega desde el admin también hay que confirmar
+					// las comisiones (pendiente → disponible); antes sólo lo hacía
+					// deliverOrder y los asientos quedaban impagables para siempre.
+					if (targetState === 'entregado' || targetState === 'retirado') {
+						try {
+							await confirmarComisionesDeOrden(input.orderId);
+						} catch (e) {
+							console.warn('No se pudieron confirmar comisiones para la orden', input.orderId, e);
+						}
+					}
 				}
 
 				await registrarEventoOrden(input.orderId, estadoActual, targetState, actor.profileId);
@@ -1330,14 +1447,28 @@ export const server = {
 						}
 					}
 
+					// El email del cliente sale de su profile (customer_id): los
+					// atributos customer_email/guest_email no se escriben nunca,
+					// así que con ellos la notificación jamás llegaba.
+					let notifCustomerName = order.customer_name || order.guest_name || '';
+					let notifCustomerEmail = order.customer_email || order.guest_email || '';
+					const custId = typeof order.customer_id === 'string' ? order.customer_id : order.customer_id?.$id;
+					if (!notifCustomerEmail && custId) {
+						const custProf: any = await db.getDocument('urbanpoint', 'profiles', custId).catch(() => null);
+						if (custProf) {
+							notifCustomerName = notifCustomerName || custProf.nombre || '';
+							notifCustomerEmail = custProf.email || '';
+						}
+					}
+
 					await sendOrderStatusNotificationEmail({
 						$id: order.$id,
 						numero: order.numero,
 						total: order.total,
 						estado: targetState,
 						pickup_code_hash: order.pickup_code_hash,
-						customerName: order.customer_name || order.guest_name,
-						customerEmail: order.customer_email || order.guest_email,
+						customerName: notifCustomerName,
+						customerEmail: notifCustomerEmail,
 						pickupNodeName,
 						pickupNodeAddress
 					});
@@ -1369,15 +1500,17 @@ export const server = {
 			try {
 				requireRole(ctx, 'admin', 'gestion');
 
-				// 1. Fetch current order items
+				// 1. Fetch current order items (sin Query.limit, Appwrite trae 25:
+				// un pedido más grande dejaba ítems huérfanos al recrear)
 				const currentItemsRes = await db.listDocuments('urbanpoint', 'order_items', [
-					Query.equal('order_id', input.orderId)
+					Query.equal('order_id', input.orderId),
+					Query.limit(500)
 				]);
 
 				// 2. Delete all existing items for this order
-				for (const item of currentItemsRes.documents) {
-					await db.deleteDocument('urbanpoint', 'order_items', item.$id);
-				}
+				await Promise.all(currentItemsRes.documents.map(item =>
+					db.deleteDocument('urbanpoint', 'order_items', item.$id)
+				));
 
 				// 3. Create new items and calculate total
 				let newSubtotal = 0;
@@ -1586,7 +1719,14 @@ export const server = {
 					updateData.price_canillita = recalculated.price_canillita;
 					updateData.precio_canillita = recalculated.price_canillita;
 				}
-				if (recalculated.price_publico !== null) {
+				// Si el admin tipeó un precio nuevo, esa decisión explícita gana
+				// sobre el recalculado por costo×markup (antes se pisaba en
+				// silencio). Si no lo tocó, rige el recalculado.
+				const adminCambioPrecio = input.precio !== undefined && input.precio !== (currentDoc.precio ?? null);
+				if (adminCambioPrecio) {
+					updateData.precio = input.precio;
+					updateData.price_publico = input.precio;
+				} else if (recalculated.price_publico !== null) {
 					updateData.price_publico = recalculated.price_publico;
 					updateData.precio = recalculated.price_publico;
 				} else if (input.precio !== undefined) {
@@ -1933,20 +2073,17 @@ export const server = {
 					throw new Error('Solo admin puede crear promociones');
 				}
 
-				try {
-					const doc = await db.createDocument('urbanpoint', 'promotions', ID.unique(), {
-						nombre: input.nombre,
-						tipo: input.tipo,
-						valor: input.valor,
-						desde: input.desde,
-						hasta: input.hasta,
-						estado: input.estado
-					});
-					return { success: true, id: doc.$id };
-				} catch (e) {
-					// Fallback si no existe la colección promotions
-					return { success: true, id: 'demo-' + Date.now() };
-				}
+				// Sin fallback "demo": devolver success con un id inventado hacía
+				// que la UI mostrara como creada una promoción que no existe.
+				const doc = await db.createDocument('urbanpoint', 'promotions', ID.unique(), {
+					nombre: input.nombre,
+					tipo: input.tipo,
+					valor: input.valor,
+					desde: input.desde,
+					hasta: input.hasta,
+					estado: input.estado
+				});
+				return { success: true, id: doc.$id };
 			} catch (error: any) {
 				return { success: false, error: error.message };
 			}
@@ -2009,7 +2146,12 @@ export const server = {
 						}
 					} else {
 						const { users } = createAdminClient();
-						const pwd = input.password && input.password.length >= 8 ? input.password : 'Canillita2026!';
+						// Sin contraseña provista se genera una aleatoria: la fija
+						// 'Canillita2026!' dejaba a todos los canillitas creados sin
+						// clave con la misma credencial conocida y publicada en el repo.
+						const pwd = input.password && input.password.length >= 8
+							? input.password
+							: `Up-${randomBytes(9).toString('base64url')}`;
 						const name = input.titular_nombre || input.nombre_comercial;
 
 						const authUser = await users.create(ID.unique(), cleanEmail, undefined, pwd, name);
@@ -2028,10 +2170,14 @@ export const server = {
 							await db.createDocument('urbanpoint', 'referral_codes', ID.unique(), {
 								code: refCode,
 								owner_id: profileId,
-								active: true,
+								// El atributo es 'activo' (con 'active' el código nacía
+								// inactivo y el canillita no podía referir ventas).
+								activo: true,
 								total_uses: 0
 							});
-						} catch (e: any) {}
+						} catch (e: any) {
+							console.error('No se pudo crear el código de referido del canillita nuevo:', e.message);
+						}
 					}
 				}
 

@@ -6,7 +6,12 @@ export function generateCsvString(rows: Array<Record<string, any>>, headers?: st
 	
 	const dataRows = rows.map(row => {
 		return keys.map(k => {
-			const val = row[k] !== undefined && row[k] !== null ? String(row[k]) : '';
+			let val = row[k] !== undefined && row[k] !== null ? String(row[k]) : '';
+			// Neutralizar inyección de fórmulas: un valor que empieza con = + - @
+			// se ejecuta al abrir el CSV en Excel/Sheets (p. ej. =HYPERLINK(...)).
+			if (/^[=+\-@\t\r]/.test(val) && isNaN(Number(val))) {
+				val = `'${val}`;
+			}
 			// Escape quotes and commas
 			if (val.includes(',') || val.includes('"') || val.includes('\n')) {
 				return `"${val.replace(/"/g, '""')}"`;

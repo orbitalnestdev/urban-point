@@ -4,11 +4,12 @@ import { getClientProfile } from '../../../lib/server/auth';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import { ETIQUETAS, puedeEntregarse, type EstadoPedido } from '../../../lib/orderStates';
+import QRCode from 'qrcode';
 
 export const prerender = false;
 
 const { id } = Astro.params;
-const profile = await getClientProfile(Astro.cookies);
+const profile = await getClientProfile(Astro);
 if (!profile) return Astro.redirect('/login');
 
 let order = null;
@@ -45,6 +46,18 @@ try {
 }
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+
+// El QR se genera server-side con el paquete `qrcode`: antes se armaba con
+// api.qrserver.com, o sea que el código de retiro (la credencial para llevarse
+// el pedido) viajaba a un tercero en la URL.
+let qrDataUrl = '';
+if (order.fulfillment === 'retiro' && order.pickup_code_hash) {
+	try {
+		qrDataUrl = await QRCode.toDataURL(String(order.pickup_code_hash), { width: 300, margin: 1 });
+	} catch (e) {
+		console.error('No se pudo generar el QR del código de retiro:', e);
+	}
+}
 
 // Los estados salen del vocabulario canónico (src/lib/orderStates.ts). Antes
 // se renderizaban 'en_transito' y 'listo_retiro', que no existen en el enum.
@@ -124,9 +137,11 @@ const getStatusBadge = (status: string) => {
 					<h3 class="font-bold text-lg mb-2 relative z-10">Código de Retiro</h3>
 					<p class="text-sm text-emerald-100 mb-6 relative z-10">Mostrá este código al Canillita para llevarte tu pedido.</p>
 					
-					<div class="bg-white p-4 rounded-2xl inline-block mx-auto mb-4 relative z-10 shadow-inner">
-						<img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${order.pickup_code_hash}`} alt="QR Retiro" class="w-32 h-32" />
-					</div>
+					{qrDataUrl && (
+						<div class="bg-white p-4 rounded-2xl inline-block mx-auto mb-4 relative z-10 shadow-inner">
+							<img src={qrDataUrl} alt="QR Retiro" class="w-32 h-32" />
+						</div>
+					)}
 					
 					<p class="text-3xl font-black tracking-widest relative z-10">{order.pickup_code_hash}</p>
 				</div>

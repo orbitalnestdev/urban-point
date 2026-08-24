@@ -42,6 +42,14 @@ try {
 const profileMap: Record<string, any> = {};
 profiles.forEach(p => { profileMap[p.$id] = p; });
 
+// Índice de códigos de referido por dueño: hacer un .find() adentro del map
+// de la tabla era O(puntos × códigos) en cada render.
+const refCodeByProfile = new Map<string, any>();
+for (const r of referidos) {
+	const ownerId = typeof r.owner_id === 'string' ? r.owner_id : r.owner_id?.$id;
+	if (ownerId && !refCodeByProfile.has(ownerId)) refCodeByProfile.set(ownerId, r);
+}
+
 const searchQuery = Astro.url.searchParams.get('q') || '';
 const estadoFilter = Astro.url.searchParams.get('estado') || 'todos';
 
@@ -142,7 +150,7 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 					<tbody class="divide-y divide-slate-100 text-sm">
 						{puntos.map(punto => {
 							const puntoProfileId = typeof punto.profile_id === 'string' ? punto.profile_id : punto.profile_id?.$id;
-							const refCode = referidos.find(r => (typeof r.owner_id === 'string' ? r.owner_id : r.owner_id?.$id) === puntoProfileId);
+							const refCode = puntoProfileId ? refCodeByProfile.get(puntoProfileId) : undefined;
 
 							return (
 								<tr class="hover:bg-slate-50 transition-colors">

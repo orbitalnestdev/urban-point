@@ -43,16 +43,33 @@ let allLedgerDocs: any[] = [];
 let pastPayouts: any[] = [];
 let canillitaOptionsMap: Record<string, any> = {};
 let canillitaOptions: any[] = [];
+// Saldo 'disponible' total por canillita (sin recorte de período): es lo que
+// createPayout liquida de verdad.
+let disponibleTotalByProfile: Record<string, number> = {};
 
-// Available months for period selector
-const periodOptions = [
-  { value: '', label: 'Todos los períodos' },
-  { value: '2026-08', label: 'Agosto 2026 (Actual)' },
-  { value: '2026-07', label: 'Julio 2026' },
-  { value: '2026-06', label: 'Junio 2026' },
-  { value: '2026-05', label: 'Mayo 2026' },
-  { value: '2026-04', label: 'Abril 2026' }
+// Opciones de período generadas dinámicamente (últimos 6 meses): la lista
+// estaba hardcodeada abril-agosto 2026 y quedaba vieja con solo dejar pasar
+// el tiempo.
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const hoy = new Date();
+const periodOptions: Array<{ value: string; label: string }> = [
+  { value: '', label: 'Todos los períodos' }
 ];
+for (let i = 0; i < 6; i++) {
+  const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+  const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  periodOptions.push({ value, label: `${MESES[d.getMonth()]} ${d.getFullYear()}${i === 0 ? ' (Actual)' : ''}` });
+}
+
+// Rango de fechas del período elegido, en UTC (los $createdAt de Appwrite son
+// ISO UTC; el filtro viejo comparaba el substring del mes con el mismo criterio).
+let periodoDesdeIso: string | null = null;
+let periodoHastaIso: string | null = null;
+if (/^\d{4}-\d{2}$/.test(periodoParam)) {
+  const [py, pm] = periodoParam.split('-').map(Number);
+  periodoDesdeIso = new Date(Date.UTC(py, pm - 1, 1)).toISOString();
+  periodoHastaIso = new Date(Date.UTC(py, pm, 1)).toISOString();
+}
 
 try {
   // 1. Fetch auxiliary collections
@@ -128,7 +145,9 @@ try {
     a.nombreComercial.localeCompare(b.nombreComercial)
   );
 
-  // 2. Fetch Ledger Entries
+  // 2. Fetch Ledger Entries. El período se filtra en la query misma: traer
+  // 5000 documentos para después tirar la mayoría en memoria era pagar el
+  // costo de red al cuete (y con >5000 asientos el filtro directamente mentía).
   const ledgerQueries = [Query.orderDesc('$createdAt'), Query.limit(5000)];
   if (canillitaParam) {
     ledgerQueries.unshift(Query.equal('profile_id', canillitaParam));
@@ -136,16 +155,33 @@ try {
   if (estadoParam !== 'todos') {
     ledgerQueries.unshift(Query.equal('estado', estadoParam));
   }
+  if (periodoDesdeIso && periodoHastaIso) {
+    ledgerQueries.unshift(Query.greaterThanEqual('$createdAt', periodoDesdeIso));
+    ledgerQueries.unshift(Query.lessThan('$createdAt', periodoHastaIso));
+  }
 
-  const ledgerRes = await databases.listDocuments('urbanpoint', 'commission_ledger', ledgerQueries);
+  // En paralelo, el saldo disponible REAL por canillita (todos los períodos):
+  // createPayout liquida TODO lo disponible, así que el modal tiene que mostrar
+  // ese total y no el recorte del período visible.
+  const [ledgerRes, disponiblesRes] = await Promise.all([
+    databases.listDocuments('urbanpoint', 'commission_ledger', ledgerQueries),
+    databases.listDocuments('urbanpoint', 'commission_ledger', [
+      Query.equal('estado', 'disponible'),
+      Query.select(['profile_id', 'monto_centavos']),
+      Query.limit(5000)
+    ]).catch(() => ({ documents: [] as any[] }))
+  ]);
   allLedgerDocs = ledgerRes.documents || [];
 
-  // Filter ledgers locally by period ($createdAt month match) and search query q
+  for (const doc of (disponiblesRes.documents || [])) {
+    const pId = typeof doc.profile_id === 'string' ? doc.profile_id : doc.profile_id?.$id;
+    if (!pId) continue;
+    disponibleTotalByProfile[pId] = (disponibleTotalByProfile[pId] || 0) + (doc.monto_centavos || 0);
+  }
+
+  // Búsqueda por texto: esta sí queda en memoria (Appwrite no puede matchear
+  // contra los nombres del mapa de canillitas).
   allLedgerDocs = allLedgerDocs.filter(doc => {
-    if (periodoParam) {
-      const docDate = doc.$createdAt ? doc.$createdAt.substring(0, 7) : '';
-      if (docDate !== periodoParam) return false;
-    }
     if (qParam.trim()) {
       const q = qParam.toLowerCase();
       const pId = typeof doc.profile_id === 'string' ? doc.profile_id : doc.profile_id?.$id;
@@ -158,13 +194,16 @@ try {
     return true;
   });
 
-  // 3. Fetch past Payouts
+  // 3. Fetch past Payouts. Se filtran por $createdAt igual que los ledgers:
+  // antes usaban el campo 'periodo' y las dos pestañas mostraban recortes
+  // distintos para el mismo mes elegido.
   const payoutQueries = [Query.orderDesc('$createdAt'), Query.limit(500)];
   if (canillitaParam) {
     payoutQueries.unshift(Query.equal('profile_id', canillitaParam));
   }
-  if (periodoParam) {
-    payoutQueries.unshift(Query.equal('periodo', periodoParam));
+  if (periodoDesdeIso && periodoHastaIso) {
+    payoutQueries.unshift(Query.greaterThanEqual('$createdAt', periodoDesdeIso));
+    payoutQueries.unshift(Query.lessThan('$createdAt', periodoHastaIso));
   }
   const payoutsRes = await databases.listDocuments('urbanpoint', 'payouts', payoutQueries);
   pastPayouts = (payoutsRes.documents || []).map((pay: any) => {
@@ -182,11 +221,15 @@ try {
   console.error("Error cargando panel de liquidaciones:", e);
 }
 
-// Global KPI Metrics calculation based on filtered ledgers
+// Global KPI Metrics calculation based on filtered ledgers.
+// 'pendiente' (espera confirmación de entrega) y 'disponible' (liquidable ya)
+// se muestran por separado: sumarlos en un solo número escondía cuánto se
+// puede pagar hoy realmente.
 let totalComisionCentavos = 0;
 let totalFeeLogisticaCentavos = 0;
 let totalComisionReferidoCentavos = 0;
-let totalPendienteCentavos = 0;
+let totalPorConfirmarCentavos = 0;
+let totalDisponibleCentavos = 0;
 let totalLiquidadoCentavos = 0;
 
 for (const doc of allLedgerDocs) {
@@ -199,8 +242,10 @@ for (const doc of allLedgerDocs) {
     totalComisionReferidoCentavos += monto;
   }
 
-  if (doc.estado === 'pendiente' || doc.estado === 'disponible') {
-    totalPendienteCentavos += monto;
+  if (doc.estado === 'pendiente') {
+    totalPorConfirmarCentavos += monto;
+  } else if (doc.estado === 'disponible') {
+    totalDisponibleCentavos += monto;
   } else if (doc.estado === 'liquidado') {
     totalLiquidadoCentavos += monto;
   }
@@ -255,6 +300,12 @@ for (const doc of allLedgerDocs) {
   if (doc.tipo === 'comision_referido') group.referidoCentavos += monto;
   if (doc.estado === 'pendiente' || doc.estado === 'disponible') group.pendienteCentavos += monto;
   if (doc.estado === 'liquidado') group.liquidadoCentavos += monto;
+}
+
+// El botón "Liquidar" opera sobre el saldo disponible total del canillita
+// (todos los períodos), no sobre el recorte visible.
+for (const group of Object.values(groupedByCanillitaMap)) {
+  (group as any).disponibleTotalCentavos = disponibleTotalByProfile[group.profileId] || 0;
 }
 
 const summaryCanillitasList = Object.values(groupedByCanillitaMap).sort((a, b) => b.pendienteCentavos - a.pendienteCentavos);
@@ -356,8 +407,9 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 						class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 cursor-pointer"
 					>
 						<option value="todos" selected={estadoParam === 'todos'}>Todas las comisiones</option>
-						<option value="pendiente" selected={estadoParam === 'pendiente'}>Solo Pendientes de Pago</option>
-						<option value="liquidado" selected={estadoParam === 'liquidado'}>Solo Liquidadas / Pagadas</option>
+						<option value="pendiente" selected={estadoParam === 'pendiente'}>Por confirmar (pendiente)</option>
+						<option value="disponible" selected={estadoParam === 'disponible'}>Liquidable (disponible)</option>
+						<option value="liquidado" selected={estadoParam === 'liquidado'}>Liquidadas / Pagadas</option>
 					</select>
 				</div>
 
@@ -402,8 +454,8 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 						</div>
 					</div>
 
-					{selectedCanillitaStats && selectedCanillitaStats.pendienteCentavos > 0 && (
-						<button 
+					{(disponibleTotalByProfile[selectedCanillitaInfo.profileId] || 0) > 0 && (
+						<button
 							class="btn-abrir-payout px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl shadow-lg transition-all text-xs flex items-center gap-2 cursor-pointer shrink-0 hover:scale-[1.02]"
 							data-profile-id={selectedCanillitaInfo.profileId}
 							data-nombre={selectedCanillitaInfo.nombreComercial}
@@ -411,10 +463,10 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 							data-banco={selectedCanillitaInfo.banco}
 							data-cbu={selectedCanillitaInfo.cbu}
 							data-alias={selectedCanillitaInfo.alias}
-							data-monto={selectedCanillitaStats.pendienteCentavos}
+							data-monto={disponibleTotalByProfile[selectedCanillitaInfo.profileId]}
 						>
 							<CreditCard className="w-4 h-4" />
-							Liquidar Saldo Pendiente ({formateador.format(selectedCanillitaStats.pendienteCentavos / 100)})
+							Liquidar Saldo Disponible ({formateador.format((disponibleTotalByProfile[selectedCanillitaInfo.profileId] || 0) / 100)})
 						</button>
 					)}
 				</div>
@@ -447,7 +499,7 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 		)}
 
 		<!-- KPI Metric Cards (Dinamizadas según los filtros) -->
-		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
 			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
 				<div class="flex items-center justify-between text-slate-400 mb-2">
 					<span class="text-xs font-bold uppercase tracking-wider text-slate-500">Comisiones Totales</span>
@@ -477,11 +529,20 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 
 			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs bg-amber-50/40">
 				<div class="flex items-center justify-between text-slate-400 mb-2">
-					<span class="text-xs font-bold uppercase tracking-wider text-amber-800">Saldo Pendiente a Liquidar</span>
+					<span class="text-xs font-bold uppercase tracking-wider text-amber-800">Por Confirmar (Pendiente)</span>
 					<Clock className="w-5 h-5 text-amber-600" />
 				</div>
-				<h3 class="text-2xl font-black text-amber-700">{formateador.format(totalPendienteCentavos / 100)}</h3>
-				<p class="text-[11px] text-amber-700 font-medium mt-1">{summaryCanillitasList.filter(s => s.pendienteCentavos > 0).length} canillitas con saldo a favor</p>
+				<h3 class="text-2xl font-black text-amber-700">{formateador.format(totalPorConfirmarCentavos / 100)}</h3>
+				<p class="text-[11px] text-amber-700 font-medium mt-1">A la espera de confirmación de entrega</p>
+			</div>
+
+			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs bg-emerald-50/40">
+				<div class="flex items-center justify-between text-slate-400 mb-2">
+					<span class="text-xs font-bold uppercase tracking-wider text-emerald-800">Liquidable (Disponible)</span>
+					<CheckCircle2 className="w-5 h-5 text-emerald-600" />
+				</div>
+				<h3 class="text-2xl font-black text-emerald-700">{formateador.format(totalDisponibleCentavos / 100)}</h3>
+				<p class="text-[11px] text-emerald-700 font-medium mt-1">{summaryCanillitasList.filter(s => (s as any).disponibleTotalCentavos > 0).length} canillitas con saldo confirmado</p>
 			</div>
 		</div>
 
@@ -575,8 +636,8 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 											Ver Movimientos
 										</a>
 
-										{item.pendienteCentavos > 0 && (
-											<button 
+										{(item as any).disponibleTotalCentavos > 0 && (
+											<button
 												class="btn-abrir-payout px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs cursor-pointer"
 												data-profile-id={item.profileId}
 												data-nombre={item.info.nombreComercial}
@@ -584,7 +645,7 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 												data-banco={item.info.banco}
 												data-cbu={item.info.cbu}
 												data-alias={item.info.alias}
-												data-monto={item.pendienteCentavos}
+												data-monto={(item as any).disponibleTotalCentavos}
 											>
 												Liquidar
 											</button>
@@ -668,13 +729,24 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 											</td>
 
 											<td class="p-4 text-center">
-												{doc.estado === 'pendiente' ? (
+												{doc.estado === 'pendiente' && (
 													<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-														Pendiente
+														Por confirmar
 													</span>
-												) : (
+												)}
+												{doc.estado === 'disponible' && (
+													<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">
+														Liquidable
+													</span>
+												)}
+												{doc.estado === 'liquidado' && (
 													<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
 														Liquidado
+													</span>
+												)}
+												{doc.estado === 'revertido' && (
+													<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+														Revertido
 													</span>
 												)}
 											</td>
@@ -798,6 +870,10 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 				<div class="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-center">
 					<p class="text-xs font-bold text-emerald-800 uppercase tracking-wider">Monto Total A Liquidar</p>
 					<h2 id="payout-monto-text" class="text-3xl font-black text-emerald-700 mt-0.5">$0,00</h2>
+					<p class="text-[11px] text-emerald-800/80 font-medium mt-1.5 leading-snug">
+						Se liquida <strong>todo el saldo confirmado</strong> (entregas ya realizadas) pendiente de pago,
+						de todos los períodos — no solo el mes filtrado en pantalla.
+					</p>
 				</div>
 
 				<div>

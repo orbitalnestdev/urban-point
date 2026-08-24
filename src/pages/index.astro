@@ -5,7 +5,7 @@ import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import Logo from '../components/Logo.astro';
 import AddToCartBtn from '../components/shop/AddToCartBtn';
-import { getCachedCatalog } from '../lib/server/catalogCache';
+import { getCachedCatalog, getOptimizedImageUrl } from '../lib/server/catalogCache';
 import { precioDeVentaCentavos, precioListaCentavos } from '../lib/pricing';
 import { toSafeJson } from '../lib/safeJson';
 
@@ -274,7 +274,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 									<!-- Image Container -->
 									<a href={`/productos/${prod.slug}`} class="block aspect-square rounded-2xl bg-slate-50 mb-4 overflow-hidden relative cursor-pointer group-hover:opacity-95 p-3 flex items-center justify-center">
 										{prod.portada_url ? (
-											<img src={prod.portada_url} alt={prod.nombre} loading="lazy" decoding="async" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
+											<img src={getOptimizedImageUrl(prod.portada_url, 400, 400, 80)} alt={prod.nombre} loading="lazy" decoding="async" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
 										) : (
 											<div class="w-full h-full flex items-center justify-center text-slate-300">
 												<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
@@ -325,11 +325,22 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 										<span class="text-[11px] font-bold text-[#2D5A27]">3 cuotas sin interés</span>
 										<span class="text-[11px] text-slate-500 font-medium">de {formateador.format(Math.round(precioMinorista / 3))}</span>
 									</div>
-									<AddToCartBtn client:load item={{ id: prod.$id, nombre: prod.nombre, precio: precioMinorista, imagen: prod.portada_url || '', sku: prod.sku || prod.$id }} variant="plus" />
+									<AddToCartBtn client:load item={{ id: prod.$id, nombre: prod.nombre, precio: precioMinorista, imagen: getOptimizedImageUrl(prod.portada_url || '', 200, 200, 75), sku: prod.sku || prod.$id }} variant="plus" disabled={typeof prod.stock === 'number' && prod.stock <= 0} />
 								</div>
 							</div>
 						);
 					})}
+				</div>
+
+				<!-- Mensaje cuando el filtro de categoría no matchea ningún destacado.
+				     La home sólo muestra 8 productos: sin esto, filtrar dejaba la
+				     grilla vacía en silencio. -->
+				<div id="cat-empty-msg" class="hidden bg-white rounded-2xl border border-slate-200 p-10 text-center shadow-sm">
+					<p class="text-slate-700 font-bold mb-3">No hay productos de esta categoría en destacados</p>
+					<a id="cat-empty-link" href="/productos" class="inline-flex items-center gap-2 text-sm font-bold text-[#2D5A27] hover:text-[#23471F] transition-colors">
+						Ver catálogo completo
+						<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+					</a>
 				</div>
 
 				<!-- Member Sign-Up Incentive Banner -->
@@ -711,6 +722,8 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 		// Interactive Category Filter Pills
 		const catPills = document.querySelectorAll('.cat-pill');
 		const prodItems = document.querySelectorAll('.prod-item');
+		const catEmptyMsg = document.getElementById('cat-empty-msg');
+		const catEmptyLink = document.getElementById('cat-empty-link') as HTMLAnchorElement | null;
 
 		catPills.forEach(pill => {
 			pill.addEventListener('click', () => {
@@ -722,14 +735,25 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 				pill.classList.add('bg-[#2D5A27]', 'text-white', 'active');
 
 				const catId = pill.getAttribute('data-category');
+				let visibles = 0;
 				prodItems.forEach(item => {
 					const itemCat = item.getAttribute('data-cat-id');
 					if (catId === 'all' || itemCat === catId) {
 						(item as HTMLElement).style.display = 'flex';
+						visibles++;
 					} else {
 						(item as HTMLElement).style.display = 'none';
 					}
 				});
+
+				// El filtro opera sólo sobre los 8 destacados: si no matchea nada,
+				// se avisa y se ofrece el catálogo completo de esa categoría.
+				if (catEmptyMsg) {
+					catEmptyMsg.classList.toggle('hidden', visibles > 0);
+					if (visibles === 0 && catEmptyLink && catId && catId !== 'all') {
+						catEmptyLink.href = `/productos?categoria=${encodeURIComponent(catId)}`;
+					}
+				}
 			});
 		});
 
@@ -741,6 +765,13 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 		const allPoints = pointsDataEl ? JSON.parse(pointsDataEl.textContent || '[]') : [];
 
 		if (checkBtn && locationInput && resultBox) {
+			// Escape para interpolar datos (nombre, dirección, horarios y lo que
+			// escribió el usuario) dentro de innerHTML sin riesgo de XSS.
+			const esc = (s: unknown): string =>
+				String(s ?? '').replace(/[&<>"']/g, (c) =>
+					({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string
+				);
+
 			// "Nuñez", "Vicente López" y "Villa Pueyrredón" concentran 41 de los
 			// primeros 100 puntos. Sin normalizar, quien escribe "nunez" o
 			// "vicente lopez" —lo habitual— no encontraba ninguno.
@@ -770,15 +801,15 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 					let html = `<div class="space-y-2"><p class="text-[#2D5A27] font-extrabold flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-[-2px] shrink-0"><polyline points="20 6 9 17 4 12"/></svg> ¡Encontramos ${matches.length} punto(s) UrbanPoint en tu zona!</p><div class="space-y-2 max-h-56 overflow-y-auto pr-1">`;
 					matches.forEach((m: any) => {
 						html += `<div class="p-2.5 bg-white rounded-xl border border-[#D4E5D6] text-xs text-slate-800 shadow-xs">
-							<strong class="text-[#2D5A27] block text-xs">${m.nombre_comercial}</strong>
-							<span class="text-slate-600 block mt-0.5 font-medium"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="inline-block align-[-2px] shrink-0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${m.direccion} — ${m.localidad}</span>
-							<span class="text-[11px] text-slate-500 block mt-0.5"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="inline-block align-[-2px] shrink-0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${m.horarios || 'Horarios de atención regulares'}</span>
+							<strong class="text-[#2D5A27] block text-xs">${esc(m.nombre_comercial)}</strong>
+							<span class="text-slate-600 block mt-0.5 font-medium"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="inline-block align-[-2px] shrink-0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${esc(m.direccion)} — ${esc(m.localidad)}</span>
+							<span class="text-[11px] text-slate-500 block mt-0.5"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="inline-block align-[-2px] shrink-0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${esc(m.horarios || 'Horarios de atención regulares')}</span>
 						</div>`;
 					});
 					html += `</div></div>`;
 					resultBox.innerHTML = html;
 				} else {
-					resultBox.innerHTML = `<div><p class="font-bold text-amber-800"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="inline-block align-[-2px] shrink-0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> No encontramos un punto exacto para "${locationInput.value.trim()}".</p><p class="text-slate-600 mt-1">¡Contamos con ${allPoints.length} puntos activos en CABA y GBA! Al realizar tu compra vas a poder elegir el punto más conveniente.</p></div>`;
+					resultBox.innerHTML = `<div><p class="font-bold text-amber-800"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="inline-block align-[-2px] shrink-0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> No encontramos un punto exacto para "${esc(locationInput.value.trim())}".</p><p class="text-slate-600 mt-1">¡Contamos con ${allPoints.length} puntos activos en CABA y GBA! Al realizar tu compra vas a poder elegir el punto más conveniente.</p></div>`;
 				}
 				resultBox.classList.remove('hidden');
 			};

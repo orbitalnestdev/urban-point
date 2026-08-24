@@ -21,11 +21,15 @@ try {
 		databases.listDocuments('urbanpoint', 'products', [
 			Query.limit(200)
 		]),
+		// Sin Query.limit, Appwrite devuelve 25 documentos por defecto y los
+		// KPIs (solicitudes, comisiones pendientes) quedan subestimados.
 		databases.listDocuments('urbanpoint', 'canillita_applications', [
-			Query.equal('estado', 'solicitado')
+			Query.equal('estado', 'solicitado'),
+			Query.limit(1000)
 		]),
 		databases.listDocuments('urbanpoint', 'commission_ledger', [
-			Query.equal('estado', 'pendiente')
+			Query.equal('estado', 'pendiente'),
+			Query.limit(5000)
 		])
 	]);
 
@@ -146,7 +150,8 @@ const recentOrders = orders.slice(0, 8);
 				</div>
 			</a>
 
-			<a href="/admin/pedidos?estado=despachado" class="bg-blue-50/60 border border-blue-200 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center justify-between">
+			{/* La card cuenta en_punto+preparando: linkear al filtro de despachado mostraba otra cosa. */}
+			<a href="/admin/pedidos" class="bg-blue-50/60 border border-blue-200 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center justify-between">
 				<div>
 					<p class="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1">Listos Para Retiro</p>
 					<p class="text-3xl font-black text-blue-700">{listosParaRetiro}</p>
