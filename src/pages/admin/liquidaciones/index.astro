@@ -199,7 +199,7 @@ for (const doc of allLedgerDocs) {
     totalComisionReferidoCentavos += monto;
   }
 
-  if (doc.estado === 'pendiente') {
+  if (doc.estado === 'pendiente' || doc.estado === 'disponible') {
     totalPendienteCentavos += monto;
   } else if (doc.estado === 'liquidado') {
     totalLiquidadoCentavos += monto;
@@ -253,7 +253,7 @@ for (const doc of allLedgerDocs) {
 
   if (doc.tipo === 'fee_logistica') group.feeLogisticaCentavos += monto;
   if (doc.tipo === 'comision_referido') group.referidoCentavos += monto;
-  if (doc.estado === 'pendiente') group.pendienteCentavos += monto;
+  if (doc.estado === 'pendiente' || doc.estado === 'disponible') group.pendienteCentavos += monto;
   if (doc.estado === 'liquidado') group.liquidadoCentavos += monto;
 }
 

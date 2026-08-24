@@ -9,6 +9,7 @@ import {
   normalizarEstadoPedido,
   type EstadoPedido
 } from '../../lib/orderStates';
+import { getCanillitaStats } from '../../lib/commissions';
 
 const user = Astro.locals.user;
 if (!user || (user.role !== 'canillita' && user.role !== 'admin')) {
@@ -19,12 +20,18 @@ const { databases: db } = createAdminClient();
 
 let point: any = null;
 let referralCodeDoc: any = null;
+let stats = {
+  comisionesMesCentavos: 0,
+  totalPendienteCentavos: 0,
+  totalLiquidadoCentavos: 0,
+  ventasAtribuidasMesCount: 0,
+  entregasPendientesCount: 0
+};
+
 let ordersList: any[] = [];
 let ledgerList: any[] = [];
-
-let totalAcumuladoCentavos = 0;
-let totalPendienteCentavos = 0;
-let totalLiquidadoCentavos = 0;
+let payoutsList: any[] = [];
+let isApprovedCanillita = true;
 
 const estadoFiltro = Astro.url.searchParams.get('estado') || 'todos';
 
@@ -36,27 +43,33 @@ try {
   if (points.documents.length > 0) {
     point = points.documents[0];
   } else if (user.role === 'admin') {
-    // For admin previewing the page
     const allPoints = await db.listDocuments('urbanpoint', 'pickup_points', [Query.limit(1)]);
     if (allPoints.documents.length > 0) point = allPoints.documents[0];
   }
 
-  if (point) {
-    // 1. Referral Code
+  // Verificación estricta de estado aprobado
+  if (user.role === 'canillita' && (!point || point.estado !== 'activo')) {
+    isApprovedCanillita = false;
+  }
+
+  if (isApprovedCanillita && point) {
+    // Métrica unificada calculada por función de servidor
+    stats = await getCanillitaStats(user.profileId);
+
+    // 1. Código de referido
     const refRes = await db.listDocuments('urbanpoint', 'referral_codes', [
       Query.equal('owner_id', point.profile_id?.$id || point.profile_id || user.profileId),
       Query.limit(1)
     ]);
     if (refRes.documents.length > 0) referralCodeDoc = refRes.documents[0];
 
-    // 2. Orders assigned to this pickup point
-    const orderQueries = [
+    // 2. Pedidos asignados a su punto de retiro
+    const orderQueries: any[] = [
       Query.equal('pickup_point_id', point.$id),
       Query.orderDesc('$createdAt'),
       Query.limit(100)
     ];
     if (estadoFiltro !== 'todos') {
-      // El tab "Listos" apuntaba al estado inexistente 'listo' y devolvía vacío.
       const estadoCanonico = normalizarEstadoPedido(estadoFiltro);
       if (estadoCanonico) {
         orderQueries.unshift(Query.equal('estado', estadoCanonico));
@@ -65,12 +78,12 @@ try {
     const fetchedOrders = await db.listDocuments('urbanpoint', 'orders', orderQueries);
     ordersList = fetchedOrders.documents;
 
-    // 3. Order Items for names/skus
+    // 3. Ítems de los pedidos para mostrar detalle
     const orderIds = ordersList.map(o => o.$id);
     if (orderIds.length > 0) {
       const itemsRes = await db.listDocuments('urbanpoint', 'order_items', [
         Query.equal('order_id', orderIds),
-        Query.limit(200)
+        Query.limit(500)
       ]);
       const itemsByOrder: Record<string, any[]> = {};
       for (const item of itemsRes.documents) {
@@ -85,50 +98,72 @@ try {
       });
     }
 
-    // 4. Commission Ledger
+    // 4. Asientos de comisión (solo price_tier = 'publico')
     const ledgerRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
-      Query.equal('profile_id', point.profile_id?.$id || point.profile_id || user.profileId),
+      Query.equal('profile_id', user.profileId),
       Query.orderDesc('$createdAt'),
-      Query.limit(100)
+      Query.limit(200)
     ]);
-    ledgerList = ledgerRes.documents;
 
-    // "Comisiones totales" es lo ganado: suma sólo los devengos, sin los
-    // asientos de reversa (negativos) ni los ya revertidos, que antes se
-    // mezclaban y distorsionaban el número.
-    totalAcumuladoCentavos = ledgerList
-      .filter(l => l.tipo !== 'reversa' && l.tipo !== 'liquidacion' && l.estado !== 'revertido')
-      .reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
-    totalPendienteCentavos = ledgerList.filter(l => l.estado === 'pendiente').reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
-    // El enum del ledger es pendiente|disponible|liquidado|revertido: filtrar
-    // por 'pagado' daba siempre $0.
-    totalLiquidadoCentavos = ledgerList.filter(l => l.estado === 'liquidado').reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
+    const ledgerOrderIds = ledgerRes.documents
+      .map(l => typeof l.order_id === 'string' ? l.order_id : l.order_id?.$id)
+      .filter(Boolean);
+
+    const ledgerOrdersMap: Record<string, any> = {};
+    if (ledgerOrderIds.length > 0) {
+      const lOrdersRes = await db.listDocuments('urbanpoint', 'orders', [
+        Query.equal('$id', ledgerOrderIds),
+        Query.limit(200)
+      ]);
+      for (const ord of lOrdersRes.documents) {
+        ledgerOrdersMap[ord.$id] = ord;
+      }
+    }
+
+    ledgerList = ledgerRes.documents
+      .map(l => {
+        const oId = typeof l.order_id === 'string' ? l.order_id : l.order_id?.$id;
+        const ord = oId ? ledgerOrdersMap[oId] : null;
+        return {
+          ...l,
+          order: ord
+        };
+      })
+      .filter(l => !l.order || (l.order.price_tier || 'publico') === 'publico');
+
+    // 5. Histórico de liquidaciones / payouts
+    const payoutsRes = await db.listDocuments('urbanpoint', 'payouts', [
+      Query.equal('profile_id', user.profileId),
+      Query.orderDesc('pagado_at'),
+      Query.limit(50)
+    ]);
+    payoutsList = payoutsRes.documents;
   }
 } catch (e) {
   console.error("Canillita Dashboard Error:", e);
 }
 
-const isPending = point?.estado === 'pendiente';
-const isSuspended = point?.estado === 'suspendido';
-const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCodeDoc.code}` : '';
+const landingUrl = point ? `https://urbanpoint.com.ar/${point.slug || ''}` : '';
 ---
 
 <Layout title="Panel de Canillita | UrbanPoint">
 	<nav class="w-full z-50 bg-white border-b border-slate-200">
 		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
 			<div class="flex items-center gap-3">
-				<div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black">
+				<div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-sm">
 					C
 				</div>
 				<div>
-					<span class="text-lg font-extrabold tracking-tight text-slate-900 block leading-tight">Panel Canillita</span>
-					<span class="text-xs text-slate-500 font-medium">{point ? point.nombre_comercial : 'Sin Local'}</span>
+					<span class="text-base font-extrabold tracking-tight text-slate-900 block leading-tight">Panel Canillita</span>
+					<span class="text-xs text-slate-500 font-medium">{point ? point.nombre_comercial : 'Punto de Retiro'}</span>
 				</div>
 			</div>
 			<div class="flex items-center gap-4">
-				<span class="text-sm font-semibold text-slate-700 hidden sm:inline">{user.name}</span>
-				<a href="/canillita/liquidaciones" class="text-xs font-bold px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg transition-colors">
+				<span class="text-xs font-semibold text-slate-700 hidden sm:inline">{user.name}</span>
+				<a href="/canillita/liquidaciones" class="text-xs font-bold px-3.5 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl transition-colors flex items-center gap-1.5">
+					<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
 					Mis Cobros
 				</a>
 				<form method="post" action={'/_actions/auth_logout'}>
@@ -139,255 +174,440 @@ const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCod
 	</nav>
 
 	<main class="min-h-[calc(100vh-64px)] bg-slate-50 py-8">
-		<div class="max-w-7xl mx-auto px-4 sm:px-6">
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
 
-			{/* Status Banners */}
-			{isPending && (
-				<div class="bg-amber-500 text-white rounded-2xl p-6 mb-8 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
-					<div>
-						<h2 class="text-xl font-bold mb-1">¡Cuenta Pendiente de Activación!</h2>
-						<p class="text-amber-100 text-sm">Tu local fue registrado. Para empezar a operar necesitás completar tu CBU y datos fiscales.</p>
+			{/* Acceso Denegado por Estado Pendiente o Inactivo */}
+			{!isApprovedCanillita && (
+				<div class="bg-white border border-amber-200 rounded-3xl p-8 max-w-2xl mx-auto shadow-sm text-center space-y-4">
+					<div class="w-16 h-16 rounded-full bg-amber-100 text-amber-700 mx-auto flex items-center justify-center">
+						<svg class="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
 					</div>
-					<a href="/canillita/activar" class="px-6 py-2.5 bg-white text-amber-800 font-bold text-sm rounded-xl hover:bg-amber-50 transition-all shrink-0">
-						Activar Cuenta
-					</a>
+					<h2 class="text-2xl font-black text-slate-900">Cuenta en Revisión o Inactiva</h2>
+					<p class="text-slate-600 text-sm leading-relaxed">
+						Tu punto de retiro se encuentra en estado <strong>{point ? point.estado : 'pendiente'}</strong>. Para comenzar a operar, recibir paquetes y devengar comisiones, tu cuenta debe ser aprobada por la administración.
+					</p>
+					<div class="pt-4">
+						<a href="/canillita/activar" class="inline-flex items-center gap-2 px-6 py-3 bg-amber-600 text-white font-bold text-xs rounded-xl hover:bg-amber-700 transition-all shadow-sm">
+							Completar Datos de Activación
+						</a>
+					</div>
 				</div>
 			)}
 
-			{isSuspended && (
-				<div class="bg-rose-600 text-white rounded-2xl p-6 mb-8 shadow-lg">
-					<h2 class="text-xl font-bold mb-1">Punto de Retiro Suspendido</h2>
-					<p class="text-rose-100 text-sm">Tu cuenta o punto de retiro se encuentra inactivo temporalmente. Ponete en contacto con administración para regularizar tu situación.</p>
-				</div>
-			)}
-
-			{/* Metric Cards */}
-			<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-				<div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200">
-					<h3 class="text-slate-400 font-bold text-xs uppercase tracking-wider mb-2">Entregas Pendientes</h3>
-					<p class="text-3xl font-black text-slate-900">{ordersList.filter(o => puedeEntregarse(o.estado)).length}</p>
-				</div>
-				<div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200">
-					<h3 class="text-slate-400 font-bold text-xs uppercase tracking-wider mb-2">Comisiones Totales</h3>
-					<p class="text-3xl font-black text-indigo-600">{formateador.format(totalAcumuladoCentavos / 100)}</p>
-				</div>
-				<div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200">
-					<h3 class="text-slate-400 font-bold text-xs uppercase tracking-wider mb-2">Pendiente de Liquidar</h3>
-					<p class="text-3xl font-black text-emerald-600">{formateador.format(totalPendienteCentavos / 100)}</p>
-				</div>
-				<div class="bg-white rounded-2xl p-6 shadow-xs border border-slate-200">
-					<h3 class="text-slate-400 font-bold text-xs uppercase tracking-wider mb-2">Total Ya Liquidado</h3>
-					<p class="text-3xl font-black text-slate-700">{formateador.format(totalLiquidadoCentavos / 100)}</p>
-				</div>
-			</div>
-
-			{/* Sección 1 — Entregas */}
-			<div class="bg-white rounded-3xl shadow-xs border border-slate-200 p-6 md:p-8 mb-8">
-				<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-					<div>
-						<h2 class="text-2xl font-black text-slate-900">Entregas y Paquetes</h2>
-						<p class="text-xs text-slate-500 mt-0.5">Gestioná los paquetes recibidos para retiro en tu local.</p>
-					</div>
-					<div class="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl text-xs font-bold">
-						<a href="?estado=todos" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'todos' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'}`}>Todos</a>
-						<a href="?estado=en_punto" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'en_punto' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600'}`}>Listos para retirar</a>
-						<a href="?estado=pagado" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'pagado' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600'}`}>Pagados</a>
-						<a href="?estado=entregado" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'entregado' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600'}`}>Entregados</a>
-					</div>
-				</div>
-
-				{ordersList.length > 0 ? (
-					<div class="overflow-x-auto">
-						<table class="w-full text-left border-collapse text-sm">
-							<thead>
-								<tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
-									<th class="p-4">Pedido #</th>
-									<th class="p-4">Fecha</th>
-									<th class="p-4">Ítems</th>
-									<th class="p-4 text-center">Código Retiro</th>
-									<th class="p-4 text-center">Estado</th>
-									<th class="p-4 text-right">Acción</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-slate-100">
-								{ordersList.map(order => (
-									<tr class="hover:bg-slate-50 transition-colors">
-										<td class="p-4 font-bold text-indigo-700 font-mono">
-											{order.numero || order.$id.substring(0,8).toUpperCase()}
-										</td>
-										<td class="p-4 text-slate-600 text-xs font-medium">
-											{new Date(order.$createdAt).toLocaleDateString('es-AR')}
-										</td>
-										<td class="p-4 text-slate-800">
-											{order.items && order.items.length > 0 ? (
-												<ul class="text-xs space-y-1">
-													{order.items.map((it: any) => (
-														<li><span class="font-bold">{it.cantidad}x</span> {it.nombre_snapshot}</li>
-													))}
-												</ul>
-											) : (
-												<span class="text-xs text-slate-400">Ver pedido en detalle</span>
-											)}
-										</td>
-										<td class="p-4 text-center">
-											<span class="inline-block px-3 py-1 bg-slate-100 border border-slate-200 text-slate-700 font-mono font-bold tracking-widest rounded-lg text-xs">
-												{order.pickup_code_hash || 'Sin código'}
-											</span>
-										</td>
-										<td class="p-4 text-center">
-											{order.estado === 'pendiente_pago' ? (
-												<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">Pendiente de pago</span>
-											) : (
-												<span class={`px-2.5 py-1 rounded-full text-xs font-bold border ${order.estado === 'entregado' || order.estado === 'retirado' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-indigo-100 text-indigo-800 border-indigo-200'}`}>
-													{ETIQUETAS[order.estado as EstadoPedido] || order.estado}
-												</span>
-											)}
-										</td>
-										<td class="p-4 text-right">
-											{order.estado === 'pendiente_pago' ? (
-												<span class="text-xs font-semibold text-amber-700">
-													No entregar: sin pago acreditado
-												</span>
-											) : puedeEntregarse(order.estado) ? (
-												<button
-													class="btn-entregar-pedido px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
-													data-id={order.$id}
-													data-code={order.pickup_code_hash || ''}
-												>
-													Marcar Entregado
-												</button>
-											) : (
-												<span class="text-xs text-slate-400 font-medium">Completado</span>
-											)}
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-				) : (
-					<div class="text-center py-12 text-slate-500">
-						<p class="font-bold text-slate-700">No hay paquetes registrados en este estado.</p>
-					</div>
-				)}
-			</div>
-
-			{/* Sección 2 — Comisiones */}
-			<div class="bg-white rounded-3xl shadow-xs border border-slate-200 p-6 md:p-8 mb-8">
-				<div class="mb-6">
-					<h2 class="text-2xl font-black text-slate-900">Historial de Comisiones Devengadas</h2>
-					<p class="text-xs text-slate-500 mt-0.5">Detalle por venta y porcentajes aplicados congelados en la compra.</p>
-				</div>
-
-				{ledgerList.length > 0 ? (
-					<div class="overflow-x-auto">
-						<table class="w-full text-left border-collapse text-sm">
-							<thead>
-								<tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
-									<th class="p-4">Fecha</th>
-									<th class="p-4">Tipo</th>
-									<th class="p-4 text-center">Tasa Aplicada</th>
-									<th class="p-4 text-right">Monto Comisión</th>
-									<th class="p-4 text-center">Estado</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-slate-100">
-								{ledgerList.map(leg => (
-									<tr class="hover:bg-slate-50">
-										<td class="p-4 text-xs font-medium text-slate-600">
-											{new Date(leg.$createdAt).toLocaleString('es-AR')}
-										</td>
-										<td class="p-4 font-semibold text-slate-800 text-xs uppercase tracking-wider">
-											{leg.tipo || 'Comisión Venta'}
-										</td>
-										<td class="p-4 text-center font-mono text-xs font-bold text-indigo-600">
-											{((leg.tasa_bp_snapshot || 0) / 100).toFixed(1)}%
-										</td>
-										<td class="p-4 text-right font-black text-slate-900">
-											{formateador.format((leg.monto_centavos || 0) / 100)}
-										</td>
-										<td class="p-4 text-center">
-											{leg.estado === 'liquidado' ? (
-												<span class="px-2 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-full">Liquidado</span>
-											) : leg.estado === 'revertido' ? (
-												<span class="px-2 py-1 bg-rose-100 text-rose-800 text-xs font-bold rounded-full">Revertido</span>
-											) : (
-												<span class="px-2 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">Pendiente</span>
-											)}
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-				) : (
-					<div class="text-center py-8 text-slate-400 text-sm">
-						Aún no registrás comisiones acumuladas.
-					</div>
-				)}
-			</div>
-
-			{/* Sección 3 — Link de Referido, WhatsApp y QR */}
-			{referralCodeDoc && (
-				<div class="bg-white rounded-3xl shadow-xs border border-slate-200 p-8 space-y-6">
-					<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-slate-100 pb-6">
-						<div>
-							<span class="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 font-bold text-xs rounded-full uppercase tracking-wider mb-2">
-								Link Exclusivo de Referido
-							</span>
-							<h3 class="text-2xl font-black text-slate-900">
-								Tu Código: <span class="text-indigo-600 font-mono tracking-wider">{referralCodeDoc.code}</span>
-							</h3>
-							<p class="text-slate-500 text-xs mt-1">Compartí este link con tus clientes para sumar comisiones del {point.comision_pct || 10.0}% en cada venta.</p>
-						</div>
-
-						<div class="flex flex-col sm:flex-row items-center gap-3">
-							<input type="text" readonly value={shareUrl} class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 w-full sm:w-80 outline-none" />
-							<button id="btn-copiar-link" data-url={shareUrl} class="px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-all shrink-0 cursor-pointer">
-								Copiar Link
-							</button>
-							<a 
-								href={`https://wa.me/?text=${encodeURIComponent(`¡Hola! Te comparto mi link exclusivo para comprar en UrbanPoint: ${shareUrl}`)}`}
-								target="_blank" 
-								rel="noopener noreferrer"
-								class="px-5 py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 shrink-0"
-							>
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
-								Compartir por WhatsApp
-							</a>
-						</div>
-					</div>
-
-					{/* Código QR para Impresión en Kiosco */}
-					<div class="flex flex-col md:flex-row items-center justify-between gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-						<div class="flex items-center gap-4">
-							<div class="w-24 h-24 bg-white p-2 border border-slate-200 rounded-xl shadow-sm shrink-0 flex items-center justify-center">
-								<img 
-									src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`} 
-									alt="Código QR Referido Canillita" 
-									class="w-full h-full object-contain" 
-								/>
+			{isApprovedCanillita && (
+				<>
+					{/* 1. RESUMEN (Cabecera del panel) */}
+					<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+						<div class="bg-white rounded-2xl p-5 shadow-xs border border-slate-200">
+							<div class="flex items-center justify-between mb-2">
+								<span class="text-slate-500 font-bold text-xs uppercase tracking-wider">Comisiones del Mes</span>
+								<div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+									<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+								</div>
 							</div>
+							<p class="text-2xl font-black text-indigo-600">{formateador.format(stats.comisionesMesCentavos / 100)}</p>
+							<span class="text-[10px] text-slate-400 font-medium">Mes en curso</span>
+						</div>
+
+						<div class="bg-white rounded-2xl p-5 shadow-xs border border-slate-200">
+							<div class="flex items-center justify-between mb-2">
+								<span class="text-slate-500 font-bold text-xs uppercase tracking-wider">Pendiente Liquidador</span>
+								<div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+									<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+								</div>
+							</div>
+							<p class="text-2xl font-black text-amber-600">{formateador.format(stats.totalPendienteCentavos / 100)}</p>
+							<span class="text-[10px] text-slate-400 font-medium">Devengado sin cobrar</span>
+						</div>
+
+						<div class="bg-white rounded-2xl p-5 shadow-xs border border-slate-200">
+							<div class="flex items-center justify-between mb-2">
+								<span class="text-slate-500 font-bold text-xs uppercase tracking-wider">Total Liquidado</span>
+								<div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+									<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+								</div>
+							</div>
+							<p class="text-2xl font-black text-emerald-600">{formateador.format(stats.totalLiquidadoCentavos / 100)}</p>
+							<span class="text-[10px] text-slate-400 font-medium">Cobros recibidos</span>
+						</div>
+
+						<div class="bg-white rounded-2xl p-5 shadow-xs border border-slate-200">
+							<div class="flex items-center justify-between mb-2">
+								<span class="text-slate-500 font-bold text-xs uppercase tracking-wider">Ventas Período</span>
+								<div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+									<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+								</div>
+							</div>
+							<p class="text-2xl font-black text-slate-900">{stats.ventasAtribuidasMesCount}</p>
+							<span class="text-[10px] text-slate-400 font-medium">Ventas atribuidas</span>
+						</div>
+
+						<div class="bg-white rounded-2xl p-5 shadow-xs border border-slate-200">
+							<div class="flex items-center justify-between mb-2">
+								<span class="text-slate-500 font-bold text-xs uppercase tracking-wider">Entregas Pendientes</span>
+								<div class="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+									<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+								</div>
+							</div>
+							<p class="text-2xl font-black text-purple-600">{stats.entregasPendientesCount}</p>
+							<span class="text-[10px] text-slate-400 font-medium">Paquetes por entregar</span>
+						</div>
+					</div>
+
+					{/* 4. ENTREGAS PENDIENTES */}
+					<div class="bg-white rounded-3xl shadow-xs border border-slate-200 p-6 md:p-8">
+						<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
 							<div>
-								<h4 class="font-bold text-slate-900 text-sm">Código QR para tu Local</h4>
-								<p class="text-xs text-slate-500 mt-1 max-w-md">Imprimí este código QR y pegalo en tu Kiosco de Diarios para que tus vecinos escaneen y compren directo desde tu punto.</p>
+								<h2 class="text-xl font-black text-slate-900 flex items-center gap-2">
+									<svg class="w-5 h-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+									Entregas y Paquetes en Punto de Retiro
+								</h2>
+								<p class="text-xs text-slate-500 mt-0.5">Control de recepción y entrega de paquetes asignados a tu kiosco.</p>
+							</div>
+							<div class="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-xl text-xs font-bold">
+								<a href="?estado=todos" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'todos' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>Todos</a>
+								<a href="?estado=en_punto" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'en_punto' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>Listos para retirar</a>
+								<a href="?estado=pagado" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'pagado' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>Pagados</a>
+								<a href="?estado=entregado" class={`px-3 py-1.5 rounded-lg transition-colors ${estadoFiltro === 'entregado' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>Entregados</a>
 							</div>
 						</div>
-						<button 
-							onclick="window.print()" 
-							class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-colors shadow-sm flex items-center gap-2 shrink-0 cursor-pointer"
-						>
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="inline-block align-[-3px] shrink-0"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Imprimir Cartel con QR
-						</button>
+
+						{ordersList.length > 0 ? (
+							<div class="overflow-x-auto">
+								<table class="w-full text-left border-collapse text-xs">
+									<thead>
+										<tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+											<th class="p-4">Pedido #</th>
+											<th class="p-4">Fecha</th>
+											<th class="p-4">Ítems a Entregar</th>
+											<th class="p-4 text-center">Código Retiro</th>
+											<th class="p-4 text-center">Estado</th>
+											<th class="p-4 text-right">Acción</th>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-slate-100">
+										{ordersList.map(order => (
+											<tr class="hover:bg-slate-50 transition-colors">
+												<td class="p-4 font-bold text-indigo-700 font-mono">
+													#{order.numero || order.$id.substring(0,8).toUpperCase()}
+												</td>
+												<td class="p-4 text-slate-600 font-medium">
+													{new Date(order.$createdAt).toLocaleDateString('es-AR')}
+												</td>
+												<td class="p-4 text-slate-800">
+													{order.items && order.items.length > 0 ? (
+														<ul class="space-y-1">
+															{order.items.map((it: any) => (
+																<li><span class="font-bold text-slate-900">{it.cantidad}x</span> {it.nombre_snapshot}</li>
+															))}
+														</ul>
+													) : (
+														<span class="text-slate-400">Ver pedido en detalle</span>
+													)}
+												</td>
+												<td class="p-4 text-center">
+													<span class="inline-block px-3 py-1 bg-slate-100 border border-slate-200 text-slate-800 font-mono font-bold tracking-widest rounded-lg text-xs">
+														{order.pickup_code_hash || 'Sin código'}
+													</span>
+												</td>
+												<td class="p-4 text-center">
+													{order.estado === 'pendiente_pago' ? (
+														<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">Pendiente de pago</span>
+													) : (
+														<span class={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${order.estado === 'entregado' || order.estado === 'retirado' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}>
+															{ETIQUETAS[order.estado as EstadoPedido] || order.estado}
+														</span>
+													)}
+												</td>
+												<td class="p-4 text-right">
+													{order.estado === 'pendiente_pago' ? (
+														<span class="text-xs font-semibold text-amber-700">
+															Pago no acreditado
+														</span>
+													) : puedeEntregarse(order.estado) ? (
+														<button
+															class="btn-entregar-pedido px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer inline-flex items-center gap-1.5"
+															data-id={order.$id}
+															data-code={order.pickup_code_hash || ''}
+														>
+															<svg class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+															Marcar Entregado
+														</button>
+													) : (
+														<span class="text-xs text-emerald-700 font-bold flex items-center justify-end gap-1">
+															<svg class="w-4 h-4 text-emerald-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>
+															Entregado
+														</span>
+													)}
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						) : (
+							<div class="text-center py-12 text-slate-500">
+								<p class="font-bold text-slate-700">No hay paquetes registrados en este estado.</p>
+							</div>
+						)}
 					</div>
-				</div>
+
+					{/* 2. DETALLE DE COMISIONES */}
+					<div class="bg-white rounded-3xl shadow-xs border border-slate-200 p-6 md:p-8">
+						<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+							<div>
+								<h2 class="text-xl font-black text-slate-900 flex items-center gap-2">
+									<svg class="w-5 h-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+									Detalle de Comisiones Devengadas
+								</h2>
+								<p class="text-xs text-slate-500 mt-0.5">Trazabilidad contable por asiento de venta en nivel Público.</p>
+							</div>
+
+							<div class="flex flex-wrap items-center gap-3">
+								{/* Filtro por estado */}
+								<select id="filter-ledger-status" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none">
+									<option value="todos">Todos los Estados</option>
+									<option value="pendiente">Pendiente</option>
+									<option value="disponible">Confirmada</option>
+									<option value="liquidado">Pagada</option>
+									<option value="revertido">Anulada</option>
+								</select>
+
+								{/* Filtro por Fecha Desde / Hasta */}
+								<div class="flex items-center gap-1.5 text-xs">
+									<input type="date" id="filter-date-from" class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none" />
+									<span class="text-slate-400">a</span>
+									<input type="date" id="filter-date-to" class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none" />
+								</div>
+
+								{/* Botón Exportar CSV */}
+								<button id="btn-export-csv" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
+									<svg class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+									Exportar CSV
+								</button>
+							</div>
+						</div>
+
+						{ledgerList.length > 0 ? (
+							<div class="overflow-x-auto">
+								<table id="table-ledger" class="w-full text-left border-collapse text-xs">
+									<thead>
+										<tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+											<th class="p-4">Fecha</th>
+											<th class="p-4">Pedido #</th>
+											<th class="p-4 text-right">Monto Venta</th>
+											<th class="p-4 text-center">Tasa Aplicada</th>
+											<th class="p-4 text-right">Comisión Generada</th>
+											<th class="p-4 text-center">Estado</th>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-slate-100">
+										{ledgerList.map(leg => {
+											const orderNum = leg.order ? (leg.order.numero || leg.order.$id.substring(0,8).toUpperCase()) : 'N/A';
+											const orderTotal = leg.order ? (leg.order.total / 100) : 0;
+											const createdDate = new Date(leg.$createdAt);
+											const isoDate = createdDate.toISOString().substring(0, 10);
+
+											let estadoClass = 'bg-slate-100 text-slate-700 border-slate-200';
+											let estadoLabel = 'Pendiente';
+
+											if (leg.estado === 'disponible') {
+												estadoClass = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+												estadoLabel = 'Confirmada';
+											} else if (leg.estado === 'liquidado') {
+												estadoClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+												estadoLabel = 'Pagada';
+											} else if (leg.estado === 'revertido') {
+												estadoClass = 'bg-rose-50 text-rose-700 border-rose-200';
+												estadoLabel = 'Anulada';
+											}
+
+											const jsonItems = leg.order && leg.order.items ? JSON.stringify(leg.order.items) : '[]';
+
+											return (
+												<tr 
+													class="ledger-row hover:bg-slate-50 transition-colors cursor-pointer"
+													data-status={leg.estado || 'pendiente'}
+													data-date={isoDate}
+													data-ordernum={orderNum}
+													data-ordertotal={orderTotal}
+													data-commission={leg.monto_centavos / 100}
+													data-tasa={((leg.tasa_bp_snapshot || 0) / 100).toFixed(1)}
+													data-created={createdDate.toLocaleDateString('es-AR')}
+													data-items={jsonItems}
+												>
+													<td class="p-4 text-slate-600 font-medium">
+														{createdDate.toLocaleDateString('es-AR')}
+													</td>
+													<td class="p-4 font-bold text-indigo-700 font-mono">
+														#{orderNum}
+													</td>
+													<td class="p-4 text-right font-bold text-slate-800">
+														{orderTotal > 0 ? formateador.format(orderTotal) : '-'}
+													</td>
+													<td class="p-4 text-center font-mono font-bold text-indigo-600">
+														{((leg.tasa_bp_snapshot || 0) / 100).toFixed(1)}%
+													</td>
+													<td class="p-4 text-right font-black text-slate-900">
+														{formateador.format((leg.monto_centavos || 0) / 100)}
+													</td>
+													<td class="p-4 text-center">
+														<span class={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${estadoClass}`}>
+															{estadoLabel}
+														</span>
+													</td>
+												</tr>
+											);
+										})}
+									</tbody>
+								</table>
+							</div>
+						) : (
+							<div class="text-center py-12 text-slate-400 text-xs">
+								Aún no registrás comisiones devengadas en nivel público.
+							</div>
+						)}
+					</div>
+
+					{/* 5. HISTÓRICO DE LIQUIDACIONES */}
+					<div class="bg-white rounded-3xl shadow-xs border border-slate-200 p-6 md:p-8">
+						<h2 class="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
+							<svg class="w-5 h-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+							Histórico de Liquidaciones Recibidas (Payouts)
+						</h2>
+
+						{payoutsList.length > 0 ? (
+							<div class="overflow-x-auto">
+								<table class="w-full text-left border-collapse text-xs">
+									<thead>
+										<tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+											<th class="p-4">Fecha Pago</th>
+											<th class="p-4">Período</th>
+											<th class="p-4">Medio de Pago</th>
+											<th class="p-4">Comprobante / Referencia</th>
+											<th class="p-4 text-right">Monto Liquidado</th>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-slate-100">
+										{payoutsList.map(p => (
+											<tr class="hover:bg-slate-50 transition-colors">
+												<td class="p-4 text-slate-700 font-medium">
+													{p.pagado_at ? new Date(p.pagado_at).toLocaleDateString('es-AR') : new Date(p.$createdAt).toLocaleDateString('es-AR')}
+												</td>
+												<td class="p-4 text-slate-900 font-bold uppercase">
+													{p.periodo || 'Mensual'}
+												</td>
+												<td class="p-4 text-slate-800 font-semibold">
+													{p.medio_pago || 'Transferencia CBU'}
+												</td>
+												<td class="p-4 font-mono text-slate-600">
+													{p.referencia_pago || 'Sin referencia'}
+												</td>
+												<td class="p-4 text-right font-black text-emerald-700 text-sm">
+													{formateador.format((p.monto_centavos || 0) / 100)}
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						) : (
+							<div class="text-center py-8 text-slate-400 text-xs">
+								Aún no se registraron liquidaciones enviadas por administración.
+							</div>
+						)}
+					</div>
+
+					{/* 6. REFERIDO & LANDING */}
+					{referralCodeDoc && (
+						<div class="bg-white rounded-3xl shadow-xs border border-slate-200 p-8 space-y-6">
+							<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-slate-100 pb-6">
+								<div>
+									<span class="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 font-bold text-xs rounded-full uppercase tracking-wider mb-2">
+										Código y Link de Referido Exclusivo
+									</span>
+									<h3 class="text-2xl font-black text-slate-900">
+										Tu Código: <span class="text-indigo-600 font-mono tracking-wider">{referralCodeDoc.code}</span>
+									</h3>
+									<p class="text-slate-500 text-xs mt-1">Compartí este enlace con tus clientes para sumar comisiones por cada compra en UrbanPoint.</p>
+								</div>
+
+								<div class="flex flex-col sm:flex-row items-center gap-3">
+									<input type="text" readonly value={shareUrl} class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 w-full sm:w-80 outline-none" />
+									<button id="btn-copiar-link" data-url={shareUrl} class="px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all shrink-0 cursor-pointer flex items-center gap-1.5">
+										<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+										Copiar Link
+									</button>
+									<a 
+										href={`https://wa.me/?text=${encodeURIComponent(`¡Hola! Te comparto mi link exclusivo para comprar en UrbanPoint: ${shareUrl}`)}`}
+										target="_blank" 
+										rel="noopener noreferrer"
+										class="px-5 py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2 shrink-0"
+									>
+										<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+										Compartir WhatsApp
+									</a>
+								</div>
+							</div>
+
+							<div class="flex flex-col md:flex-row items-center justify-between gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+								<div class="flex items-center gap-4">
+									<div class="w-24 h-24 bg-white p-2 border border-slate-200 rounded-xl shadow-xs shrink-0 flex items-center justify-center">
+										<img 
+											src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`} 
+											alt="Código QR Referido" 
+											class="w-full h-full object-contain" 
+										/>
+									</div>
+									<div>
+										<h4 class="font-bold text-slate-900 text-sm">Cartel QR para Tu Local</h4>
+										<p class="text-xs text-slate-500 mt-1 max-w-md">Imprimí el código QR para que tus clientes escaneen desde tu kiosco y compren directo a tu punto de retiro.</p>
+										{landingUrl && (
+											<a href={landingUrl} target="_blank" class="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline mt-2">
+												Ver Landing de Punto de Retiro &rarr;
+											</a>
+										)}
+									</div>
+								</div>
+								<button 
+									onclick="window.print()" 
+									class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-colors shadow-xs flex items-center gap-2 shrink-0 cursor-pointer"
+								>
+									<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+									Imprimir Cartel QR
+								</button>
+							</div>
+						</div>
+					)}
+				</>
 			)}
 		</div>
 	</main>
 
+	{/* Modal de Detalle de Pedido */}
+	<div id="modal-order-detail" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+		<div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+			<div class="flex justify-between items-center border-b border-slate-100 pb-3">
+				<h3 class="text-lg font-black text-slate-900" id="modal-order-title">Detalle de Pedido</h3>
+				<button id="btn-close-modal" class="text-slate-400 hover:text-slate-700 font-bold text-lg cursor-pointer">&times;</button>
+			</div>
+
+			<div class="space-y-3 text-xs" id="modal-order-body">
+				{/* Contenido dinámico por JavaScript */}
+			</div>
+
+			<div class="pt-3 border-t border-slate-100 text-right">
+				<button id="btn-close-modal-bottom" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer">
+					Cerrar
+				</button>
+			</div>
+		</div>
+	</div>
+
 	<script>
 		import { actions } from 'astro:actions';
 
+		// 1. Entregas de pedido
 		document.querySelectorAll('.btn-entregar-pedido').forEach(btn => {
 			btn.addEventListener('click', async (e) => {
 				const el = e.currentTarget as HTMLElement;
@@ -413,7 +633,7 @@ const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCod
 						el.removeAttribute('disabled');
 						el.innerHTML = 'Marcar Entregado';
 					} else {
-						alert('¡Pedido marcado como entregado exitosamente!');
+						alert('¡Pedido entregado con éxito!');
 						window.location.reload();
 					}
 				} catch (err) {
@@ -424,6 +644,7 @@ const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCod
 			});
 		});
 
+		// 2. Copiar Link de Referido
 		document.getElementById('btn-copiar-link')?.addEventListener('click', (e) => {
 			const btn = e.currentTarget as HTMLButtonElement;
 			const url = btn.dataset.url || '';
@@ -431,6 +652,120 @@ const shareUrl = referralCodeDoc ? `https://urbanpoint.com.ar/?ref=${referralCod
 			navigator.clipboard.writeText(url).then(() => {
 				btn.innerText = '¡Copiado!';
 				setTimeout(() => btn.innerText = 'Copiar Link', 2000);
+			});
+		});
+
+		// 3. Filtros interactivos de la Tabla de Comisiones
+		const statusSelect = document.getElementById('filter-ledger-status') as HTMLSelectElement;
+		const dateFromInput = document.getElementById('filter-date-from') as HTMLInputElement;
+		const dateToInput = document.getElementById('filter-date-to') as HTMLInputElement;
+		const ledgerRows = document.querySelectorAll('.ledger-row') as NodeListOf<HTMLElement>;
+
+		function applyLedgerFilters() {
+			const statusVal = statusSelect?.value || 'todos';
+			const dateFromVal = dateFromInput?.value || '';
+			const dateToVal = dateToInput?.value || '';
+
+			ledgerRows.forEach(row => {
+				const rowStatus = row.dataset.status || '';
+				const rowDate = row.dataset.date || '';
+
+				let matchesStatus = (statusVal === 'todos') || (rowStatus === statusVal);
+				let matchesDateFrom = !dateFromVal || (rowDate >= dateFromVal);
+				let matchesDateTo = !dateToVal || (rowDate <= dateToVal);
+
+				if (matchesStatus && matchesDateFrom && matchesDateTo) {
+					row.style.display = '';
+				} else {
+					row.style.display = 'none';
+				}
+			});
+		}
+
+		statusSelect?.addEventListener('change', applyLedgerFilters);
+		dateFromInput?.addEventListener('change', applyLedgerFilters);
+		dateToInput?.addEventListener('change', applyLedgerFilters);
+
+		// 4. Exportar Tabla de Comisiones a CSV
+		document.getElementById('btn-export-csv')?.addEventListener('click', () => {
+			let csvContent = "data:text/csv;charset=utf-8,Fecha,Pedido,Monto Venta ARS,Tasa BP %,Comision Generada ARS,Estado\n";
+
+			ledgerRows.forEach(row => {
+				if (row.style.display !== 'none') {
+					const date = row.dataset.created || '';
+					const num = row.dataset.ordernum || '';
+					const total = row.dataset.ordertotal || '0';
+					const tasa = row.dataset.tasa || '0';
+					const comm = row.dataset.commission || '0';
+					const status = row.dataset.status || '';
+					csvContent += `"${date}","${num}",${total},${tasa},${comm},"${status}"\n`;
+				}
+			});
+
+			const encodedUri = encodeURI(csvContent);
+			const link = document.createElement("a");
+			link.setAttribute("href", encodedUri);
+			link.setAttribute("download", `comisiones_canillita_${new Date().toISOString().substring(0,10)}.csv`);
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+		});
+
+		// 5. Modal de Detalle al tocar una fila de comisiones
+		const modal = document.getElementById('modal-order-detail');
+		const modalTitle = document.getElementById('modal-order-title');
+		const modalBody = document.getElementById('modal-order-body');
+		const btnCloseModal = document.getElementById('btn-close-modal');
+		const btnCloseModalBottom = document.getElementById('btn-close-modal-bottom');
+
+		function closeModal() {
+			modal?.classList.add('hidden');
+		}
+
+		btnCloseModal?.addEventListener('click', closeModal);
+		btnCloseModalBottom?.addEventListener('click', closeModal);
+
+		ledgerRows.forEach(row => {
+			row.addEventListener('click', () => {
+				const num = row.dataset.ordernum || '';
+				const date = row.dataset.created || '';
+				const total = parseFloat(row.dataset.ordertotal || '0');
+				const comm = parseFloat(row.dataset.commission || '0');
+				const itemsJson = row.dataset.items || '[]';
+
+				let itemsHtml = '';
+				try {
+					const items = JSON.parse(itemsJson);
+					if (items.length > 0) {
+						itemsHtml = `<div class="space-y-2 mt-2">
+							<p class="font-bold text-slate-700">Productos comprados:</p>
+							<ul class="divide-y divide-slate-100 bg-slate-50 p-3 rounded-xl">
+								${items.map((it: any) => `
+									<li class="py-1.5 flex justify-between">
+										<span><strong>${it.cantidad}x</strong> ${it.nombre_snapshot}</span>
+										<span class="font-mono text-slate-600">$${(it.subtotal / 100).toFixed(0)}</span>
+									</li>
+								`).join('')}
+							</ul>
+						</div>`;
+					}
+				} catch (e) {}
+
+				if (modalTitle) modalTitle.innerText = `Pedido #${num}`;
+				if (modalBody) {
+					modalBody.innerHTML = `
+						<div class="grid grid-cols-2 gap-2 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl">
+							<div><span class="text-slate-400 block">Fecha:</span><strong>${date}</strong></div>
+							<div><span class="text-slate-400 block">Monto Venta:</span><strong>$${total.toFixed(0)}</strong></div>
+							<div><span class="text-slate-400 block">Comisión:</span><strong class="text-indigo-600">$${comm.toFixed(0)}</strong></div>
+						</div>
+						${itemsHtml}
+						<p class="text-[10px] text-slate-400 pt-2 border-t border-slate-100">
+							* Los datos personales privados del cliente permanecen protegidos según las políticas de privacidad.
+						</p>
+					`;
+				}
+				modal?.classList.remove('hidden');
 			});
 		});
 	</script>

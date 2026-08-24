@@ -26,6 +26,13 @@ export interface SiteSettings {
     attribution_days: number;
     delivery_canillita_commission: boolean;
 
+    // Precios Multinivel y Redondeo
+    default_markup_distribuidor: number;
+    default_markup_canillita: number;
+    default_markup_publico: number;
+    round_to: number; // 0, 10, 50, 100
+    round_mode: 'nearest' | 'up' | 'down';
+
     shipping_cost_centavos: number;
     free_shipping_threshold_centavos: number;
     pickup_has_cost: boolean;
@@ -76,6 +83,12 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     default_commission_pct: 10.0,
     attribution_days: 30,
     delivery_canillita_commission: false,
+
+    default_markup_distribuidor: 6.25,
+    default_markup_canillita: 12.5,
+    default_markup_publico: 25.0,
+    round_to: 10,
+    round_mode: 'nearest',
 
     shipping_cost_centavos: 350000,
     free_shipping_threshold_centavos: 2500000,
@@ -138,6 +151,12 @@ export async function getSiteSettings(): Promise<SiteSettings> {
             default_commission_pct: settingsMap.default_commission_pct ? parseFloat(settingsMap.default_commission_pct) : DEFAULT_SETTINGS.default_commission_pct,
             attribution_days: settingsMap.attribution_days ? parseInt(settingsMap.attribution_days, 10) : DEFAULT_SETTINGS.attribution_days,
             delivery_canillita_commission: settingsMap.delivery_canillita_commission !== undefined ? settingsMap.delivery_canillita_commission === 'true' : DEFAULT_SETTINGS.delivery_canillita_commission,
+
+            default_markup_distribuidor: settingsMap.default_markup_distribuidor ? parseFloat(settingsMap.default_markup_distribuidor) : DEFAULT_SETTINGS.default_markup_distribuidor,
+            default_markup_canillita: settingsMap.default_markup_canillita ? parseFloat(settingsMap.default_markup_canillita) : DEFAULT_SETTINGS.default_markup_canillita,
+            default_markup_publico: settingsMap.default_markup_publico ? parseFloat(settingsMap.default_markup_publico) : DEFAULT_SETTINGS.default_markup_publico,
+            round_to: settingsMap.round_to !== undefined ? parseInt(settingsMap.round_to, 10) : DEFAULT_SETTINGS.round_to,
+            round_mode: (settingsMap.round_mode as any) || DEFAULT_SETTINGS.round_mode,
 
             shipping_cost_centavos: settingsMap.shipping_cost_centavos ? parseInt(settingsMap.shipping_cost_centavos, 10) : DEFAULT_SETTINGS.shipping_cost_centavos,
             free_shipping_threshold_centavos: settingsMap.free_shipping_threshold_centavos ? parseInt(settingsMap.free_shipping_threshold_centavos, 10) : DEFAULT_SETTINGS.free_shipping_threshold_centavos,

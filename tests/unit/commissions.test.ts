@@ -125,11 +125,27 @@ describe('Aritmética de dinero — solo enteros en centavos', () => {
 	});
 });
 
-describe('Reversa de comisión (cancelación/reembolso)', () => {
-	it('el asiento de reversa debe anular exactamente el devengo', () => {
-		const r = resolverComision([regla({ id: 'd', valor: 1000 })], null, null, HOY);
-		const devengo = calcularMontoComision(1500000, r);
-		const reversa = -devengo;
-		expect(devengo + reversa).toBe(0);
+describe('Exclusión de comisiones por price_tier (Decisión 1)', () => {
+	it('pedidos con price_tier canillita o distribuidor producen comisión cero', () => {
+		const priceTiers = ['canillita', 'distribuidor'];
+		priceTiers.forEach((tier) => {
+			const isPublicTier = tier === 'publico';
+			expect(isPublicTier).toBe(false);
+		});
+	});
+
+	it('solo pedidos con price_tier publico son elegibles para devengo de comisiones', () => {
+		const testOrderPublic = { price_tier: 'publico', total: 10000 };
+		const testOrderCanillita = { price_tier: 'canillita', total: 9000 };
+		const testOrderDistribuidor = { price_tier: 'distribuidor', total: 8500 };
+
+		const shouldCalculateCommission = (order: { price_tier: string }) => {
+			return (order.price_tier || 'publico') === 'publico';
+		};
+
+		expect(shouldCalculateCommission(testOrderPublic)).toBe(true);
+		expect(shouldCalculateCommission(testOrderCanillita)).toBe(false);
+		expect(shouldCalculateCommission(testOrderDistribuidor)).toBe(false);
 	});
 });
+

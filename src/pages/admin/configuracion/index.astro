@@ -103,6 +103,7 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 							{ id: 'sec-contacto', label: 'Contacto & Redes', icon: Phone },
 							{ id: 'sec-whatsapp', label: 'Botón Flotante WhatsApp', icon: MessageSquare },
 							{ id: 'sec-canillitas', label: 'Red de Canillitas & Comisiones', icon: Newspaper },
+							{ id: 'sec-precios', label: 'Precios Multinivel & Redondeo', icon: CreditCard },
 							{ id: 'sec-envios', label: 'Envíos & Retiro en Punto', icon: Truck },
 							{ id: 'sec-pagos', label: 'Pagos & Mercado Pago', icon: CreditCard },
 							{ id: 'sec-notificaciones', label: 'Notificaciones & Emails', icon: Bell },
@@ -212,6 +213,51 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 							<div>
 								<label class="block font-bold text-slate-900 mb-1">Ventana de Atribución del Referido (Días)</label>
 								<input type="number" name="attribution_days" value={settings.attribution_days} class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+							</div>
+						</div>
+					</div>
+
+					{/* 4.b. Precios Multinivel y Redondeo Global */}
+					<div id="sec-precios" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">Precios Multinivel (Defaults Globales) & Redondeo</h3>
+						<p class="text-xs text-slate-500 font-medium">
+							Estos porcentajes de markup actúan como fallback global cuando ni el producto ni la categoría definen porcentajes o precios fijos propios.
+						</p>
+						<div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+							<div>
+								<label class="block font-bold text-slate-900 mb-1">Markup Distribuidor (%)</label>
+								<input type="number" step="0.01" name="default_markup_distribuidor" value={settings.default_markup_distribuidor} class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+								<span class="text-[10px] text-slate-400">Ej: 6.25 para +6.25% sobre el costo</span>
+							</div>
+							<div>
+								<label class="block font-bold text-slate-900 mb-1">Markup Canillita (%)</label>
+								<input type="number" step="0.01" name="default_markup_canillita" value={settings.default_markup_canillita} class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+								<span class="text-[10px] text-slate-400">Ej: 12.5 para +12.5% sobre el costo</span>
+							</div>
+							<div>
+								<label class="block font-bold text-slate-900 mb-1">Markup Público (%)</label>
+								<input type="number" step="0.01" name="default_markup_publico" value={settings.default_markup_publico} class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+								<span class="text-[10px] text-slate-400">Ej: 25.0 para +25% sobre el costo</span>
+							</div>
+						</div>
+
+						<div class="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+							<div>
+								<label class="block font-bold text-slate-900 mb-1">Redondeo de Precios ($ ARS)</label>
+								<select name="round_to" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600 bg-slate-50">
+									<option value="0" selected={settings.round_to === 0}>Sin redondeo (valor exacto)</option>
+									<option value="10" selected={settings.round_to === 10}>Redondear a $10</option>
+									<option value="50" selected={settings.round_to === 50}>Redondear a $50</option>
+									<option value="100" selected={settings.round_to === 100}>Redondear a $100</option>
+								</select>
+							</div>
+							<div>
+								<label class="block font-bold text-slate-900 mb-1">Modo de Redondeo</label>
+								<select name="round_mode" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600 bg-slate-50">
+									<option value="nearest" selected={settings.round_mode === 'nearest'}>Al más cercano (Math.round)</option>
+									<option value="up" selected={settings.round_mode === 'up'}>Hacia arriba (Math.ceil)</option>
+									<option value="down" selected={settings.round_mode === 'down'}>Hacia abajo (Math.floor)</option>
+								</select>
 							</div>
 						</div>
 					</div>

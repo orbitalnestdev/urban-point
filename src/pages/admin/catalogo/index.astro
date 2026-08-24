@@ -19,6 +19,7 @@ const categoriaFilter = Astro.url.searchParams.get('categoria') || '';
 const minPrice = Astro.url.searchParams.get('precioMin') || '';
 const maxPrice = Astro.url.searchParams.get('precioMax') || '';
 const soloBorradores = Astro.url.searchParams.get('borradores') === 'true';
+const soloSinCosto = Astro.url.searchParams.get('sinCosto') === 'true';
 
 let products: any[] = [];
 let categories: any[] = [];
@@ -44,12 +45,10 @@ try {
 	console.error("Error loading products page:", e);
 }
 
-
-
-
 const numBorradores = products.filter(p => p.estado === 'borrador').length;
 const numSinStock = products.filter(p => p.stock === 0 && p.estado !== 'borrador').length;
 const numSinFoto = products.filter(p => !p.portada_url).length;
+const numSinCosto = products.filter(p => (!p.cost && !p.costo) || (p.cost <= 0 && p.costo <= 0)).length;
 const total = products.length;
 const activos = products.filter(p => p.estado === 'activo').length;
 const pausados = products.filter(p => p.estado === 'pausado').length;
@@ -117,6 +116,10 @@ if (maxPrice) {
 
 if (soloBorradores) {
 	filteredProducts = filteredProducts.filter(p => p.estado === 'borrador');
+}
+
+if (soloSinCosto) {
+	filteredProducts = filteredProducts.filter(p => (!p.cost && !p.costo) || (p.cost <= 0 && p.costo <= 0));
 }
 
 // 30 days window in ms for derived "Nuevo" flag
@@ -198,8 +201,17 @@ const paginationItems = filteredPages.map((p, index) => ({
 		</header>
 
 		{/* Top Metric Cards - Solo se muestran las alertas si son > 0 */}
-		{(numBorradores > 0 || numSinStock > 0 || numSinFoto > 0) ? (
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+		{(numBorradores > 0 || numSinStock > 0 || numSinFoto > 0 || numSinCosto > 0) ? (
+			<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+				{numSinCosto > 0 && (
+					<div class="bg-purple-50/70 border border-purple-200 p-4 rounded-2xl relative cursor-pointer hover:shadow-md transition-all" onclick="window.location.href='/admin/catalogo?sinCosto=true'">
+						<p class="absolute top-4 right-4 text-3xl font-black text-purple-800">{numSinCosto}</p>
+						<div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center mb-2 font-bold"><DollarSign className="w-4 h-4" /></div>
+						<h3 class="font-extrabold text-slate-900 text-sm">Sin costo de compra</h3>
+						<p class="text-xs text-slate-500 mt-0.5">Asignar costos &rarr;</p>
+					</div>
+				)}
+
 				{numBorradores > 0 && (
 					<div class="bg-amber-50/70 border border-amber-200 p-4 rounded-2xl relative cursor-pointer hover:shadow-md transition-all" onclick="window.location.href='/admin/catalogo?borradores=true'">
 						<p class="absolute top-4 right-4 text-3xl font-black text-amber-700">{numBorradores}</p>
@@ -230,7 +242,7 @@ const paginationItems = filteredPages.map((p, index) => ({
 		) : (
 			<div class="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-emerald-800 text-xs font-bold flex items-center gap-2">
 				<CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-				<span>Catálogo en orden: Todos los productos publicados tienen stock e imagen asignada.</span>
+				<span>Catálogo en orden: Todos los productos publicados tienen costo, stock e imagen asignada.</span>
 			</div>
 		)}
 

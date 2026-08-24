@@ -294,6 +294,28 @@ const totalSubcategorias = categories.length - rootCategories.length;
 					</div>
 				</div>
 
+				<div class="border-t border-slate-100 pt-4 space-y-3">
+					<h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Reglas de Markup por Categoría</h4>
+					<p class="text-[11px] text-slate-500 font-medium leading-relaxed">
+						Definí los porcentajes por defecto para todos los productos de esta categoría en modo "Heredar". Si los modificás, se recalcularán automáticamente los precios de los productos asociados.
+					</p>
+
+					<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+						<div>
+							<label class="block text-[11px] font-bold text-slate-700 mb-1">Distribuidor (%)</label>
+							<input type="number" step="0.01" id="cat-markup-distribuidor" placeholder="Hereda global" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-600" />
+						</div>
+						<div>
+							<label class="block text-[11px] font-bold text-slate-700 mb-1">Canillita (%)</label>
+							<input type="number" step="0.01" id="cat-markup-canillita" placeholder="Hereda global" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-600" />
+						</div>
+						<div>
+							<label class="block text-[11px] font-bold text-slate-700 mb-1">Público (%)</label>
+							<input type="number" step="0.01" id="cat-markup-publico" placeholder="Hereda global" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-600" />
+						</div>
+					</div>
+				</div>
+
 				<div>
 					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Descripción (Opcional)</label>
 					<textarea id="cat-descripcion" rows="2" placeholder="Breve descripción descriptiva para la categoría..." class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600 resize-none"></textarea>
@@ -323,6 +345,12 @@ const totalSubcategorias = categories.length - rootCategories.length;
 		const inputSlug = document.getElementById('cat-slug') as HTMLInputElement;
 		const inputEstado = document.getElementById('cat-estado') as HTMLSelectElement;
 		const inputDescripcion = document.getElementById('cat-descripcion') as HTMLTextAreaElement;
+		
+		const inputMarkupDist = document.getElementById('cat-markup-distribuidor') as HTMLInputElement;
+		const inputMarkupCani = document.getElementById('cat-markup-canillita') as HTMLInputElement;
+		const inputMarkupPub = document.getElementById('cat-markup-publico') as HTMLInputElement;
+
+		let originalMarkups: { dist: string; cani: string; pub: string } = { dist: '', cani: '', pub: '' };
 
 		function openModal(data: any = null, defaultParentId: string = '') {
 			if (data) {
@@ -333,6 +361,10 @@ const totalSubcategorias = categories.length - rootCategories.length;
 				inputSlug.value = data.slug || '';
 				inputEstado.value = data.estado || 'activa';
 				inputDescripcion.value = data.descripcion || '';
+
+				inputMarkupDist.value = data.markup_distribuidor !== undefined && data.markup_distribuidor !== null ? data.markup_distribuidor : '';
+				inputMarkupCani.value = data.markup_canillita !== undefined && data.markup_canillita !== null ? data.markup_canillita : '';
+				inputMarkupPub.value = data.markup_publico !== undefined && data.markup_publico !== null ? data.markup_publico : '';
 			} else {
 				modalTitle!.textContent = defaultParentId ? 'Nueva Subcategoría' : 'Nueva Categoría Principal';
 				inputId.value = '';
@@ -341,7 +373,18 @@ const totalSubcategorias = categories.length - rootCategories.length;
 				inputSlug.value = '';
 				inputEstado.value = 'activa';
 				inputDescripcion.value = '';
+
+				inputMarkupDist.value = '';
+				inputMarkupCani.value = '';
+				inputMarkupPub.value = '';
 			}
+
+			originalMarkups = {
+				dist: inputMarkupDist.value,
+				cani: inputMarkupCani.value,
+				pub: inputMarkupPub.value
+			};
+
 			modal!.classList.remove('hidden');
 		}
 
@@ -390,13 +433,23 @@ const totalSubcategorias = categories.length - rootCategories.length;
 			btnSave.disabled = true;
 			btnSave.textContent = 'Guardando...';
 
+			const categoryId = inputId.value || undefined;
+			const markupsChanged = categoryId && (
+				inputMarkupDist.value !== originalMarkups.dist ||
+				inputMarkupCani.value !== originalMarkups.cani ||
+				inputMarkupPub.value !== originalMarkups.pub
+			);
+
 			const payload = {
-				id: inputId.value || undefined,
+				id: categoryId,
 				nombre: inputNombre.value,
 				parent_id: inputParent.value || null,
 				slug: inputSlug.value || undefined,
 				estado: inputEstado.value,
-				descripcion: inputDescripcion.value || undefined
+				descripcion: inputDescripcion.value || undefined,
+				markup_distribuidor: inputMarkupDist.value !== '' ? parseFloat(inputMarkupDist.value) : null,
+				markup_canillita: inputMarkupCani.value !== '' ? parseFloat(inputMarkupCani.value) : null,
+				markup_publico: inputMarkupPub.value !== '' ? parseFloat(inputMarkupPub.value) : null
 			};
 
 			const { data, error } = await actions.saveCategory(payload);
@@ -404,9 +457,19 @@ const totalSubcategorias = categories.length - rootCategories.length;
 				alert(error?.message || 'Error al guardar categoría');
 				btnSave.disabled = false;
 				btnSave.textContent = 'Guardar Categoría';
-			} else {
-				window.location.reload();
+				return;
 			}
+
+			const savedId = data.id || categoryId;
+
+			if (markupsChanged && savedId) {
+				if (confirm(`Se han modificado las reglas de markup. ¿Deseás recalcular automáticamente los precios de los productos heredados en esta categoría?`)) {
+					btnSave.textContent = 'Recalculando productos...';
+					await actions.recalculateCategoryProducts({ categoryId: savedId });
+				}
+			}
+
+			window.location.reload();
 		});
 	</script>
 </AdminLayout>

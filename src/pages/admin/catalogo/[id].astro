@@ -13,8 +13,9 @@ const tipoParam = Astro.url.searchParams.get('tipo') || 'simple';
 let product = null;
 import { buildCategoryTree } from '../../../lib/server/categoryUtils';
 
-let categories = [];
-let allProducts = [];
+import { getSiteSettings } from '../../../lib/server/settings';
+
+let siteSettings = await getSiteSettings();
 
 try {
 	product = await databases.getDocument('urbanpoint', 'products', id as string);
@@ -268,96 +269,258 @@ if (product.galeria_urls) {
 					</div>
 				</div>
 
-				{/* Pestaña 2: Precio */}
+				{/* Pestaña 2: Precio Multinivel */}
 				<div id="tab-precio" class="tab-panel space-y-6 hidden">
-					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
-						<div class="mb-6 border-b border-slate-100 pb-4">
-							<h2 class="text-lg font-bold text-slate-900">Precio de Venta y Margen</h2>
-							<p class="text-sm text-slate-500">Precio final de venta visible al público y costo del proveedor.</p>
+
+					{/* 1. Costo Base Obligatorio */}
+					<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+						<div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+							<div>
+								<h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+									<span class="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-black">1</span>
+									Costo de Compra (Base para Markup)
+								</h2>
+								<p class="text-xs text-slate-500">Costo real del proveedor. Todos los precios derivados se calculan como markup sobre este valor.</p>
+							</div>
+							<div id="badge-costo-status" class="hidden"></div>
 						</div>
 
-						<div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
 							<div>
-								<label class="block text-sm font-bold text-slate-900 mb-1">Precio de Venta <span class="text-rose-500">*</span></label>
+								<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Costo Unitario ($ ARS)</label>
 								<div class="relative">
-									<input type="number" id="input-precio-ars" value={product.precio / 100} class="w-full pl-4 pr-12 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900 text-base" />
+									<input 
+										type="number" 
+										step="0.01" 
+										id="input-costo" 
+										value={(product.costo || product.cost || 0) / 100} 
+										class="w-full pl-4 pr-14 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-indigo-600 font-extrabold text-slate-900 text-lg" 
+										placeholder="0.00"
+									/>
 									<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">ARS</span>
 								</div>
-								<p class="text-xs text-slate-400 mt-2">Precio final visible para los clientes.</p>
+								<p class="text-[11px] text-slate-400 mt-1.5">Si se modifica el costo, se actualizarán los precios de venta derivados automáticamente.</p>
 							</div>
 
+							<div class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+								<span class="font-bold text-slate-700 block">Regla de Redondeo Vigente:</span>
+								<p class="text-slate-600">
+									Paso: <strong id="lbl-round-to">${siteSettings.round_to || 0} ARS</strong> | 
+									Modo: <strong id="lbl-round-mode">{siteSettings.round_mode || 'nearest'}</strong>
+								</p>
+								<span class="text-[10px] text-slate-400 block pt-1">Podés modificar la regla global en Configuración del Sitio.</span>
+							</div>
+						</div>
+					</div>
+
+					{/* Alerta de Jerarquía de Precios */}
+					<div id="pricing-hierarchy-alert" class="hidden p-4 rounded-2xl border text-xs font-bold space-y-1"></div>
+
+					{/* 2. Matriz de Niveles de Precio */}
+					<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+						{/* Nivel Distribuidor */}
+						<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
 							<div>
-								<label class="block text-sm font-bold text-slate-900 mb-1">Precio de Costo</label>
-								<div class="relative">
-									<input type="number" id="input-costo" value={(product.costo || 0) / 100} class="w-full pl-4 pr-12 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900 text-base" />
-									<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">ARS</span>
+								<div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+									<span class="px-2.5 py-1 bg-purple-100 text-purple-800 text-xs font-black rounded-lg uppercase tracking-wide">Nivel 1: Distribuidor</span>
+									<span id="badge-mode-distribuidor" class="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600"></span>
 								</div>
-								<p class="text-xs text-slate-400 mt-2">Costo del proveedor (no visible al público).</p>
-							</div>
 
-							<div>
-								<label class="block text-sm font-bold text-slate-900 mb-1">Margen Calculado</label>
-								<div class="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+								<div class="space-y-3">
 									<div>
-										<span class="block text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">MARGEN NETO</span>
-										<span id="label-margen" class="text-lg font-black text-emerald-700">0,0 %</span>
+										<label class="block text-xs font-bold text-slate-700 mb-1">Modo de Cálculo</label>
+										<select id="select-mode-distribuidor" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-600">
+											<option value="inherit" selected={(product.distribuidor_mode || 'inherit') === 'inherit'}>Heredar (% Categoría / Global)</option>
+											<option value="percent" selected={product.distribuidor_mode === 'percent'}>Override Porcentaje (%)</option>
+											<option value="fixed" selected={product.distribuidor_mode === 'fixed'}>Precio Fijo Manual ($ ARS)</option>
+										</select>
 									</div>
-									<div class="text-right">
-										<span class="block text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">GANANCIA</span>
-										<span id="label-ganancia" class="text-sm font-bold text-emerald-800">$0</span>
+
+									<div id="container-percent-distribuidor" class="space-y-1">
+										<label class="block text-[11px] font-bold text-slate-700">Porcentaje de Markup (%)</label>
+										<input 
+											type="number" 
+											step="0.01" 
+											id="input-percent-distribuidor" 
+											value={product.distribuidor_percent ?? ''} 
+											placeholder="Ej: 6.25" 
+											class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-600" 
+										/>
+									</div>
+
+									<div id="container-fixed-distribuidor" class="space-y-1 hidden">
+										<label class="block text-[11px] font-bold text-slate-700">Precio Fijo ($ ARS)</label>
+										<input 
+											type="number" 
+											step="0.01" 
+											id="input-fixed-distribuidor" 
+											value={product.distribuidor_fixed_price ? product.distribuidor_fixed_price / 100 : (product.precio_distribuidor ? product.precio_distribuidor / 100 : '')} 
+											placeholder="Ej: 85.00" 
+											class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-600" 
+										/>
 									</div>
 								</div>
 							</div>
+
+							{/* Live Card Distribuidor */}
+							<div class="p-3.5 bg-purple-50/60 border border-purple-100 rounded-xl text-xs space-y-2">
+								<div class="flex justify-between items-center text-purple-900 font-extrabold">
+									<span>Precio Calculado:</span>
+									<span id="lbl-price-distribuidor" class="text-base text-purple-950 font-black">$0</span>
+								</div>
+								<div class="grid grid-cols-3 gap-1 text-[10px] text-purple-700 font-medium pt-1 border-t border-purple-100">
+									<div>Markup: <strong id="lbl-markup-distribuidor">0%</strong></div>
+									<div>Margen s/venta: <strong id="lbl-margin-distribuidor">0%</strong></div>
+									<div class="text-right">Ganancia: <strong id="lbl-gain-distribuidor">$0</strong></div>
+								</div>
+							</div>
 						</div>
+
+						{/* Nivel Canillita */}
+						<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+							<div>
+								<div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+									<span class="px-2.5 py-1 bg-amber-100 text-amber-800 text-xs font-black rounded-lg uppercase tracking-wide">Nivel 2: Canillita</span>
+									<span id="badge-mode-canillita" class="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600"></span>
+								</div>
+
+								<div class="space-y-3">
+									<div>
+										<label class="block text-xs font-bold text-slate-700 mb-1">Modo de Cálculo</label>
+										<select id="select-mode-canillita" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-600">
+											<option value="inherit" selected={(product.canillita_mode || 'inherit') === 'inherit'}>Heredar (% Categoría / Global)</option>
+											<option value="percent" selected={product.canillita_mode === 'percent'}>Override Porcentaje (%)</option>
+											<option value="fixed" selected={product.canillita_mode === 'fixed'}>Precio Fijo Manual ($ ARS)</option>
+										</select>
+									</div>
+
+									<div id="container-percent-canillita" class="space-y-1">
+										<label class="block text-[11px] font-bold text-slate-700">Porcentaje de Markup (%)</label>
+										<input 
+											type="number" 
+											step="0.01" 
+											id="input-percent-canillita" 
+											value={product.canillita_percent ?? ''} 
+											placeholder="Ej: 12.5" 
+											class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-600" 
+										/>
+									</div>
+
+									<div id="container-fixed-canillita" class="space-y-1 hidden">
+										<label class="block text-[11px] font-bold text-slate-700">Precio Fijo ($ ARS)</label>
+										<input 
+											type="number" 
+											step="0.01" 
+											id="input-fixed-canillita" 
+											value={product.canillita_fixed_price ? product.canillita_fixed_price / 100 : (product.precio_canillita ? product.precio_canillita / 100 : '')} 
+											placeholder="Ej: 90.00" 
+											class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-600" 
+										/>
+									</div>
+								</div>
+							</div>
+
+							{/* Live Card Canillita */}
+							<div class="p-3.5 bg-amber-50/60 border border-amber-100 rounded-xl text-xs space-y-2">
+								<div class="flex justify-between items-center text-amber-900 font-extrabold">
+									<span>Precio Calculado:</span>
+									<span id="lbl-price-canillita" class="text-base text-amber-950 font-black">$0</span>
+								</div>
+								<div class="grid grid-cols-3 gap-1 text-[10px] text-amber-700 font-medium pt-1 border-t border-amber-100">
+									<div>Markup: <strong id="lbl-markup-canillita">0%</strong></div>
+									<div>Margen s/venta: <strong id="lbl-margin-canillita">0%</strong></div>
+									<div class="text-right">Ganancia: <strong id="lbl-gain-canillita">$0</strong></div>
+								</div>
+							</div>
+						</div>
+
+						{/* Nivel Público */}
+						<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+							<div>
+								<div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+									<span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-black rounded-lg uppercase tracking-wide">Nivel 3: Público</span>
+									<span id="badge-mode-publico" class="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600"></span>
+								</div>
+
+								<div class="space-y-3">
+									<div>
+										<label class="block text-xs font-bold text-slate-700 mb-1">Modo de Cálculo</label>
+										<select id="select-mode-publico" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-600">
+											<option value="inherit" selected={(product.publico_mode || 'inherit') === 'inherit'}>Heredar (% Categoría / Global)</option>
+											<option value="percent" selected={product.publico_mode === 'percent'}>Override Porcentaje (%)</option>
+											<option value="fixed" selected={product.publico_mode === 'fixed'}>Precio Fijo Manual ($ ARS)</option>
+										</select>
+									</div>
+
+									<div id="container-percent-publico" class="space-y-1">
+										<label class="block text-[11px] font-bold text-slate-700">Porcentaje de Markup (%)</label>
+										<input 
+											type="number" 
+											step="0.01" 
+											id="input-percent-publico" 
+											value={product.publico_percent ?? ''} 
+											placeholder="Ej: 25.0" 
+											class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-600" 
+										/>
+									</div>
+
+									<div id="container-fixed-publico" class="space-y-1 hidden">
+										<label class="block text-[11px] font-bold text-slate-700">Precio Fijo ($ ARS)</label>
+										<input 
+											type="number" 
+											step="0.01" 
+											id="input-fixed-publico" 
+											value={product.publico_fixed_price ? product.publico_fixed_price / 100 : (product.precio ? product.precio / 100 : '')} 
+											placeholder="Ej: 100.00" 
+											class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-600" 
+										/>
+									</div>
+								</div>
+							</div>
+
+							{/* Live Card Público */}
+							<div class="p-3.5 bg-emerald-50/60 border border-emerald-100 rounded-xl text-xs space-y-2">
+								<div class="flex justify-between items-center text-emerald-900 font-extrabold">
+									<span>Precio Calculado:</span>
+									<span id="lbl-price-publico" class="text-base text-emerald-950 font-black">$0</span>
+								</div>
+								<div class="grid grid-cols-3 gap-1 text-[10px] text-emerald-700 font-medium pt-1 border-t border-emerald-100">
+									<div>Markup: <strong id="lbl-markup-publico">0%</strong></div>
+									<div>Margen s/venta: <strong id="lbl-margin-publico">0%</strong></div>
+									<div class="text-right">Ganancia: <strong id="lbl-gain-publico">$0</strong></div>
+								</div>
+							</div>
+						</div>
+
 					</div>
 
-					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
-						<div class="mb-6 border-b border-slate-100 pb-4">
-							<h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-								<span class="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-black rounded-md uppercase">Privado Admin / Red</span>
-								Precios Distribuidor y Canillita
-							</h2>
-							<p class="text-sm text-slate-500">Valores internos para la gestión con distribuidores y la red de Canillitas (100% ocultos para los clientes).</p>
-						</div>
-
-						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+					{/* 3. Precio Promocional (Oferta) */}
+					<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+						<div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
 							<div>
-								<label class="block text-sm font-bold text-slate-900 mb-1">Precio Distribuidor ($ ARS)</label>
-								<div class="relative">
-									<input type="number" id="input-precio-distribuidor" value={(product.precio_distribuidor || 0) / 100} class="w-full pl-4 pr-12 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900 text-base" />
-									<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">ARS</span>
-								</div>
-								<p class="text-xs text-slate-400 mt-2">Precio interno asignado para distribuidores o mayoristas.</p>
-							</div>
-
-							<div>
-								<label class="block text-sm font-bold text-slate-900 mb-1">Precio Canillita ($ ARS)</label>
-								<div class="relative">
-									<input type="number" id="input-precio-canillita" value={(product.precio_canillita || 0) / 100} class="w-full pl-4 pr-12 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900 text-base" />
-									<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">ARS</span>
-								</div>
-								<p class="text-xs text-slate-400 mt-2">Precio o base de costo asignado a los Canillitas.</p>
-							</div>
-						</div>
-					</div>
-
-					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
-						<div class="flex justify-between items-center mb-4">
-							<div>
-								<h2 class="text-lg font-bold text-slate-900">Precio Promocional (Oferta)</h2>
-								<p class="text-sm text-slate-500">Si estableces un precio aquí, el precio original se mostrará tachado.</p>
+								<h2 class="text-base font-bold text-slate-900">Precio Promocional (Oferta Especial)</h2>
+								<p class="text-xs text-slate-500">Si se asigna un importe menor al precio Público, el precio de lista aparecerá tachado en la vitrina.</p>
 							</div>
 						</div>
 
-						<div class="w-1/2 min-w-[200px]">
-							<label class="block text-sm font-bold text-slate-900 mb-1">Precio Promocional</label>
+						<div class="w-full md:w-1/3">
+							<label class="block text-xs font-bold text-slate-700 mb-1">Precio Promocional ($ ARS)</label>
 							<div class="relative">
-								<input type="number" id="input-precio-promocional" value={(product.precio_promocional || 0) / 100} class="w-full pl-4 pr-12 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900 text-base" />
+								<input 
+									type="number" 
+									step="0.01" 
+									id="input-precio-promocional" 
+									value={(product.precio_promocional || 0) / 100} 
+									class="w-full pl-4 pr-14 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-600 font-extrabold text-slate-900 text-base" 
+									placeholder="0.00"
+								/>
 								<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">ARS</span>
 							</div>
-							<p class="text-[11px] text-slate-400 mt-2">Dejar en 0 para no aplicar descuento.</p>
+							<p class="text-[11px] text-slate-400 mt-1.5">Dejar en 0 para no aplicar precio de oferta.</p>
 						</div>
 					</div>
+
 				</div>
 
 				{/* Pestaña 3: Stock */}
@@ -812,27 +975,165 @@ if (product.galeria_urls) {
 		const calcMargin = () => {
 			const precio = parseFloat((document.getElementById('input-precio-ars') as HTMLInputElement)?.value || '0');
 			const costo = parseFloat((document.getElementById('input-costo') as HTMLInputElement)?.value || '0');
-			const labelMargen = document.getElementById('label-margen');
-			const labelGanancia = document.getElementById('label-ganancia');
+		// Multilevel Pricing Live Calculations
+		const categoriesMap = new Map();
+		try {
+			const catResData = JSON.parse(document.getElementById('product-meta-data')?.dataset.categories || '[]');
+			catResData.forEach((c: any) => categoriesMap.set(c.$id, c));
+		} catch (e) {}
 
-			const ganancia = precio - costo;
-			if (labelGanancia) {
-				labelGanancia.innerText = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Math.max(0, ganancia));
-			}
+		const globalSettings = {
+			default_markup_distribuidor: parseFloat('{siteSettings.default_markup_distribuidor}') || 6.25,
+			default_markup_canillita: parseFloat('{siteSettings.default_markup_canillita}') || 12.5,
+			default_markup_publico: parseFloat('{siteSettings.default_markup_publico}') || 25.0,
+			round_to: parseInt('{siteSettings.round_to}', 10) || 0,
+			round_mode: '{siteSettings.round_mode}' || 'nearest'
+		};
 
-			if (labelMargen) {
-				if (costo > 0 && precio > 0) {
-					const margin = ((precio - costo) / costo) * 100;
-					labelMargen.innerText = margin.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %';
-				} else {
-					labelMargen.innerText = '0,0 %';
-				}
+		const applyRounding = (exactPesos: number) => {
+			if (!globalSettings.round_to || globalSettings.round_to <= 0) return exactPesos;
+			const step = globalSettings.round_to;
+			const ratio = exactPesos / step;
+			let factor = Math.round(ratio);
+			if (globalSettings.round_mode === 'up') factor = Math.ceil(ratio);
+			if (globalSettings.round_mode === 'down') factor = Math.floor(ratio);
+			return factor * step;
+		};
+
+		const updateLevelUI = (level: 'distribuidor' | 'canillita' | 'publico') => {
+			const modeSelect = document.getElementById(`select-mode-${level}`) as HTMLSelectElement;
+			const containerPercent = document.getElementById(`container-percent-${level}`);
+			const containerFixed = document.getElementById(`container-fixed-${level}`);
+			const badgeMode = document.getElementById(`badge-mode-${level}`);
+
+			if (!modeSelect) return;
+			const mode = modeSelect.value;
+
+			if (mode === 'fixed') {
+				containerPercent?.classList.add('hidden');
+				containerFixed?.classList.remove('hidden');
+				if (badgeMode) badgeMode.innerText = 'PRECIO FIJO MANUAL';
+			} else if (mode === 'percent') {
+				containerPercent?.classList.remove('hidden');
+				containerFixed?.classList.add('hidden');
+				if (badgeMode) badgeMode.innerText = 'OVERRIDE PORCENTAJE';
+			} else {
+				containerPercent?.classList.remove('hidden');
+				containerFixed?.classList.add('hidden');
+				if (badgeMode) badgeMode.innerText = 'HEREDADO (CATEGORÍA / GLOBAL)';
 			}
 		};
 
-		document.getElementById('input-precio-ars')?.addEventListener('input', calcMargin);
-		document.getElementById('input-costo')?.addEventListener('input', calcMargin);
-		calcMargin();
+		['distribuidor', 'canillita', 'publico'].forEach((level: any) => {
+			const sel = document.getElementById(`select-mode-${level}`);
+			sel?.addEventListener('change', () => {
+				updateLevelUI(level);
+				calcMultilevelPrices();
+			});
+			document.getElementById(`input-percent-${level}`)?.addEventListener('input', calcMultilevelPrices);
+			document.getElementById(`input-fixed-${level}`)?.addEventListener('input', calcMultilevelPrices);
+			updateLevelUI(level);
+		});
+
+		document.getElementById('input-costo')?.addEventListener('input', calcMultilevelPrices);
+		document.getElementById('input-categoria')?.addEventListener('change', calcMultilevelPrices);
+
+		function calcMultilevelPrices() {
+			const costArs = parseFloat((document.getElementById('input-costo') as HTMLInputElement)?.value || '0');
+			const selectedCatId = (document.getElementById('input-categoria') as HTMLSelectElement)?.value;
+			const categoryDoc = selectedCatId ? categoriesMap.get(selectedCatId) : null;
+
+			// Cost badge status
+			const badgeCosto = document.getElementById('badge-costo-status');
+			if (badgeCosto) {
+				if (costArs <= 0) {
+					badgeCosto.className = 'px-3 py-1 bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold rounded-full flex items-center gap-1';
+					badgeCosto.innerHTML = '⚠️ Sin costo cargado';
+					badgeCosto.classList.remove('hidden');
+				} else {
+					badgeCosto.className = 'px-3 py-1 bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-full flex items-center gap-1';
+					badgeCosto.innerHTML = '✓ Costo Asignado';
+					badgeCosto.classList.remove('hidden');
+				}
+			}
+
+			const prices: Record<string, { exactPesos: number; roundedPesos: number; markupPct: number; gainPesos: number }> = {};
+
+			['distribuidor', 'canillita', 'publico'].forEach((level) => {
+				const mode = (document.getElementById(`select-mode-${level}`) as HTMLSelectElement)?.value || 'inherit';
+				let exactPesos = 0;
+				let roundedPesos = 0;
+				let markupPct = 0;
+
+				if (mode === 'fixed') {
+					const fixedVal = parseFloat((document.getElementById(`input-fixed-${level}`) as HTMLInputElement)?.value || '0');
+					exactPesos = fixedVal;
+					roundedPesos = applyRounding(exactPesos);
+					markupPct = costArs > 0 ? ((roundedPesos - costArs) / costArs) * 100 : 0;
+				} else {
+					if (mode === 'percent') {
+						const inputPct = parseFloat((document.getElementById(`input-percent-${level}`) as HTMLInputElement)?.value || '');
+						if (Number.isFinite(inputPct)) {
+							markupPct = inputPct;
+						}
+					}
+					
+					if (markupPct === 0 && mode === 'inherit') {
+						const catKey = `markup_${level}`;
+						if (categoryDoc && categoryDoc[catKey] !== undefined && categoryDoc[catKey] !== null) {
+							markupPct = parseFloat(categoryDoc[catKey]);
+						} else {
+							markupPct = (globalSettings as any)[`default_markup_${level}`] || 0;
+						}
+					}
+
+					exactPesos = costArs * (1 + markupPct / 100);
+					roundedPesos = applyRounding(exactPesos);
+				}
+
+				const gainPesos = roundedPesos - costArs;
+				const realMarginPct = roundedPesos > 0 && costArs > 0 ? ((roundedPesos - costArs) / roundedPesos) * 100 : 0;
+				prices[level] = { exactPesos, roundedPesos, markupPct, gainPesos };
+
+				// Update UI Labels
+				const lblPrice = document.getElementById(`lbl-price-${level}`);
+				const lblMarkup = document.getElementById(`lbl-markup-${level}`);
+				const lblMargin = document.getElementById(`lbl-margin-${level}`);
+				const lblGain = document.getElementById(`lbl-gain-${level}`);
+
+				if (lblPrice) lblPrice.innerText = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(roundedPesos);
+				if (lblMarkup) lblMarkup.innerText = `${markupPct.toFixed(1)}%`;
+				if (lblMargin) lblMargin.innerText = `${realMarginPct.toFixed(1)}%`;
+				if (lblGain) lblGain.innerText = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(gainPesos);
+			});
+
+			// Hierarchy Validation Alerts
+			const alertBox = document.getElementById('pricing-hierarchy-alert');
+			if (alertBox) {
+				const pDist = prices['distribuidor']?.roundedPesos || 0;
+				const pCani = prices['canillita']?.roundedPesos || 0;
+				const pPub = prices['publico']?.roundedPesos || 0;
+
+				let alertHtml = '';
+				if (costArs <= 0) {
+					alertHtml = `<div class="bg-amber-50 text-amber-800 border-amber-200 border p-3 rounded-xl">⚠️ <strong>Atención:</strong> El producto no tiene costo asignado. Se recomienda ingresar el costo real para automatizar los precios de venta derivados.</div>`;
+				} else if (pDist > pCani || pCani > pPub) {
+					alertHtml = `<div class="bg-amber-50 text-amber-800 border-amber-200 border p-3 rounded-xl">⚠️ <strong>Inconsistencia en Escala de Precios:</strong> Se detectó que un nivel inferior es mayor que un nivel superior (Valores: Distribuidor $${pDist} | Canillita $${pCani} | Público $${pPub}). Verificar la jerarquía de markups.</div>`;
+				} else if (pDist < costArs || pCani < costArs || pPub < costArs) {
+					alertHtml = `<div class="bg-rose-50 text-rose-800 border-rose-200 border p-3 rounded-xl">🚫 <strong>Precio Bajo Costo:</strong> Uno o más niveles de precio están por debajo del costo de compra ($${costArs}).</div>`;
+				}
+
+				if (alertHtml) {
+					alertBox.innerHTML = alertHtml;
+					alertBox.classList.remove('hidden');
+				} else {
+					alertBox.innerHTML = '';
+					alertBox.classList.add('hidden');
+				}
+			}
+		}
+
+		calcMultilevelPrices();
 
 		document.getElementById('btn-guardar-producto')?.addEventListener('click', async (e) => {
 			const btn = e.currentTarget as HTMLButtonElement;
@@ -842,12 +1143,22 @@ if (product.galeria_urls) {
 			const nombre = (document.getElementById('input-nombre') as HTMLInputElement)?.value;
 			const marca = (document.getElementById('input-marca') as HTMLInputElement)?.value;
 			const descripcion = (document.getElementById('input-descripcion') as HTMLTextAreaElement)?.value;
-			const precioArs = parseFloat((document.getElementById('input-precio-ars') as HTMLInputElement)?.value || '0');
-			const precioPromocionalArs = parseFloat((document.getElementById('input-precio-promocional') as HTMLInputElement)?.value || '0');
-			const precioDistribuidorArs = parseFloat((document.getElementById('input-precio-distribuidor') as HTMLInputElement)?.value || '0');
-			const precioCanillitaArs = parseFloat((document.getElementById('input-precio-canillita') as HTMLInputElement)?.value || '0');
-			const costoArs = parseFloat((document.getElementById('input-costo') as HTMLInputElement)?.value || '0');
 			
+			const costoArs = parseFloat((document.getElementById('input-costo') as HTMLInputElement)?.value || '0');
+			const precioPromocionalArs = parseFloat((document.getElementById('input-precio-promocional') as HTMLInputElement)?.value || '0');
+
+			const distMode = (document.getElementById('select-mode-distribuidor') as HTMLSelectElement)?.value;
+			const distPercent = parseFloat((document.getElementById('input-percent-distribuidor') as HTMLInputElement)?.value || '');
+			const distFixedArs = parseFloat((document.getElementById('input-fixed-distribuidor') as HTMLInputElement)?.value || '');
+
+			const caniMode = (document.getElementById('select-mode-canillita') as HTMLSelectElement)?.value;
+			const caniPercent = parseFloat((document.getElementById('input-percent-canillita') as HTMLInputElement)?.value || '');
+			const caniFixedArs = parseFloat((document.getElementById('input-fixed-canillita') as HTMLInputElement)?.value || '');
+
+			const pubMode = (document.getElementById('select-mode-publico') as HTMLSelectElement)?.value;
+			const pubPercent = parseFloat((document.getElementById('input-percent-publico') as HTMLInputElement)?.value || '');
+			const pubFixedArs = parseFloat((document.getElementById('input-fixed-publico') as HTMLInputElement)?.value || '');
+
 			const stock = parseInt((document.getElementById('input-stock') as HTMLInputElement)?.value || '0', 10);
 			const stockMaximo = parseInt((document.getElementById('input-stock-maximo') as HTMLInputElement)?.value || '0', 10);
 			const nivelReorden = parseInt((document.getElementById('input-nivel-reorden') as HTMLInputElement)?.value || '0', 10);
@@ -885,7 +1196,7 @@ if (product.galeria_urls) {
 				const opcion = (row.querySelector('.var-opcion') as HTMLInputElement)?.value || '';
 				const sku = (row.querySelector('.var-sku') as HTMLInputElement)?.value || '';
 				const vStock = parseInt((row.querySelector('.var-stock') as HTMLInputElement)?.value || '0', 10);
-				updatedVariants.push({ opcion, sku, stock: vStock, precio: precioArs });
+				updatedVariants.push({ opcion, sku, stock: vStock });
 			});
 
 			if (!nombre) {
@@ -908,12 +1219,23 @@ if (product.galeria_urls) {
 					nombre,
 					marca,
 					descripcion,
-					precio: Math.round(precioArs * 100),
-					precio_promocional: (precioPromocionalArs > 0 && precioPromocionalArs < precioArs) ? Math.round(precioPromocionalArs * 100) : 0,
-
-					precio_distribuidor: Math.round(precioDistribuidorArs * 100),
-					precio_canillita: Math.round(precioCanillitaArs * 100),
+					cost: Math.round(costoArs * 100),
 					costo: Math.round(costoArs * 100),
+
+					distribuidor_mode: distMode as any,
+					distribuidor_percent: Number.isFinite(distPercent) ? distPercent : null,
+					distribuidor_fixed_price: Number.isFinite(distFixedArs) ? Math.round(distFixedArs * 100) : null,
+
+					canillita_mode: caniMode as any,
+					canillita_percent: Number.isFinite(caniPercent) ? caniPercent : null,
+					canillita_fixed_price: Number.isFinite(caniFixedArs) ? Math.round(caniFixedArs * 100) : null,
+
+					publico_mode: pubMode as any,
+					publico_percent: Number.isFinite(pubPercent) ? pubPercent : null,
+					publico_fixed_price: Number.isFinite(pubFixedArs) ? Math.round(pubFixedArs * 100) : null,
+
+					precio_promocional: precioPromocionalArs > 0 ? Math.round(precioPromocionalArs * 100) : 0,
+
 					stock: finalStock,
 					stock_maximo: stockMaximo,
 					nivel_reorden: nivelReorden,
@@ -934,7 +1256,7 @@ if (product.galeria_urls) {
 					return;
 				}
 
-				alert('¡Producto guardado exitosamente!');
+				alert('¡Producto guardado exitosamente con sus precios multinivel!');
 				window.location.reload();
 			} catch (err: any) {
 				alert('Error al guardar: ' + err.message);

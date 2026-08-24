@@ -15,7 +15,7 @@ import { esSlugReservado, limpiarSlugNodo } from '../lib/slugs';
 import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 
 
-import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones } from '../lib/commissions';
+import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, confirmarComisionesDeOrden } from '../lib/commissions';
 
 import { createAdminClient } from '../lib/server/appwrite';
 import { invalidateCatalogCache } from '../lib/server/catalogCache';
@@ -31,7 +31,12 @@ import {
 
 import { env, getPublicSiteUrl } from '../lib/server/env';
 
-import { saveSiteSetting } from '../lib/server/settings';
+import { saveSiteSetting, getSiteSettings } from '../lib/server/settings';
+import { 
+	recalculateProductPrices, 
+	resolveProductPriceForUser, 
+	sanitizeProductForUser 
+} from '../lib/pricingEngine';
 import { obtenerTokenPlataformaValido } from '../lib/server/mercadopagoOAuth';
 
 const client = new Proxy({} as Client, {
@@ -643,6 +648,13 @@ export const server = {
 					estado: 'entregado'
 				});
 
+				// Confirmar comisiones asociadas (pasar de pendiente a disponible/confirmada)
+				try {
+					await confirmarComisionesDeOrden(input.orderId);
+				} catch (e) {
+					console.warn('No se pudieron confirmar comisiones para la orden', input.orderId, e);
+				}
+
 				// Create order event
 				try {
 					await db.createDocument('urbanpoint', 'order_events', ID.unique(), {
@@ -653,12 +665,6 @@ export const server = {
 						motivo: 'Entrega confirmada por canillita'
 					});
 				} catch (e) {}
-
-				// Las comisiones se devengan al acreditarse el pago (webhook o
-				// updateOrderStatus), no al entregar. Acá se llamaba a
-				// resolverComisiones DESPUÉS de escribir estado='entregado', y esa
-				// función exige estado 'pagado': tiraba error aunque la entrega
-				// hubiera salido bien, y la action devolvía success:false.
 
 				return { success: true };
 			} catch (error: any) {
@@ -722,6 +728,8 @@ export const server = {
 					} catch (e) {}
 				}
 
+				const userRole = ctx.locals.user?.role || 'cliente';
+
 				// Re-fetch all products securely from backend to avoid price manipulation
 				const prefItems = [];
 				const orderItemsData = [];
@@ -733,10 +741,12 @@ export const server = {
 						throw new Error(`El producto ${p.nombre} no está disponible o no hay stock suficiente.`);
 					}
 
-					// Mismo precio que ve el cliente en la vitrina, incluida la
-					// promoción. El precio siempre sale de la base, nunca del cliente.
-					const unitarioCentavos = precioDeVentaCentavos(p as any);
+					const priceInfo = resolveProductPriceForUser(p, userRole);
+					const unitarioCentavos = tienePromocion(p as any) 
+						? precioDeVentaCentavos(p as any) 
+						: priceInfo.unitPriceCentavos;
 					const subtotalCentavos = unitarioCentavos * item.cantidad;
+					const costoUnitario = Math.round(Number(p.cost ?? p.costo ?? 0));
 
 					prefItems.push({
 						id: p.$id,
@@ -751,6 +761,8 @@ export const server = {
 						sku_snapshot: p.sku || 'SKU-GEN',
 						nombre_snapshot: p.nombre,
 						precio_unitario: unitarioCentavos,
+						applied_level: priceInfo.appliedLevel,
+						costo_unitario: costoUnitario,
 						cantidad: item.cantidad,
 						subtotal: subtotalCentavos
 					});
@@ -768,6 +780,8 @@ export const server = {
 					ctx.cookies.get(NODE_COOKIE_NAME)?.value
 				);
 
+				const effectiveTier = userRole === 'distribuidor' ? 'distribuidor' : (userRole === 'canillita' ? 'canillita' : 'publico');
+
 				// Create the Order in Appwrite
 				const orderPayload: any = {
 					numero: Math.floor(100000 + Math.random() * 900000).toString(),
@@ -777,7 +791,8 @@ export const server = {
 					estado: 'pendiente_pago',
 					fulfillment: input.fulfillment || 'retiro',
 					referral_code_id: referralCodeId,
-					pickup_code_hash: pickupCode
+					pickup_code_hash: pickupCode,
+					price_tier: effectiveTier
 				};
 
 				if (activeNodeSession) {
@@ -1472,7 +1487,21 @@ export const server = {
 			precio_promocional: z.number().min(0).optional(),
 			precio_distribuidor: z.number().min(0).optional(),
 			precio_canillita: z.number().min(0).optional(),
-			costo: z.number().min(0).optional(),
+			costo: z.number().min(0).optional().nullable(),
+			cost: z.number().min(0).optional().nullable(),
+			
+			distribuidor_mode: z.enum(['inherit', 'percent', 'fixed']).optional(),
+			distribuidor_percent: z.number().optional().nullable(),
+			distribuidor_fixed_price: z.number().optional().nullable(),
+
+			canillita_mode: z.enum(['inherit', 'percent', 'fixed']).optional(),
+			canillita_percent: z.number().optional().nullable(),
+			canillita_fixed_price: z.number().optional().nullable(),
+
+			publico_mode: z.enum(['inherit', 'percent', 'fixed']).optional(),
+			publico_percent: z.number().optional().nullable(),
+			publico_fixed_price: z.number().optional().nullable(),
+
 			stock: z.number().min(0).optional(),
 			stock_maximo: z.number().min(0).optional(),
 			nivel_reorden: z.number().min(0).optional(),
@@ -1493,28 +1522,34 @@ export const server = {
 			try {
 				requireRole(ctx, 'admin', 'gestion');
 
+				const currentDoc = await db.getDocument('urbanpoint', 'products', input.id);
 				const updateData: any = {};
 
 				if (input.nombre !== undefined) updateData.nombre = input.nombre;
 				if (input.descripcion !== undefined) updateData.descripcion = input.descripcion;
-				if (input.precio !== undefined) updateData.precio = input.precio;
 				if (input.stock !== undefined) updateData.stock = input.stock;
 				if (input.estado !== undefined) {
 					updateData.estado = input.estado === 'inactivo' ? 'pausado' : input.estado;
 				}
 
-				if (input.precio_promocional !== undefined) {
-					const finalPrecio = input.precio !== undefined ? input.precio : undefined;
-					if (input.precio_promocional <= 0 || (finalPrecio !== undefined && input.precio_promocional >= finalPrecio)) {
-						updateData.precio_promocional = null;
-					} else {
-						updateData.precio_promocional = input.precio_promocional;
-					}
-				}
-				if (input.precio_distribuidor !== undefined) updateData.precio_distribuidor = input.precio_distribuidor;
-				if (input.precio_canillita !== undefined) updateData.precio_canillita = input.precio_canillita;
 				if (input.marca !== undefined) updateData.marca = input.marca;
-				if (input.costo !== undefined) updateData.costo = input.costo;
+				
+				const finalCost = input.cost !== undefined ? input.cost : (input.costo !== undefined ? input.costo : currentDoc.cost ?? currentDoc.costo);
+				updateData.cost = finalCost;
+				updateData.costo = finalCost;
+
+				if (input.distribuidor_mode !== undefined) updateData.distribuidor_mode = input.distribuidor_mode;
+				if (input.distribuidor_percent !== undefined) updateData.distribuidor_percent = input.distribuidor_percent;
+				if (input.distribuidor_fixed_price !== undefined) updateData.distribuidor_fixed_price = input.distribuidor_fixed_price;
+
+				if (input.canillita_mode !== undefined) updateData.canillita_mode = input.canillita_mode;
+				if (input.canillita_percent !== undefined) updateData.canillita_percent = input.canillita_percent;
+				if (input.canillita_fixed_price !== undefined) updateData.canillita_fixed_price = input.canillita_fixed_price;
+
+				if (input.publico_mode !== undefined) updateData.publico_mode = input.publico_mode;
+				if (input.publico_percent !== undefined) updateData.publico_percent = input.publico_percent;
+				if (input.publico_fixed_price !== undefined) updateData.publico_fixed_price = input.publico_fixed_price;
+
 				if (input.stock_maximo !== undefined) updateData.stock_maximo = input.stock_maximo;
 				if (input.nivel_reorden !== undefined) updateData.nivel_reorden = input.nivel_reorden;
 				if (input.tiempo_reposicion !== undefined) updateData.tiempo_reposicion = input.tiempo_reposicion;
@@ -1528,6 +1563,46 @@ export const server = {
 
 				if (input.categoria_id !== undefined) {
 					updateData.categoria_id = input.categoria_id || null;
+				}
+
+				// Merged document for recalculation
+				const merged = { ...currentDoc, ...updateData };
+
+				// Fetch category and site settings
+				let catDoc = null;
+				const targetCatId = merged.categoria_id ? (typeof merged.categoria_id === 'string' ? merged.categoria_id : merged.categoria_id.$id) : null;
+				if (targetCatId) {
+					try {
+						catDoc = await db.getDocument('urbanpoint', 'categories', targetCatId);
+					} catch (e) {}
+				}
+				const settings = await getSiteSettings();
+
+				const recalculated = recalculateProductPrices(merged, catDoc, settings);
+
+				if (recalculated.price_distribuidor !== null) {
+					updateData.price_distribuidor = recalculated.price_distribuidor;
+					updateData.precio_distribuidor = recalculated.price_distribuidor;
+				}
+				if (recalculated.price_canillita !== null) {
+					updateData.price_canillita = recalculated.price_canillita;
+					updateData.precio_canillita = recalculated.price_canillita;
+				}
+				if (recalculated.price_publico !== null) {
+					updateData.price_publico = recalculated.price_publico;
+					updateData.precio = recalculated.price_publico;
+				} else if (input.precio !== undefined) {
+					updateData.precio = input.precio;
+					updateData.price_publico = input.precio;
+				}
+
+				if (input.precio_promocional !== undefined) {
+					const finalPrecio = updateData.precio ?? currentDoc.precio;
+					if (input.precio_promocional <= 0 || (finalPrecio !== undefined && input.precio_promocional >= finalPrecio)) {
+						updateData.precio_promocional = null;
+					} else {
+						updateData.precio_promocional = input.precio_promocional;
+					}
 				}
 
 				await db.updateDocument('urbanpoint', 'products', input.id, updateData);
@@ -2042,7 +2117,10 @@ export const server = {
 			slug: z.string().optional(),
 			descripcion: z.string().optional(),
 			imagen_url: z.string().optional(),
-			estado: z.string().optional()
+			estado: z.string().optional(),
+			markup_distribuidor: z.number().optional().nullable(),
+			markup_canillita: z.number().optional().nullable(),
+			markup_publico: z.number().optional().nullable()
 		}),
 		handler: async (input, ctx) => {
 			try {
@@ -2063,13 +2141,72 @@ export const server = {
 					estado: input.estado || 'activa'
 				};
 
-				if (input.id) {
-					const updated = await db.updateDocument('urbanpoint', 'categories', input.id, payload);
-					return { success: true, id: updated.$id };
+				if (input.markup_distribuidor !== undefined) payload.markup_distribuidor = input.markup_distribuidor;
+				if (input.markup_canillita !== undefined) payload.markup_canillita = input.markup_canillita;
+				if (input.markup_publico !== undefined) payload.markup_publico = input.markup_publico;
+
+				let categoryId = input.id;
+				if (categoryId) {
+					await db.updateDocument('urbanpoint', 'categories', categoryId, payload);
 				} else {
 					const created = await db.createDocument('urbanpoint', 'categories', ID.unique(), payload);
-					return { success: true, id: created.$id };
+					categoryId = created.$id;
 				}
+
+				return { success: true, id: categoryId };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	recalculateCategoryProducts: defineAction({
+		accept: 'json',
+		input: z.object({
+			categoryId: z.string()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo los administradores pueden recalcular precios');
+				}
+
+				const category = await db.getDocument('urbanpoint', 'categories', input.categoryId);
+				const settings = await getSiteSettings();
+
+				// Fetch products in this category
+				const prodsRes = await db.listDocuments('urbanpoint', 'products', [
+					Query.equal('categoria_id', input.categoryId),
+					Query.limit(500)
+				]);
+
+				let updatedCount = 0;
+
+				for (const prod of prodsRes.documents) {
+					const recalculated = recalculateProductPrices(prod, category, settings);
+					const patch: any = {};
+
+					if (recalculated.price_distribuidor !== null) {
+						patch.price_distribuidor = recalculated.price_distribuidor;
+						patch.precio_distribuidor = recalculated.price_distribuidor;
+					}
+					if (recalculated.price_canillita !== null) {
+						patch.price_canillita = recalculated.price_canillita;
+						patch.precio_canillita = recalculated.price_canillita;
+					}
+					if (recalculated.price_publico !== null) {
+						patch.price_publico = recalculated.price_publico;
+						patch.precio = recalculated.price_publico;
+					}
+
+					if (Object.keys(patch).length > 0) {
+						await db.updateDocument('urbanpoint', 'products', prod.$id, patch);
+						updatedCount++;
+					}
+				}
+
+				invalidateCatalogCache();
+				return { success: true, updatedCount };
 			} catch (error: any) {
 				return { success: false, error: error.message };
 			}
@@ -2087,6 +2224,27 @@ export const server = {
 					throw new Error('Solo los administradores pueden eliminar categorías');
 				}
 				await db.deleteDocument('urbanpoint', 'categories', input.id);
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	updateProfileRole: defineAction({
+		accept: 'json',
+		input: z.object({
+			profileId: z.string(),
+			role: z.enum(['cliente', 'canillita', 'distribuidor', 'admin'])
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo los administradores pueden cambiar roles de usuario');
+				}
+				await db.updateDocument('urbanpoint', 'profiles', input.profileId, {
+					role: input.role
+				});
 				return { success: true };
 			} catch (error: any) {
 				return { success: false, error: error.message };

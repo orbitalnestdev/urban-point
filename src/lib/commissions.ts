@@ -58,6 +58,18 @@ export async function resolverComisiones(orderId: string) {
 			throw new Error('La orden no está pagada.');
 		}
 
+		// DECISIÓN CERRADA 1: Comisión y margen son excluyentes.
+		// Solo los pedidos con price_tier = 'publico' generan asiento en commission_ledger.
+		// Los pedidos a precio canillita o distribuidor tienen comisión cero, sin excepción.
+		const priceTier = order.price_tier || 'publico';
+		if (priceTier !== 'publico') {
+			await db.updateDocument('urbanpoint', 'orders', orderId, {
+				comision_total_centavos: 0
+			});
+			console.log(`Orden ${orderId} en nivel '${priceTier}': comisión 0 (excluyente con margen).`);
+			return { success: true, zeroCommissionTier: priceTier };
+		}
+
 		// Evitar re-procesamiento duplicado de comisiones para la misma orden
 		const existingLedgers = await db.listDocuments('urbanpoint', 'commission_ledger', [
 			Query.equal('order_id', orderId)
@@ -207,6 +219,110 @@ export async function revertirComisiones(orderId: string, motivo: string) {
 	return revertidos;
 }
 
+/**
+ * Confirma las comisiones asociadas a una orden al ser entregada al cliente.
+ * Pasa los asientos de estado 'pendiente' a 'disponible' (confirmada).
+ */
+export async function confirmarComisionesDeOrden(orderId: string) {
+	const ledgersRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
+		Query.equal('order_id', orderId),
+		Query.limit(500)
+	]);
+
+	let confirmados = 0;
+	for (const asiento of ledgersRes.documents) {
+		if (asiento.estado === 'pendiente') {
+			await db.updateDocument('urbanpoint', 'commission_ledger', asiento.$id, {
+				estado: 'disponible'
+			});
+			confirmados++;
+		}
+	}
+	return confirmados;
+}
+
+export interface CanillitaStats {
+	comisionesMesCentavos: number;
+	totalPendienteCentavos: number;
+	totalLiquidadoCentavos: number;
+	ventasAtribuidasMesCount: number;
+	entregasPendientesCount: number;
+}
+
+/**
+ * Función única de servidor para calcular estadísticas y métricas del canillita.
+ * Utilizada tanto por el Panel de Canillita (/canillita) como por el Panel de Administración.
+ */
+export async function getCanillitaStats(profileId: string): Promise<CanillitaStats> {
+	// 1. Puntos de retiro asociados al canillita
+	const pointsRes = await db.listDocuments('urbanpoint', 'pickup_points', [
+		Query.equal('profile_id', profileId),
+		Query.limit(50)
+	]);
+	const pickupPointIds = pointsRes.documents.map(p => p.$id);
+
+	// 2. Historial de comisiones del canillita
+	const ledgerRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
+		Query.equal('profile_id', profileId),
+		Query.limit(1000)
+	]);
+	const ledgers = ledgerRes.documents;
+
+	const now = new Date();
+	const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+	// Comisiones del mes en curso (asientos vivos creados este mes)
+	const comisionesMesCentavos = ledgers
+		.filter(l => {
+			if (l.tipo === 'reversa' || l.tipo === 'liquidacion' || l.estado === 'revertido') return false;
+			const createdTime = new Date(l.$createdAt).getTime();
+			return createdTime >= startOfMonth;
+		})
+		.reduce((acc, l) => acc + (l.monto_centavos || 0), 0);
+
+	// Total pendiente de liquidación (devengado/confirmado y no pagado)
+	const totalPendienteCentavos = ledgers
+		.filter(l => (l.estado === 'pendiente' || l.estado === 'disponible') && l.tipo !== 'reversa')
+		.reduce((acc, l) => acc + (l.monto_centavos || 0), 0);
+
+	// Total ya liquidado histórico
+	const totalLiquidadoCentavos = ledgers
+		.filter(l => l.estado === 'liquidado' && l.tipo !== 'reversa')
+		.reduce((acc, l) => acc + (l.monto_centavos || 0), 0);
+
+	// Ventas atribuidas en el mes en curso (pedidos únicos vivos)
+	const orderIdsThisMonth = new Set(
+		ledgers
+			.filter(l => {
+				if (l.tipo === 'reversa' || l.estado === 'revertido') return false;
+				return new Date(l.$createdAt).getTime() >= startOfMonth;
+			})
+			.map(l => typeof l.order_id === 'string' ? l.order_id : l.order_id?.$id)
+			.filter(Boolean)
+	);
+	const ventasAtribuidasMesCount = orderIdsThisMonth.size;
+
+	// Entregas pendientes en su punto de retiro
+	let entregasPendientesCount = 0;
+	if (pickupPointIds.length > 0) {
+		const pendingOrdersRes = await db.listDocuments('urbanpoint', 'orders', [
+			Query.equal('pickup_point_id', pickupPointIds),
+			Query.limit(500)
+		]);
+		entregasPendientesCount = pendingOrdersRes.documents.filter(o => 
+			o.estado === 'pagado' || o.estado === 'preparando' || o.estado === 'en_punto'
+		).length;
+	}
+
+	return {
+		comisionesMesCentavos,
+		totalPendienteCentavos,
+		totalLiquidadoCentavos,
+		ventasAtribuidasMesCount,
+		entregasPendientesCount
+	};
+}
+
 export interface LiquidacionInput {
 	profileId: string;
 	medioPago: string;
@@ -220,13 +336,6 @@ export interface LiquidacionInput {
 
 /**
  * Liquida las comisiones pendientes de un canillita. [A-03]
- *
- * Fuente única. Antes convivían dos actions que escribían la misma colección
- * con nombres de campo distintos y ambas fallaban por motivos diferentes:
- * liquidateCommissions nunca guardaba profile_id, así que el payout quedaba
- * huérfano y no aparecía en "Mis Cobros" del canillita; y createPayout omitía
- * periodo_desde y periodo_hasta, que son requeridos, con lo que Appwrite
- * rechazaba el documento siempre.
  */
 export async function liquidarComisiones(input: LiquidacionInput) {
 	// Idempotencia: reintentar la misma liquidación no puede pagar dos veces.
@@ -242,17 +351,20 @@ export async function liquidarComisiones(input: LiquidacionInput) {
 		};
 	}
 
-	const pendientes = await db.listDocuments('urbanpoint', 'commission_ledger', [
+	const ledgersRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
 		Query.equal('profile_id', input.profileId),
-		Query.equal('estado', 'pendiente'),
 		Query.limit(500)
 	]);
 
-	if (pendientes.documents.length === 0) {
+	const pendientes = ledgersRes.documents.filter(
+		d => (d.estado === 'pendiente' || d.estado === 'disponible') && d.tipo !== 'reversa'
+	);
+
+	if (pendientes.length === 0) {
 		throw new Error('No hay comisiones pendientes de liquidar para este canillita.');
 	}
 
-	const montoCentavos = pendientes.documents.reduce(
+	const montoCentavos = pendientes.reduce(
 		(acc, cur) => acc + (cur.monto_centavos || 0),
 		0
 	);
@@ -261,8 +373,6 @@ export async function liquidarComisiones(input: LiquidacionInput) {
 		throw new Error('El saldo pendiente no es positivo: no hay nada que liquidar.');
 	}
 
-	// El monto se calcula en el servidor. Si el admin informó uno distinto,
-	// se aborta en vez de pagar una cifra que no cierra con el ledger.
 	if (
 		input.montoCentavosEsperado !== undefined &&
 		input.montoCentavosEsperado !== montoCentavos
@@ -272,7 +382,7 @@ export async function liquidarComisiones(input: LiquidacionInput) {
 		);
 	}
 
-	const fechas = pendientes.documents.map((d) => new Date(d.$createdAt).getTime());
+	const fechas = pendientes.map((d) => new Date(d.$createdAt).getTime());
 	const desde = new Date(Math.min(...fechas));
 	const hasta = new Date(Math.max(...fechas));
 
@@ -280,7 +390,6 @@ export async function liquidarComisiones(input: LiquidacionInput) {
 		profile_id: input.profileId,
 		monto_centavos: montoCentavos,
 		estado: 'pagado',
-		// periodo_desde y periodo_hasta son requeridos en el esquema real.
 		periodo_desde: desde.toISOString(),
 		periodo_hasta: hasta.toISOString(),
 		periodo: hasta.toISOString().substring(0, 7),
@@ -289,10 +398,10 @@ export async function liquidarComisiones(input: LiquidacionInput) {
 		pagado_at: new Date().toISOString(),
 		idempotency_key: input.idempotencyKey,
 		actor_id: input.actorProfileId,
-		notas: input.notas || `Liquidación de ${pendientes.documents.length} devengo(s)`
+		notas: input.notas || `Liquidación de ${pendientes.length} devengo(s)`
 	});
 
-	for (const asiento of pendientes.documents) {
+	for (const asiento of pendientes) {
 		await db.updateDocument('urbanpoint', 'commission_ledger', asiento.$id, {
 			estado: 'liquidado',
 			payout_id: payout.$id

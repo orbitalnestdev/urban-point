@@ -2,7 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import { Query } from 'node-appwrite';
 import { createAdminClient } from '../../lib/server/appwrite';
-import { ChevronLeft, WalletCards, ArrowDownLeft, Clock } from 'lucide-react';
+import { getCanillitaStats } from '../../lib/commissions';
 
 export const prerender = false;
 
@@ -11,19 +11,12 @@ if (!user || (user.role !== 'canillita' && user.role !== 'admin')) {
   return Astro.redirect('/canillita/login');
 }
 
-
 const { databases: db } = createAdminClient();
 
-// 1. Obtener saldo pendiente
-const ledgerRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
-  Query.equal('profile_id', user.profileId),
-  Query.equal('estado', 'pendiente'),
-  Query.limit(500)
-]);
+// Stats unificadas por función de servidor
+const stats = await getCanillitaStats(user.profileId);
 
-const saldoPendiente = ledgerRes.documents.reduce((acc, curr) => acc + (curr.monto_centavos || 0), 0);
-
-// 2. Obtener historial de payouts
+// Historial de payouts con sus asientos incluidos
 const payoutsRes = await db.listDocuments('urbanpoint', 'payouts', [
   Query.equal('profile_id', user.profileId),
   Query.orderDesc('pagado_at'),
@@ -31,70 +24,113 @@ const payoutsRes = await db.listDocuments('urbanpoint', 'payouts', [
 ]);
 
 const payouts = payoutsRes.documents;
+
+// Obtener asientos asignados a cada payout
+const payoutIds = payouts.map(p => p.$id);
+let ledgerByPayout: Record<string, any[]> = {};
+
+if (payoutIds.length > 0) {
+  const ledgerRes = await db.listDocuments('urbanpoint', 'commission_ledger', [
+    Query.equal('payout_id', payoutIds),
+    Query.limit(500)
+  ]);
+  for (const item of ledgerRes.documents) {
+    const pId = typeof item.payout_id === 'string' ? item.payout_id : item.payout_id?.$id;
+    if (pId) {
+      if (!ledgerByPayout[pId]) ledgerByPayout[pId] = [];
+      ledgerByPayout[pId].push(item);
+    }
+  }
+}
+
+const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 ---
 
 <Layout title="Mis Cobros | Panel Canillita">
   <nav class="w-full z-50 bg-white border-b border-slate-200">
 		<div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-			<a href="/canillita" class="flex items-center gap-2 text-slate-600 hover:text-indigo-600 font-medium transition-colors">
-				<ChevronLeft className="w-5 h-5" />
+			<a href="/canillita" class="flex items-center gap-2 text-slate-600 hover:text-indigo-600 font-bold text-xs transition-colors">
+				<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M15 19l-7-7 7-7"/></svg>
 				Volver al Panel
 			</a>
-			<span class="text-xl font-extrabold tracking-tight text-slate-900">Mis Cobros</span>
+			<span class="text-base font-extrabold tracking-tight text-slate-900">Histórico de Cobros y Liquidaciones</span>
 		</div>
 	</nav>
 
-  <main class="min-h-[calc(100vh-64px)] bg-slate-50 py-12">
-    <div class="max-w-4xl mx-auto px-6 space-y-8">
+  <main class="min-h-[calc(100vh-64px)] bg-slate-50 py-10">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 space-y-8">
       
       {/* Saldo Pendiente */}
-      <div class="bg-indigo-600 rounded-2xl p-8 text-white shadow-xl shadow-indigo-600/20 relative overflow-hidden flex items-center justify-between">
-        <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
-        <div class="relative z-10">
-          <p class="text-indigo-100 font-medium flex items-center gap-2 mb-1">
-            <Clock className="w-4 h-4" />
-            Saldo Pendiente de Liquidar
+      <div class="bg-indigo-600 rounded-3xl p-8 text-white shadow-xl shadow-indigo-600/15 relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div>
+          <p class="text-indigo-100 text-xs font-bold uppercase tracking-wider flex items-center gap-2 mb-2">
+            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Saldo Pendiente de Liquidación
           </p>
-          <h2 class="text-5xl font-black">${(saldoPendiente / 100).toFixed(2)}</h2>
+          <h2 class="text-4xl sm:text-5xl font-black tracking-tight">{formateador.format(stats.totalPendienteCentavos / 100)}</h2>
+          <p class="text-xs text-indigo-200 mt-2">Corresponde a comisiones devengadas y confirmadas aún no liquidadas.</p>
         </div>
-        <div class="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center relative z-10 backdrop-blur-md">
-          <WalletCards className="w-8 h-8 text-white" />
+        <div class="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center shrink-0 backdrop-blur-xs border border-white/20">
+          <svg class="w-8 h-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
         </div>
       </div>
 
       {/* Historial de Payouts */}
-      <div>
-        <h3 class="text-xl font-bold text-slate-900 mb-4">Historial de Transferencias</h3>
+      <div class="space-y-4">
+        <h3 class="text-lg font-black text-slate-900">Transferencias y Pagos Recibidos</h3>
         
         {payouts.length === 0 ? (
-          <div class="bg-white p-8 rounded-2xl text-center border border-slate-200">
-            <p class="text-slate-500">Todavía no has recibido ninguna liquidación.</p>
+          <div class="bg-white p-8 rounded-3xl text-center border border-slate-200">
+            <p class="text-xs text-slate-500 font-medium">Todavía no has recibido ninguna liquidación enviada por administración.</p>
           </div>
         ) : (
-          <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="divide-y divide-slate-100">
-              {payouts.map((p) => (
-                <div class="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                  <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center">
-                      <ArrowDownLeft className="w-6 h-6" />
+          <div class="bg-white rounded-3xl shadow-xs border border-slate-200 overflow-hidden divide-y divide-slate-100">
+            {payouts.map((p) => {
+              const items = ledgerByPayout[p.$id] || [];
+              return (
+                <details class="group p-6 hover:bg-slate-50/50 transition-colors">
+                  <summary class="flex items-center justify-between cursor-pointer list-none">
+                    <div class="flex items-center gap-4">
+                      <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+                        <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                      </div>
+                      <div>
+                        <p class="font-bold text-slate-900 text-sm">Liquidación recibida</p>
+                        <p class="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                          <span>{p.pagado_at ? new Date(p.pagado_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Reciente'}</span>
+                          <span>•</span>
+                          <span>{p.medio_pago || 'Transferencia'}</span>
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p class="font-bold text-slate-900">Liquidación recibida</p>
-                      <p class="text-sm text-slate-500 flex gap-2">
-                        <span>{new Date(p.pagado_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                        <span>•</span>
-                        <span>{p.medio_pago}</span>
-                      </p>
+                    <div class="text-right flex items-center gap-3">
+                      <div>
+                        <p class="text-lg font-black text-emerald-600">+ {formateador.format((p.monto_centavos || 0) / 100)}</p>
+                        <p class="text-[11px] font-mono text-slate-400">Ref: {p.referencia_pago || 'N/A'}</p>
+                      </div>
+                      <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition-transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
                     </div>
+                  </summary>
+
+                  {/* Asientos Incluidos en la Liquidación */}
+                  <div class="mt-4 pt-4 border-t border-slate-100 space-y-2 text-xs">
+                    <p class="font-bold text-slate-700">Asientos incluidos en este pago ({items.length}):</p>
+                    {items.length > 0 ? (
+                      <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1.5 font-mono text-[11px]">
+                        {items.map((it: any) => (
+                          <div class="flex justify-between items-center text-slate-700">
+                            <span>Orden #{typeof it.order_id === 'string' ? it.order_id.substring(0,8).toUpperCase() : (it.order_id?.$id?.substring(0,8).toUpperCase() || 'N/A')} - {it.motivo || 'Comisión'}</span>
+                            <span class="font-bold text-slate-900">{formateador.format((it.monto_centavos || 0) / 100)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p class="text-slate-400 italic">Desglose acumulado incluido en el recibo general.</p>
+                    )}
                   </div>
-                  <div class="text-right">
-                    <p class="text-xl font-black text-green-600">+ ${(p.monto_centavos / 100).toFixed(2)}</p>
-                    <p class="text-xs font-mono text-slate-400 mt-1">Ref: {p.referencia_pago}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                </details>
+              );
+            })}
           </div>
         )}
       </div>
