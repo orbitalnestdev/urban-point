@@ -40,7 +40,7 @@ describe('Contrato del documento payout', () => {
 
 	it('verifica idempotencia antes de crear el payout', () => {
 		const idxIdem = fn.indexOf('idempotency_key');
-		const idxCreate = fn.indexOf('createDocument');
+		const idxCreate = Math.max(fn.indexOf('createDocument'), fn.indexOf('escribirDocumentoTolerante'));
 		expect(idxIdem).toBeGreaterThan(-1);
 		expect(idxIdem).toBeLessThan(idxCreate);
 	});

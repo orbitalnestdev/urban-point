@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../lib/server/appwrite';
+import { getAdminCachedCatalog } from '../../lib/server/catalogCache';
 import { Query } from 'node-appwrite';
 
 export const prerender = false;
@@ -13,14 +14,12 @@ let applications: any[] = [];
 let pendingLedgers: any[] = [];
 
 try {
-	const [resOrders, resProducts, resApps, resLedger] = await Promise.all([
+	const [resOrders, adminCache, resApps, resLedger] = await Promise.all([
 		databases.listDocuments('urbanpoint', 'orders', [
 			Query.orderDesc('$createdAt'),
 			Query.limit(200)
 		]),
-		databases.listDocuments('urbanpoint', 'products', [
-			Query.limit(200)
-		]),
+		getAdminCachedCatalog(),
 		// Sin Query.limit, Appwrite devuelve 25 documentos por defecto y los
 		// KPIs (solicitudes, comisiones pendientes) quedan subestimados.
 		databases.listDocuments('urbanpoint', 'canillita_applications', [
@@ -34,7 +33,7 @@ try {
 	]);
 
 	orders = resOrders.documents;
-	products = resProducts.documents;
+	products = adminCache.products || [];
 	applications = resApps.documents;
 	pendingLedgers = resLedger.documents;
 } catch (e) {

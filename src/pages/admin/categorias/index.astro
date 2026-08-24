@@ -1,43 +1,18 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import { createAdminClient } from '../../../lib/server/appwrite';
-import { Query } from 'node-appwrite';
+import { getAdminCachedCatalog } from '../../../lib/server/catalogCache';
 import { toSafeJson } from '../../../lib/safeJson';
 import { FolderTree, Plus, Edit2, Trash2, ChevronRight, Package, Tag } from 'lucide-react';
 
 export const prerender = false;
 
-const { databases } = createAdminClient();
 let categories: any[] = [];
 let products: any[] = [];
 
 try {
-	// Para contar productos por categoría no hace falta bajar el catálogo entero
-	// con todos sus campos: con la relación `categoria_id` alcanza. Las dos
-	// queries no dependen entre sí, así que van en paralelo.
-	//
-	// OJO: Query.select sobre una relación puede ser rechazado por el servidor
-	// de Appwrite según versión/esquema. Si falla, se reintenta sin select, y
-	// un fallo del conteo nunca debe dejar la lista de categorías vacía: por
-	// eso cada query maneja su propio error por separado.
-	const [catRes, prodRes] = await Promise.all([
-		databases.listDocuments('urbanpoint', 'categories', [Query.limit(1000)])
-			.catch((e: any) => {
-				console.error('Error cargando categorías:', e);
-				return { documents: [] };
-			}),
-		databases.listDocuments('urbanpoint', 'products', [
-			Query.select(['categoria_id']),
-			Query.limit(5000)
-		]).catch(() =>
-			databases.listDocuments('urbanpoint', 'products', [Query.limit(5000)])
-		).catch((e: any) => {
-			console.error('Error contando productos por categoría:', e);
-			return { documents: [] };
-		})
-	]);
-	categories = catRes.documents;
-	products = prodRes.documents;
+	const adminCache = await getAdminCachedCatalog();
+	categories = adminCache.categories || [];
+	products = adminCache.products || [];
 } catch (e) {
 	console.error('Error cargando categorías:', e);
 }

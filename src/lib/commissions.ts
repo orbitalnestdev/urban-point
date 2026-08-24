@@ -1,5 +1,5 @@
 import { Client, Databases, Query, ID } from 'node-appwrite';
-import { createAdminClient } from './server/appwrite';
+import { createAdminClient, escribirDocumentoTolerante } from './server/appwrite';
 import { estaPago } from './orderStates';
 
 const db = new Proxy({} as Databases, {
@@ -82,9 +82,9 @@ export async function resolverComisiones(orderId: string) {
 			if (!productId) continue;
 			try {
 				const product = await db.getDocument('urbanpoint', 'products', productId);
-				await db.updateDocument('urbanpoint', 'products', productId, {
+				await escribirDocumentoTolerante('products', {
 					stock: Math.max(0, (product.stock || 0) - item.cantidad)
-				});
+				}, productId);
 			} catch (e) {
 				console.error(`No se pudo descontar stock del producto ${productId} (orden ${orderId}):`, e);
 			}
@@ -95,7 +95,7 @@ export async function resolverComisiones(orderId: string) {
 		// 'stock_descontado' no existe en la colección orders, se loguea y se
 		// sigue: el guard por transición de estado cubre el caso normal.
 		try {
-			await db.updateDocument('urbanpoint', 'orders', orderId, { stock_descontado: true });
+			await escribirDocumentoTolerante('orders', { stock_descontado: true }, orderId);
 		} catch (e) {
 			console.warn(`No se pudo marcar stock_descontado en la orden ${orderId} (agregá el atributo booleano a la colección orders):`);
 		}
@@ -105,9 +105,9 @@ export async function resolverComisiones(orderId: string) {
 		// Los pedidos a precio canillita o distribuidor tienen comisión cero, sin excepción.
 		const priceTier = order.price_tier || 'publico';
 		if (priceTier !== 'publico') {
-			await db.updateDocument('urbanpoint', 'orders', orderId, {
+			await escribirDocumentoTolerante('orders', {
 				comision_total_centavos: 0
-			});
+			}, orderId);
 			console.log(`Orden ${orderId} en nivel '${priceTier}': comisión 0 (excluyente con margen). Stock descontado.`);
 			return { success: true, zeroCommissionTier: priceTier };
 		}
@@ -151,7 +151,7 @@ export async function resolverComisiones(orderId: string) {
 					const cents = calculateAmount(baseCents, rule);
 					if (cents > 0) {
 						totalComissionCents += cents;
-						await db.createDocument('urbanpoint', 'commission_ledger', ID.unique(), {
+						await escribirDocumentoTolerante('commission_ledger', {
 							profile_id: pickupProfileId,
 							order_id: orderId,
 							tipo: 'fee_logistica',
@@ -176,7 +176,7 @@ export async function resolverComisiones(orderId: string) {
 					const cents = calculateAmount(baseCents, rule);
 					if (cents > 0) {
 						totalComissionCents += cents;
-						await db.createDocument('urbanpoint', 'commission_ledger', ID.unique(), {
+						await escribirDocumentoTolerante('commission_ledger', {
 							profile_id: referrerProfileId,
 							order_id: orderId,
 							tipo: 'comision_referido',
@@ -191,9 +191,9 @@ export async function resolverComisiones(orderId: string) {
 		}
 		
 		// Guardar total de comisiones generadas en la orden
-		await db.updateDocument('urbanpoint', 'orders', orderId, {
+		await escribirDocumentoTolerante('orders', {
 			comision_total_centavos: totalComissionCents
-		});
+		}, orderId);
 
 		console.log(`Comisiones devengadas y stock actualizado con éxito para la orden ${orderId}`);
 		return { success: true };
@@ -227,7 +227,7 @@ export async function revertirComisiones(orderId: string, motivo: string) {
 		// Idempotencia: si ya se revirtió, no se vuelve a compensar.
 		if (asiento.estado === 'revertido' || asiento.tipo === 'reversa') continue;
 
-		await db.createDocument('urbanpoint', 'commission_ledger', ID.unique(), {
+		await escribirDocumentoTolerante('commission_ledger', {
 			profile_id: typeof asiento.profile_id === 'string' ? asiento.profile_id : asiento.profile_id?.$id,
 			order_id: orderId,
 			tipo: 'reversa',
@@ -236,9 +236,9 @@ export async function revertirComisiones(orderId: string, motivo: string) {
 			motivo
 		});
 
-		await db.updateDocument('urbanpoint', 'commission_ledger', asiento.$id, {
+		await escribirDocumentoTolerante('commission_ledger', {
 			estado: 'revertido'
-		});
+		}, asiento.$id);
 
 		revertidos++;
 	}
@@ -259,9 +259,9 @@ export async function confirmarComisionesDeOrden(orderId: string) {
 	let confirmados = 0;
 	for (const asiento of ledgersRes.documents) {
 		if (asiento.estado === 'pendiente') {
-			await db.updateDocument('urbanpoint', 'commission_ledger', asiento.$id, {
+			await escribirDocumentoTolerante('commission_ledger', {
 				estado: 'disponible'
-			});
+			}, asiento.$id);
 			confirmados++;
 		}
 	}
@@ -427,7 +427,7 @@ export async function liquidarComisiones(input: LiquidacionInput) {
 	const desde = new Date(Math.min(...fechas));
 	const hasta = new Date(Math.max(...fechas));
 
-	const payout = await db.createDocument('urbanpoint', 'payouts', ID.unique(), {
+	const payout = await escribirDocumentoTolerante('payouts', {
 		profile_id: input.profileId,
 		monto_centavos: montoCentavos,
 		estado: 'pagado',
@@ -443,10 +443,10 @@ export async function liquidarComisiones(input: LiquidacionInput) {
 	});
 
 	for (const asiento of pendientes) {
-		await db.updateDocument('urbanpoint', 'commission_ledger', asiento.$id, {
+		await escribirDocumentoTolerante('commission_ledger', {
 			estado: 'liquidado',
 			payout_id: payout.$id
-		});
+		}, asiento.$id);
 	}
 
 	return { payoutId: payout.$id, montoCentavos, idempotencySkipped: false };
@@ -468,16 +468,16 @@ export async function restaurarStockDeOrden(orderId: string) {
 		if (!productId) continue;
 		try {
 			const product = await db.getDocument('urbanpoint', 'products', productId);
-			await db.updateDocument('urbanpoint', 'products', productId, {
+			await escribirDocumentoTolerante('products', {
 				stock: (product.stock || 0) + item.cantidad
-			});
+			}, productId);
 		} catch (e) {
 			console.warn(`No se pudo restaurar el stock del producto ${productId}:`, e);
 		}
 	}
 
 	try {
-		await db.updateDocument('urbanpoint', 'orders', orderId, { stock_descontado: false });
+		await escribirDocumentoTolerante('orders', { stock_descontado: false }, orderId);
 	} catch (e) {
 		// El atributo puede no existir en el esquema; no es bloqueante.
 	}
@@ -503,9 +503,9 @@ export async function cancelarOrdenYRestaurarStock(orderId: string) {
 		}
 
 		// 3. Recién ahora se marca la orden como cancelada.
-		await db.updateDocument('urbanpoint', 'orders', orderId, {
+		await escribirDocumentoTolerante('orders', {
 			estado: 'cancelado'
-		});
+		}, orderId);
 
 		return { success: true };
 	} catch (error: any) {

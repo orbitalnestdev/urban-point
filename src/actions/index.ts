@@ -19,7 +19,7 @@ import { invalidateSessionCache } from '../middleware';
 
 import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, confirmarComisionesDeOrden } from '../lib/commissions';
 
-import { createAdminClient } from '../lib/server/appwrite';
+import { createAdminClient, escribirDocumentoTolerante } from '../lib/server/appwrite';
 import { invalidateCatalogCache } from '../lib/server/catalogCache';
 import { 
 	sendOrderNotificationEmails, 
@@ -138,6 +138,7 @@ async function generarSlugPunto(nombreComercial: string): Promise<string> {
 
 	return `${base}-${Date.now().toString().slice(-5)}`;
 }
+
 
 async function generateUniqueReferralCode(nombre: string, apellido: string): Promise<string> {
 	const initial = nombre.trim().substring(0, 1).toUpperCase().replace(/[^A-Z]/g, 'X') || 'C';
@@ -889,7 +890,7 @@ export const server = {
 					orderPayload.customer_id = profileId;
 				}
 
-				const orderDoc = await db.createDocument('urbanpoint', 'orders', ID.unique(), orderPayload);
+				const orderDoc = await escribirDocumentoTolerante('orders', orderPayload);
 
 				// Habilita a este navegador a ver el pedido y su código de retiro,
 				// también si la compra fue como invitado.
@@ -897,7 +898,7 @@ export const server = {
 
 				// Create the Order Items
 				await Promise.all(orderItemsData.map(oi =>
-					db.createDocument('urbanpoint', 'order_items', ID.unique(), {
+					escribirDocumentoTolerante('order_items', {
 						order_id: orderDoc.$id,
 						...oi
 					})
@@ -961,7 +962,7 @@ export const server = {
 					// action es un POST público: hay que validar acá también.
 					const settingsPago = await getSiteSettings();
 					if (!settingsPago.transferencia_enabled) {
-						await db.updateDocument('urbanpoint', 'orders', orderDoc.$id, { estado: 'cancelado' }).catch(() => {});
+						await escribirDocumentoTolerante('orders', { estado: 'cancelado' }, orderDoc.$id).catch(() => {});
 						return { success: false, error: 'El pago a convenir no está habilitado.' };
 					}
 					return { success: true, init_point: `/checkout/success?order_id=${orderDoc.$id}` };
@@ -1001,9 +1002,9 @@ export const server = {
 
 
 				// Update order with preference ID
-				await db.updateDocument('urbanpoint', 'orders', orderDoc.$id, {
+				await escribirDocumentoTolerante('orders', {
 					mp_preference_id: result.id
-				});
+				}, orderDoc.$id);
 
 				// NUNCA priorizar el sandbox: la API devuelve ambos campos siempre
 				// y con el orden invertido todos los compradores de producción
@@ -1598,7 +1599,7 @@ export const server = {
 					iva_pct: 21.0
 				};
 
-				const doc = await db.createDocument('urbanpoint', 'products', ID.unique(), payload);
+				const doc = await escribirDocumentoTolerante('products', payload);
 				invalidateCatalogCache();
 
 				return { success: true, id: doc.$id };
@@ -1743,7 +1744,7 @@ export const server = {
 					}
 				}
 
-				await db.updateDocument('urbanpoint', 'products', input.id, updateData);
+				await escribirDocumentoTolerante('products', updateData, input.id);
 				invalidateCatalogCache();
 
 				return { success: true };
@@ -1776,7 +1777,7 @@ export const server = {
 						if (input.categoria_id !== undefined) updatePayload.categoria_id = input.categoria_id || null;
 
 						if (Object.keys(updatePayload).length > 0) {
-							await db.updateDocument('urbanpoint', 'products', id, updatePayload);
+							await escribirDocumentoTolerante('products', updatePayload, id);
 						}
 					}
 				}
@@ -1836,7 +1837,7 @@ export const server = {
 				if (original.precio_distribuidor !== undefined) duplicatePayload.precio_distribuidor = original.precio_distribuidor;
 				if (original.precio_canillita !== undefined) duplicatePayload.precio_canillita = original.precio_canillita;
 
-				const doc = await db.createDocument('urbanpoint', 'products', ID.unique(), duplicatePayload);
+				const doc = await escribirDocumentoTolerante('products', duplicatePayload);
 				return { success: true, id: doc.$id };
 			} catch (error: any) {
 				return { success: false, error: error.message };
@@ -1913,7 +1914,7 @@ export const server = {
 					if (item.marca) payload.marca = item.marca;
 					if (item.portada_url) payload.portada_url = item.portada_url;
 
-					await db.createDocument('urbanpoint', 'products', ID.unique(), payload);
+					await escribirDocumentoTolerante('products', payload);
 					count++;
 				}
 
@@ -2012,7 +2013,7 @@ export const server = {
 						if (update.descripcion !== undefined) patch.descripcion = update.descripcion;
 
 						if (Object.keys(patch).length > 0) {
-							await db.updateDocument('urbanpoint', 'products', target.$id, patch);
+							await escribirDocumentoTolerante('products', patch, target.$id);
 							updated++;
 						}
 					} else if (update.nombre && update.precio !== undefined) {
@@ -2044,7 +2045,7 @@ export const server = {
 						if (update.marca) newPayload.marca = update.marca;
 						if (update.portada_url) newPayload.portada_url = update.portada_url;
 
-						await db.createDocument('urbanpoint', 'products', ID.unique(), newPayload);
+						await escribirDocumentoTolerante('products', newPayload);
 						created++;
 					}
 				}
@@ -2291,9 +2292,9 @@ export const server = {
 
 				let categoryId = input.id;
 				if (categoryId) {
-					await db.updateDocument('urbanpoint', 'categories', categoryId, payload);
+					await escribirDocumentoTolerante('categories', payload, categoryId);
 				} else {
-					const created = await db.createDocument('urbanpoint', 'categories', ID.unique(), payload);
+					const created = await escribirDocumentoTolerante('categories', payload);
 					categoryId = created.$id;
 				}
 
@@ -2344,7 +2345,7 @@ export const server = {
 					}
 
 					if (Object.keys(patch).length > 0) {
-						await db.updateDocument('urbanpoint', 'products', prod.$id, patch);
+						await escribirDocumentoTolerante('products', patch, prod.$id);
 						updatedCount++;
 					}
 				}
