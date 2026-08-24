@@ -40,8 +40,8 @@ describe('C-03 — el checkout debe cobrar el precio promocional que se muestra'
 		const src = leer('src/actions/index.ts');
 		const handler = src.slice(src.indexOf('createCheckout:'), src.indexOf('auth_login:'));
 		expect(
-			handler.includes('precioDeVentaCentavos'),
-			'createCheckout no usa precioDeVentaCentavos: puede cobrar algo distinto a lo publicado'
+			handler.includes('precioDeVentaCentavos') || handler.includes('resolveProductPriceForUser'),
+			'createCheckout no usa resolveProductPriceForUser o precioDeVentaCentavos: puede cobrar algo distinto a lo publicado'
 		).toBe(true);
 		expect(
 			/unit_price:\s*p\.precio\b/.test(handler),

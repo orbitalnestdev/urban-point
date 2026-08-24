@@ -11,6 +11,8 @@ const { databases } = createAdminClient();
 const tipoParam = Astro.url.searchParams.get('tipo') || 'simple';
 
 let product = null;
+let categories: any[] = [];
+let allProducts: any[] = [];
 import { buildCategoryTree } from '../../../lib/server/categoryUtils';
 
 import { getSiteSettings } from '../../../lib/server/settings';
@@ -800,7 +802,7 @@ if (product.galeria_urls) {
 
 			</div>
 		</div>
-		<div id="product-meta-data" data-product={JSON.stringify(product)}></div>
+		<div id="product-meta-data" data-product={JSON.stringify(product)} data-categories={JSON.stringify(categories)} data-settings={JSON.stringify(siteSettings)}></div>
 	</main>
 
 	<script>
@@ -972,9 +974,6 @@ if (product.galeria_urls) {
 			renderVariants();
 		});
 
-		const calcMargin = () => {
-			const precio = parseFloat((document.getElementById('input-precio-ars') as HTMLInputElement)?.value || '0');
-			const costo = parseFloat((document.getElementById('input-costo') as HTMLInputElement)?.value || '0');
 		// Multilevel Pricing Live Calculations
 		const categoriesMap = new Map();
 		try {
@@ -982,13 +981,25 @@ if (product.galeria_urls) {
 			catResData.forEach((c: any) => categoriesMap.set(c.$id, c));
 		} catch (e) {}
 
-		const globalSettings = {
-			default_markup_distribuidor: parseFloat('{siteSettings.default_markup_distribuidor}') || 6.25,
-			default_markup_canillita: parseFloat('{siteSettings.default_markup_canillita}') || 12.5,
-			default_markup_publico: parseFloat('{siteSettings.default_markup_publico}') || 25.0,
-			round_to: parseInt('{siteSettings.round_to}', 10) || 0,
-			round_mode: '{siteSettings.round_mode}' || 'nearest'
+		let globalSettings = {
+			default_markup_distribuidor: 6.25,
+			default_markup_canillita: 12.5,
+			default_markup_publico: 25.0,
+			round_to: 0,
+			round_mode: 'nearest'
 		};
+		try {
+			const parsedSettings = JSON.parse(document.getElementById('product-meta-data')?.dataset.settings || '{}');
+			if (parsedSettings) {
+				globalSettings = {
+					default_markup_distribuidor: Number(parsedSettings.default_markup_distribuidor ?? 6.25),
+					default_markup_canillita: Number(parsedSettings.default_markup_canillita ?? 12.5),
+					default_markup_publico: Number(parsedSettings.default_markup_publico ?? 25.0),
+					round_to: Number(parsedSettings.round_to ?? 0),
+					round_mode: parsedSettings.round_mode || 'nearest'
+				};
+			}
+		} catch (e) {}
 
 		const applyRounding = (exactPesos: number) => {
 			if (!globalSettings.round_to || globalSettings.round_to <= 0) return exactPesos;

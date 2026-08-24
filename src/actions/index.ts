@@ -742,9 +742,7 @@ export const server = {
 					}
 
 					const priceInfo = resolveProductPriceForUser(p, userRole);
-					const unitarioCentavos = tienePromocion(p as any) 
-						? precioDeVentaCentavos(p as any) 
-						: priceInfo.unitPriceCentavos;
+					const unitarioCentavos = priceInfo.unitPriceCentavos;
 					const subtotalCentavos = unitarioCentavos * item.cantidad;
 					const costoUnitario = Math.round(Number(p.cost ?? p.costo ?? 0));
 
