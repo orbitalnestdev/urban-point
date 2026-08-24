@@ -1,0 +1,358 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { BookOpen, HelpCircle, Package, FolderTree, MapPin, ShoppingBag, Eye, Users, FileSpreadsheet, ArrowRight, CheckCircle2, AlertTriangle, Lightbulb, Sparkles, Layers, DollarSign } from 'lucide-react';
+
+export const prerender = false;
+---
+
+<AdminLayout title="Centro de Ayuda y Guía del Administrador | UrbanPoint">
+	<main class="p-6 md:p-10 max-w-7xl mx-auto space-y-8 pb-16">
+		
+		{/* Banner de Bienvenida y Buscador de Ayuda */}
+		<header class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-8 shadow-2xl border border-indigo-900/50 relative overflow-hidden">
+			<div class="absolute -right-10 -bottom-10 opacity-10 pointer-events-none">
+				<HelpCircle className="w-80 h-80 text-white" />
+			</div>
+
+			<div class="relative z-10 max-w-3xl space-y-4">
+				<span class="px-3.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-black rounded-full uppercase tracking-wider inline-flex items-center gap-1.5">
+					<Sparkles className="w-3.5 h-3.5" /> Guía Paso a Paso para la Administradora
+				</span>
+				<h1 class="text-3xl md:text-4xl font-black tracking-tight text-white leading-tight">
+					¡Hola! Bienvenida al Centro de Ayuda de UrbanPoint
+				</h1>
+				<p class="text-slate-300 text-sm md:text-base font-medium leading-relaxed">
+					Diseñamos esta guía interactiva para que puedas gestionar tu tienda, productos, pedidos y la red de canillitas de forma super simple, clara y profesional sin necesidad de conocimientos técnicos.
+				</p>
+
+				{/* Buscador de Ayuda Rápida */}
+				<div class="pt-2">
+					<div class="relative max-w-xl">
+						<input 
+							type="text" 
+							id="help-search-input" 
+							placeholder="¿Qué necesitás hacer hoy? (ej. cargar productos, ver comisiones, impersonar usuario)..." 
+							class="w-full pl-11 pr-4 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-sm text-white placeholder-slate-400 outline-none focus:border-emerald-400 focus:bg-white/20 transition-all shadow-inner"
+						/>
+						<HelpCircle className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
+					</div>
+				</div>
+			</div>
+		</header>
+
+		{/* Accesos Rápidos por Módulo */}
+		<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+			{[
+				{ id: 'sec-productos', title: '1. Productos & Carga', icon: Package, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+				{ id: 'sec-categorias', title: '2. Categorías Tienda', icon: FolderTree, color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+				{ id: 'sec-canillitas', title: '3. Canillitas & Red', icon: MapPin, color: 'bg-amber-50 text-amber-700 border-amber-200' },
+				{ id: 'sec-pedidos', title: '4. Pedidos & Reparto', icon: ShoppingBag, color: 'bg-purple-50 text-purple-700 border-purple-200' },
+				{ id: 'sec-monitoreo', title: '5. Modo Monitoreo', icon: Eye, color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+				{ id: 'sec-clientes', title: '6. Clientes & Equipo', icon: Users, color: 'bg-slate-100 text-slate-700 border-slate-200' },
+			].map(item => (
+				<button 
+					data-target={item.id} 
+					class="quick-nav-btn p-3.5 rounded-2xl border text-left transition-all hover:scale-[1.02] cursor-pointer flex flex-col justify-between space-y-2 bg-white shadow-2xs"
+				>
+					<item.icon className="w-5 h-5 text-slate-700" />
+					<span class="font-bold text-xs text-slate-900 block leading-tight">{item.title}</span>
+				</button>
+			))}
+		</div>
+
+		{/* MÓDULO 1: PRODUCTOS, MULTINIVEL DE PRECIOS E IMPORTACIÓN */}
+		<section id="sec-productos" class="help-section bg-white rounded-3xl p-6 md:p-8 border border-slate-200/80 shadow-sm space-y-6">
+			<div class="flex items-center gap-3 border-b border-slate-100 pb-4">
+				<div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+					<Package className="w-6 h-6" />
+				</div>
+				<div>
+					<h2 class="text-xl font-extrabold text-slate-900">1. Gestión de Productos & Precios Multinivel</h2>
+					<p class="text-xs text-slate-500 font-medium">Cómo agregar items, elegir qué importar/exportar y cómo funcionan los precios por rol.</p>
+				</div>
+			</div>
+
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+				{/* Paso 1.1 */}
+				<div class="bg-slate-50 border border-slate-200/70 p-5 rounded-2xl space-y-3">
+					<span class="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-full">Paso 1.1</span>
+					<h3 class="font-bold text-slate-900 text-sm">Entender los 3 Niveles de Precios</h3>
+					<p class="text-xs text-slate-600 leading-relaxed">
+						Cada producto en UrbanPoint cuenta con 3 valores independientes:
+					</p>
+					<ul class="text-xs text-slate-700 space-y-1.5 pt-1">
+						<li class="flex items-center gap-2">
+							<span class="w-2 h-2 rounded-full bg-purple-500"></span>
+							<strong>Precio Distribuidor:</strong> Costo neto de fábrica.
+						</li>
+						<li class="flex items-center gap-2">
+							<span class="w-2 h-2 rounded-full bg-amber-500"></span>
+							<strong>Precio Canillita:</strong> Precio preferencial para revendedores.
+						</li>
+						<li class="flex items-center gap-2">
+							<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+							<strong>Precio Público:</strong> Precio final de venta en la tienda.
+						</li>
+					</ul>
+				</div>
+
+				{/* Paso 1.2 */}
+				<div class="bg-slate-50 border border-slate-200/70 p-5 rounded-2xl space-y-3">
+					<span class="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-full">Paso 1.2</span>
+					<h3 class="font-bold text-slate-900 text-sm">Carga Masiva con Selector Estilo Tiendanube</h3>
+					<p class="text-xs text-slate-600 leading-relaxed">
+						En <code class="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-800">/admin/catalogo</code> hacé clic en <strong>"Importar Excel/CSV"</strong>.
+					</p>
+					<div class="bg-white p-3 rounded-xl border border-slate-200 text-[11px] text-slate-700 space-y-1">
+						<p class="font-bold text-indigo-700">💡 Selector Inteligente:</p>
+						<p>Podés marcar tildes para elegir exactamente qué campos querés actualizar (ej. *Solo Precios*, *Solo Stock* o *Todo*), evitando sobreescribir datos por error.</p>
+					</div>
+				</div>
+
+				{/* Paso 1.3 */}
+				<div class="bg-slate-50 border border-slate-200/70 p-5 rounded-2xl space-y-3">
+					<span class="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-full">Paso 1.3</span>
+					<h3 class="font-bold text-slate-900 text-sm">Exportación a Excel</h3>
+					<p class="text-xs text-slate-600 leading-relaxed">
+						Al hacer clic en <strong>"Exportar Productos"</strong> se descargará una planilla compatible con todos los precios, SKU, categorías y stock actual de tu catálogo.
+					</p>
+				</div>
+			</div>
+		</section>
+
+		{/* MÓDULO 2: CATEGORÍAS MULTINIVEL TIENDANUBE */}
+		<section id="sec-categorias" class="help-section bg-white rounded-3xl p-6 md:p-8 border border-slate-200/80 shadow-sm space-y-6">
+			<div class="flex items-center gap-3 border-b border-slate-100 pb-4">
+				<div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+					<FolderTree className="w-6 h-6" />
+				</div>
+				<div>
+					<h2 class="text-xl font-extrabold text-slate-900">2. Categorías y Subcategorías Estilo Tiendanube</h2>
+					<p class="text-xs text-slate-500 font-medium">Cómo organizar la estructura del menú en 3 niveles de profundidad y cambiar el orden.</p>
+				</div>
+			</div>
+
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+				{/* Diagrama Visual de Niveles */}
+				<div class="bg-slate-900 text-white p-6 rounded-3xl space-y-4">
+					<h3 class="font-bold text-sm text-indigo-300 uppercase tracking-wider">Estructura en Árbol Jerárquico</h3>
+					
+					<div class="space-y-2 text-xs">
+						<div class="p-3 bg-indigo-950 border border-indigo-700/60 rounded-xl flex items-center justify-between">
+							<span class="font-bold text-indigo-200 flex items-center gap-2">
+								📁 Categoría Principal (Nivel 1)
+							</span>
+							<span class="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 text-[10px] font-bold rounded">ej. Bebidas</span>
+						</div>
+
+						<div class="ml-6 p-3 bg-slate-800 border border-amber-500/40 rounded-xl flex items-center justify-between">
+							<span class="font-bold text-amber-200 flex items-center gap-2">
+								↳ Subcategoría (Nivel 2)
+							</span>
+							<span class="px-2 py-0.5 bg-amber-500/20 text-amber-300 text-[10px] font-bold rounded">ej. Gaseosas</span>
+						</div>
+
+						<div class="ml-12 p-3 bg-slate-800/80 border border-slate-600 rounded-xl flex items-center justify-between">
+							<span class="font-bold text-slate-300 flex items-center gap-2">
+								↳ Sub-subnivel (Nivel 3)
+							</span>
+							<span class="px-2 py-0.5 bg-slate-700 text-slate-300 text-[10px] font-bold rounded">ej. Sin Azúcar</span>
+						</div>
+					</div>
+				</div>
+
+				<div class="space-y-4 text-xs text-slate-600">
+					<div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+						<h4 class="font-bold text-slate-900 text-sm">¿Cómo reordenar categorías en la web?</h4>
+						<p>En <code class="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-800">/admin/categorias</code> hacé clic en las flechitas <strong>⬆️ (Subir)</strong> o <strong>⬇️ (Bajar)</strong> que aparecen al lado de cada categoría para cambiar la posición en que se muestran a los clientes.</p>
+					</div>
+
+					<div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+						<h4 class="font-bold text-slate-900 text-sm">¿Cómo agregar una subcategoría rápido?</h4>
+						<p>Junto a cualquier categoría existe el botón <strong>"+ Subcategoría"</strong>. Al presionarlo, el sistema seleccionará automáticamente esa categoría como madre.</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		{/* MÓDULO 3: CANILLITAS Y RED DE RETIRO */}
+		<section id="sec-canillitas" class="help-section bg-white rounded-3xl p-6 md:p-8 border border-slate-200/80 shadow-sm space-y-6">
+			<div class="flex items-center gap-3 border-b border-slate-100 pb-4">
+				<div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
+					<MapPin className="w-6 h-6" />
+				</div>
+				<div>
+					<h2 class="text-xl font-extrabold text-slate-900">3. Red de Retiro y Canillitas</h2>
+					<p class="text-xs text-slate-500 font-medium">Gestión de puntos de entrega, mapa interactivo y generación de afiches QR.</p>
+				</div>
+			</div>
+
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
+				<div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+					<div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">1</div>
+					<h3 class="font-bold text-slate-900 text-sm">Crear Punto y Canillita</h3>
+					<p class="text-slate-600 leading-relaxed">
+						Ingresá en <code class="bg-white px-1.5 py-0.5 rounded border border-slate-200">/admin/canillitas</code> y tocá <strong>"Nuevo Punto de Retiro"</strong>. Podés escribir el nombre del puesto, dirección, teléfono y crearle el usuario de acceso.
+					</p>
+				</div>
+
+				<div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+					<div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">2</div>
+					<h3 class="font-bold text-slate-900 text-sm">Mapa Interactivo con Pin</h3>
+					<p class="text-slate-600 leading-relaxed">
+						El modal incluye un mapa interactivo. Podés buscar la dirección en el buscador o arrastrar directamente el marcador con el mouse para ajustar las coordenadas GPS exactas del puesto.
+					</p>
+				</div>
+
+				<div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+					<div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">3</div>
+					<h3 class="font-bold text-slate-900 text-sm">Afiche QR para el Puesto</h3>
+					<p class="text-slate-600 leading-relaxed">
+						Tocá el botón <strong>"Afiche QR"</strong> en la fila del puesto para descargar o imprimir un afiche listo para pegar en el quiosco/diariero con su URL única de nodo.
+					</p>
+				</div>
+			</div>
+		</section>
+
+		{/* MÓDULO 4: PEDIDOS Y DESGLOSE FINANCIERO */}
+		<section id="sec-pedidos" class="help-section bg-white rounded-3xl p-6 md:p-8 border border-slate-200/80 shadow-sm space-y-6">
+			<div class="flex items-center gap-3 border-b border-slate-100 pb-4">
+				<div class="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold">
+					<ShoppingBag className="w-6 h-6" />
+				</div>
+				<div>
+					<h2 class="text-xl font-extrabold text-slate-900">4. Pedidos y Liquidación Financiera</h2>
+					<p class="text-xs text-slate-500 font-medium">Entender a quién corresponde cada peso cobrado en una venta.</p>
+				</div>
+			</div>
+
+			<div class="bg-slate-900 text-white p-6 rounded-3xl space-y-6">
+				<h3 class="font-bold text-sm text-purple-300 uppercase tracking-wider">Desglose Financiero en la Ficha de Cada Pedido (`/admin/pedidos/[id]`)</h3>
+				
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+					<div class="bg-slate-800 border border-purple-500/40 p-4 rounded-2xl space-y-2">
+						<div class="flex items-center gap-2 font-bold text-purple-300">
+							<span>🏭</span> A Pagar al Distribuidor
+						</div>
+						<p class="text-slate-300">Monto correspondiente al costo de mercadería que se debe abonar al distribuidor/proveedor.</p>
+					</div>
+
+					<div class="bg-slate-800 border border-amber-500/40 p-4 rounded-2xl space-y-2">
+						<div class="flex items-center gap-2 font-bold text-amber-300">
+							<span>📰</span> A Pagar al Canillita / Punto
+						</div>
+						<p class="text-slate-300">Comisión por retiro o entrega que gana el canillita por la operación.</p>
+					</div>
+
+					<div class="bg-slate-800 border border-indigo-500/40 p-4 rounded-2xl space-y-2">
+						<div class="flex items-center gap-2 font-bold text-indigo-300">
+							<span>⚡</span> Margen UrbanPoint
+						</div>
+						<p class="text-slate-300">Ganancia neta limpia sobrante para la plataforma UrbanPoint.</p>
+					</div>
+				</div>
+
+				<div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 text-xs text-slate-200 flex items-center gap-3">
+					<Lightbulb className="w-6 h-6 text-amber-400 shrink-0" />
+					<p>
+						<strong>Código de Retiro:</strong> Cuando el pedido es con retiro en punto, el comprador presenta un código único (ej. `UP-8492`). El canillita puede validar el código desde su portal para confirmar la entrega.
+					</p>
+				</div>
+			</div>
+		</section>
+
+		{/* MÓDULO 5: MODO MONITOREO / IMPERSONACIÓN */}
+		<section id="sec-monitoreo" class="help-section bg-white rounded-3xl p-6 md:p-8 border border-slate-200/80 shadow-sm space-y-6">
+			<div class="flex items-center gap-3 border-b border-slate-100 pb-4">
+				<div class="w-12 h-12 rounded-2xl bg-cyan-50 text-cyan-700 flex items-center justify-center font-bold">
+					<Eye className="w-6 h-6" />
+				</div>
+				<div>
+					<h2 class="text-xl font-extrabold text-slate-900">5. Modo Monitoreo / "Switch User" (Probar Usuario)</h2>
+					<p class="text-xs text-slate-500 font-medium">Ver exactamente la tienda o portal como lo ve cualquier cliente o canillita.</p>
+				</div>
+			</div>
+
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-slate-700">
+				<div class="bg-amber-50/80 border border-amber-200 p-5 rounded-2xl space-y-3">
+					<h3 class="font-bold text-amber-900 text-sm flex items-center gap-2">
+						<span>👁️</span> ¿Para qué sirve el botón "👁️ Probar"?
+					</h3>
+					<p class="leading-relaxed text-amber-900/90">
+						Te permite "ponerte en los zapatos" de un cliente o canillita sin saber su contraseña. Podés verificar si ve sus precios con descuento, cómo se ve su portal o simular una compra.
+					</p>
+				</div>
+
+				<div class="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-3">
+					<h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+						<span>↩️</span> ¿Cómo salir y volver al Administrador?
+					</h3>
+					<p class="leading-relaxed text-slate-600">
+						Mientras estés en Modo Monitoreo verás una **barra amarilla superior fija**. Solo hacé clic en **"Volver a mi usuario Admin"** y regresarás instantáneamente sin perder tu sesión.
+					</p>
+				</div>
+			</div>
+		</section>
+
+		{/* MÓDULO 6: CLIENTES Y EQUIPO */}
+		<section id="sec-clientes" class="help-section bg-white rounded-3xl p-6 md:p-8 border border-slate-200/80 shadow-sm space-y-6">
+			<div class="flex items-center gap-3 border-b border-slate-100 pb-4">
+				<div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+					<Users className="w-6 h-6" />
+				</div>
+				<div>
+					<h2 class="text-xl font-extrabold text-slate-900">6. Gestión de Clientes y Equipo de Trabajo</h2>
+					<p class="text-xs text-slate-500 font-medium">Administración de fichas de clientes y otorgamiento de roles en el panel.</p>
+				</div>
+			</div>
+
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+				<div class="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+					<h4 class="font-bold text-slate-900 text-sm">Directorio de Clientes (`/admin/clientes`)</h4>
+					<p class="text-slate-600">Podés ver el historial de compras de cada usuario, su gasto acumulado promedio y filtrar por tipo de rol (Cliente, Canillita o Distribuidor).</p>
+				</div>
+
+				<div class="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+					<h4 class="font-bold text-slate-900 text-sm">Equipo de Trabajo (`/admin/equipo`)</h4>
+					<p class="text-slate-600">Permite invitar nuevos colaboradores al panel de control asignando rol **Administrador** (acceso total) o **Gestión de Tienda** (acceso a catálogo y pedidos).</p>
+				</div>
+			</div>
+		</section>
+
+	</main>
+</AdminLayout>
+
+<script>
+	// Interactive Quick Nav & Search Filter
+	const buttons = document.querySelectorAll('.quick-nav-btn');
+	const searchInput = document.getElementById('help-search-input') as HTMLInputElement;
+	const sections = document.querySelectorAll<HTMLElement>('.help-section');
+
+	buttons.forEach(btn => {
+		btn.addEventListener('click', () => {
+			const targetId = (btn as HTMLElement).dataset.target;
+			if (targetId) {
+				const el = document.getElementById(targetId);
+				if (el) {
+					el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+				}
+			}
+		});
+	});
+
+	searchInput?.addEventListener('input', (e) => {
+		const query = (e.target as HTMLInputElement).value.toLowerCase().trim();
+		sections.forEach(sec => {
+			if (!query) {
+				sec.style.display = 'block';
+				return;
+			}
+			const text = sec.innerText.toLowerCase();
+			if (text.includes(query)) {
+				sec.style.display = 'block';
+			} else {
+				sec.style.display = 'none';
+			}
+		});
+	});
+</script>
