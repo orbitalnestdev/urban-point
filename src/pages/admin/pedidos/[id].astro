@@ -139,6 +139,31 @@ const puedeCancelar = transicionesValidas.includes('cancelado');
 const itemsSubtotalCents = orderItems.reduce((acc: number, item: any) => acc + (item.subtotal || ((item.precio_unitario || 0) * (item.cantidad || 1))), 0);
 const orderSubtotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents : (order.subtotal || 0);
 const orderTotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents + (order.costo_envio || 0) : (order.total || 0);
+
+// Financial Payout Calculation (Distribuidor vs Canillita vs UrbanPoint)
+let totalMontoDistribuidorCents = 0;
+let totalMontoCanillitaCents = 0;
+
+orderItems.forEach((item: any) => {
+	const matchedProduct = allProducts.find(p => p.$id === (typeof item.product_id === 'string' ? item.product_id : item.product_id?.$id) || p.sku === item.sku_snapshot);
+	const qty = item.cantidad || 1;
+	const itemPrice = item.precio_unitario || item.precio_unitario_centavos || 0;
+	
+	const pDist = (matchedProduct && matchedProduct.precio_distribuidor) ? matchedProduct.precio_distribuidor : Math.round(itemPrice * 0.7);
+	totalMontoDistribuidorCents += pDist * qty;
+
+	const pCan = (matchedProduct && matchedProduct.precio_canillita) ? matchedProduct.precio_canillita : Math.round(itemPrice * 0.1);
+	totalMontoCanillitaCents += pCan * qty;
+});
+
+const actualLedgerTotal = orderLedgers.reduce((acc: number, l: any) => acc + (l.monto_centavos || 0), 0);
+if (actualLedgerTotal > 0) {
+	totalMontoCanillitaCents = actualLedgerTotal;
+} else if (order.comision_total_centavos > 0) {
+	totalMontoCanillitaCents = order.comision_total_centavos;
+}
+
+const totalMargenUrbanPointCents = Math.max(0, orderTotalCents - totalMontoDistribuidorCents - totalMontoCanillitaCents);
 ---
 
 <AdminLayout title={`Pedido ORD-${order.numero || order.$id.substring(0, 8)}`}>
@@ -457,44 +482,67 @@ const orderTotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents + (order.cos
 					</div>
 				</div>
 
-				{/* Card Desglose de Comisiones */}
-				<div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-					<div class="flex items-center justify-between">
-						<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Comisiones del Pedido</h3>
-						<span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-							{orderLedgers.length} devengo(s)
+				{/* Card Desglose Financiero & Reparto de Ganancias */}
+				<div class="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-6 shadow-xl space-y-4 border border-slate-700">
+					<div class="flex items-center justify-between border-b border-slate-700/80 pb-3">
+						<div>
+							<h3 class="text-xs font-black uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+								💸 Liquidación & Reparto del Pedido
+							</h3>
+							<p class="text-[11px] text-slate-300">Montos a rendir/pagar a cada parte involucrada</p>
+						</div>
+						<span class="px-2.5 py-1 text-[10px] font-black rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+							{isPaid ? '✓ Liquidado' : '⏳ Proyectado'}
 						</span>
 					</div>
 
-					{orderLedgers.length > 0 ? (
-						<div class="space-y-3 text-xs">
-							{orderLedgers.map((leg: any) => (
-								<div class="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-									<div class="flex items-center justify-between font-bold text-slate-900">
-										<span class="capitalize">{leg.tipo === 'fee_logistica' ? 'Fee Logística (Punto)' : leg.tipo === 'comision_referido' ? 'Comisión Referido' : leg.tipo}</span>
-										<span class="text-emerald-600">{formateador.format((leg.monto_centavos || 0) / 100)}</span>
-									</div>
-									<p class="text-[11px] text-slate-500 leading-snug">{leg.motivo || 'Devengo de comisión'}</p>
-									<div class="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100">
-										<span>Tasa: {((leg.tasa_bp_snapshot || 0) / 100).toFixed(1)}%</span>
-										<span class="font-semibold uppercase">{leg.estado}</span>
-									</div>
-								</div>
-							))}
-							<div class="pt-2 flex justify-between items-center font-bold text-slate-900 text-xs border-t border-slate-100">
-								<span>Total Comisiones</span>
-								<span class="text-emerald-700 font-black">{formateador.format((order.comision_total_centavos || orderLedgers.reduce((acc, l) => acc + (l.monto_centavos || 0), 0)) / 100)}</span>
+					{/* 1. A Pagar al Distribuidor */}
+					<div class="bg-slate-800/80 border border-purple-500/30 p-3.5 rounded-2xl flex items-center justify-between">
+						<div class="flex items-center gap-3">
+							<div class="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-sm border border-purple-500/40">
+								🏭
+							</div>
+							<div>
+								<p class="font-extrabold text-xs text-purple-200">A pagar al Distribuidor</p>
+								<p class="text-[10px] text-slate-400">Costo de mercadería / Proveedor</p>
 							</div>
 						</div>
-					) : (
-						<div class="p-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs text-slate-500">
-							{order.estado === 'pendiente_pago' ? (
-								<p>Las comisiones se devengan automáticamente cuando el pago queda acreditado (`pagado`).</p>
-							) : (
-								<p>Sin devengos de comisión registrados para esta orden.</p>
-							)}
+						<span class="text-base font-black text-purple-300">{formateador.format(totalMontoDistribuidorCents / 100)}</span>
+					</div>
+
+					{/* 2. A Pagar al Canillita */}
+					<div class="bg-slate-800/80 border border-amber-500/30 p-3.5 rounded-2xl flex items-center justify-between">
+						<div class="flex items-center gap-3">
+							<div class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-sm border border-amber-500/40">
+								📰
+							</div>
+							<div>
+								<p class="font-extrabold text-xs text-amber-200">A pagar al Canillita / Punto</p>
+								<p class="text-[10px] text-slate-400">Comisión por entrega / punto de retiro</p>
+							</div>
 						</div>
-					)}
+						<span class="text-base font-black text-amber-300">{formateador.format(totalMontoCanillitaCents / 100)}</span>
+					</div>
+
+					{/* 3. Margen UrbanPoint */}
+					<div class="bg-slate-800/80 border border-indigo-500/30 p-3.5 rounded-2xl flex items-center justify-between">
+						<div class="flex items-center gap-3">
+							<div class="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-sm border border-indigo-500/40">
+								⚡
+							</div>
+							<div>
+								<p class="font-extrabold text-xs text-indigo-200">Margen UrbanPoint</p>
+								<p class="text-[10px] text-slate-400">Ganancia libre de la plataforma</p>
+							</div>
+						</div>
+						<span class="text-base font-black text-indigo-300">{formateador.format(totalMargenUrbanPointCents / 100)}</span>
+					</div>
+
+					{/* Resumen Total */}
+					<div class="pt-2 border-t border-slate-700/80 flex items-center justify-between text-xs">
+						<span class="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Total Cobrado al Cliente:</span>
+						<span class="font-black text-white text-sm">{formateador.format(orderTotalCents / 100)}</span>
+					</div>
 				</div>
 
 			</div>

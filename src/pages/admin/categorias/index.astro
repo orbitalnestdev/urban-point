@@ -2,7 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { getAdminCachedCatalog } from '../../../lib/server/catalogCache';
 import { toSafeJson } from '../../../lib/safeJson';
-import { FolderTree, Plus, Edit2, Trash2, ChevronRight, Package, Tag } from 'lucide-react';
+import { FolderTree, Plus, Edit2, Trash2, ChevronRight, Package, Tag, ArrowUp, ArrowDown, Layers } from 'lucide-react';
 
 export const prerender = false;
 
@@ -17,7 +17,7 @@ try {
 	console.error('Error cargando categorías:', e);
 }
 
-// Calculate product count per category
+// Map product counts per category
 const prodCountMap: Record<string, number> = {};
 products.forEach(p => {
 	const catId = typeof p.categoria_id === 'string' ? p.categoria_id : p.categoria_id?.$id;
@@ -26,35 +26,70 @@ products.forEach(p => {
 	}
 });
 
-// Group categories into Root -> Subcategories tree
-const rootCategories = categories.filter(c => !c.parent_id);
-const childCategoriesMap: Record<string, any[]> = {};
+// Sort categories by orden attribute
+categories.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+
+// Build Multi-Level Tree (Level 1 Root -> Level 2 Child -> Level 3 Grandchild)
+const childrenMap: Record<string, any[]> = {};
+const rootCategories: any[] = [];
 
 categories.forEach(c => {
-	if (c.parent_id) {
-		const pid = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id.$id;
-		if (!childCategoriesMap[pid]) childCategoriesMap[pid] = [];
-		childCategoriesMap[pid].push(c);
+	const pid = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id;
+	if (pid) {
+		if (!childrenMap[pid]) childrenMap[pid] = [];
+		childrenMap[pid].push(c);
+	} else {
+		rootCategories.push(c);
 	}
 });
 
-// Total counts
+// Helper to calculate total products recursively for a category branch
+function calcBranchProducts(catId: string): number {
+	let total = prodCountMap[catId] || 0;
+	const kids = childrenMap[catId] || [];
+	for (const k of kids) {
+		total += calcBranchProducts(k.$id);
+	}
+	return total;
+}
+
+// Build parent select options with hierarchical indent & path text
+function buildParentSelectOptions(catList: any[], level = 0, path = ''): { id: string; label: string }[] {
+	let options: { id: string; label: string }[] = [];
+	for (const cat of catList) {
+		const fullPath = path ? `${path} > ${cat.nombre}` : cat.nombre;
+		const prefix = '  '.repeat(level) + (level > 0 ? '↳ ' : '');
+		options.push({
+			id: cat.$id,
+			label: `${prefix}${fullPath}`
+		});
+		const kids = childrenMap[cat.$id] || [];
+		if (kids.length > 0) {
+			options = options.concat(buildParentSelectOptions(kids, level + 1, fullPath));
+		}
+	}
+	return options;
+}
+
+const selectParentOptions = buildParentSelectOptions(rootCategories);
+
 const totalCategorias = categories.length;
 const totalPrincipales = rootCategories.length;
 const totalSubcategorias = categories.length - rootCategories.length;
 ---
 
-<AdminLayout title="Gestión de Categorías | UrbanPoint">
+<AdminLayout title="Gestión de Categorías Estilo Tiendanube | UrbanPoint">
 	<div class="space-y-6 max-w-6xl mx-auto pb-12">
-		<!-- Top Bar -->
+		
+		{/* Top Header */}
 		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
 			<div>
 				<h1 class="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
 					<FolderTree className="w-7 h-7 text-indigo-600" />
-					Categorías y Subcategorías
+					Categorías y Subcategorías (Multinivel)
 				</h1>
 				<p class="text-slate-500 text-xs sm:text-sm mt-1">
-					Organizá tu catálogo estilo Tienda Nube con categorías principales y subniveles.
+					Gestión multinivel intuitiva al estilo Tiendanube: creá categorías principales, subniveles y reordená fácilmente.
 				</p>
 			</div>
 			
@@ -64,12 +99,12 @@ const totalSubcategorias = categories.length - rootCategories.length;
 					class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all text-sm flex items-center gap-2 cursor-pointer hover:scale-[1.02]"
 				>
 					<Plus className="w-4 h-4" />
-					Nueva Categoría
+					Nueva Categoría Principal
 				</button>
 			</div>
 		</div>
 
-		<!-- KPI Cards -->
+		{/* KPI Cards */}
 		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
 				<div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
@@ -86,47 +121,69 @@ const totalSubcategorias = categories.length - rootCategories.length;
 					<Tag className="w-6 h-6" />
 				</div>
 				<div>
-					<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Categorías Principales</p>
+					<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Principales (Nivel 1)</p>
 					<h3 class="text-2xl font-black text-slate-900">{totalPrincipales}</h3>
 				</div>
 			</div>
 
 			<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
 				<div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-					<ChevronRight className="w-6 h-6" />
+					<Layers className="w-6 h-6" />
 				</div>
 				<div>
-					<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Subcategorías</p>
+					<p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Subniveles (Nivel 2/3)</p>
 					<h3 class="text-2xl font-black text-slate-900">{totalSubcategorias}</h3>
 				</div>
 			</div>
 		</div>
 
-		<!-- Category Tree List (Tienda Nube Style) -->
+		{/* Structure Tree List */}
 		<div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
 			<div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-				<h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Estructura del Catálogo</h2>
-				<span class="text-xs text-slate-500 font-medium">Hacé clic en "+ Subcategoría" para anidar un subnivel</span>
+				<h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Arbol de Categorías Tiendanube</h2>
+				<span class="text-xs text-slate-500 font-medium">Usá las flechas ⬆️ ⬇️ para cambiar el orden de despliegue en la tienda</span>
 			</div>
 
 			<div class="divide-y divide-slate-100">
-				{rootCategories.map(parent => {
-					const children = childCategoriesMap[parent.$id] || [];
-					const parentProdCount = (prodCountMap[parent.$id] || 0) + children.reduce((sum, child) => sum + (prodCountMap[child.$id] || 0), 0);
+				{rootCategories.map((parent, pIdx) => {
+					const lvl2Kids = childrenMap[parent.$id] || [];
+					const parentProdCount = calcBranchProducts(parent.$id);
 
 					return (
-						<div class="bg-white">
-							<!-- Parent Category Row -->
-							<div class="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50/80 transition-colors group">
-								<div class="flex items-center gap-3.5">
+						<div class="bg-white group/root">
+							{/* Level 1 Parent Category */}
+							<div class="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50/80 transition-colors">
+								<div class="flex items-center gap-3.5 min-w-0">
+									<div class="flex flex-col items-center gap-0.5 shrink-0">
+										<button 
+											class="btn-reorder p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-900 transition-colors disabled:opacity-30 cursor-pointer"
+											data-id={parent.$id}
+											data-dir="up"
+											disabled={pIdx === 0}
+											title="Subir orden"
+										>
+											<ArrowUp className="w-3.5 h-3.5" />
+										</button>
+										<button 
+											class="btn-reorder p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-900 transition-colors disabled:opacity-30 cursor-pointer"
+											data-id={parent.$id}
+											data-dir="down"
+											disabled={pIdx === rootCategories.length - 1}
+											title="Bajar orden"
+										>
+											<ArrowDown className="w-3.5 h-3.5" />
+										</button>
+									</div>
+
 									<div class="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold">
 										<FolderTree className="w-5 h-5" />
 									</div>
-									<div>
+
+									<div class="min-w-0">
 										<div class="flex items-center gap-2">
-											<h3 class="font-extrabold text-slate-900 text-base">{parent.nombre}</h3>
-											<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-												Categoría Principal
+											<h3 class="font-extrabold text-slate-900 text-base truncate">{parent.nombre}</h3>
+											<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+												Principal (N1)
 											</span>
 											{parent.estado === 'oculta' && (
 												<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
@@ -138,7 +195,7 @@ const totalSubcategorias = categories.length - rootCategories.length;
 									</div>
 								</div>
 
-								<div class="flex items-center gap-3">
+								<div class="flex items-center gap-2 sm:gap-3">
 									<span class="hidden sm:inline-flex items-center gap-1 px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-700">
 										<Package className="w-3.5 h-3.5 text-slate-500" />
 										{parentProdCount} {parentProdCount === 1 ? 'producto' : 'productos'}
@@ -171,51 +228,154 @@ const totalSubcategorias = categories.length - rootCategories.length;
 								</div>
 							</div>
 
-							<!-- Children Subcategories List -->
-							{children.length > 0 && (
-								<div class="bg-slate-50/40 border-t border-slate-100 pl-8 sm:pl-14 pr-4 sm:pr-5 py-2 divide-y divide-slate-100">
-									{children.map(child => {
-										const childProdCount = prodCountMap[child.$id] || 0;
+							{/* Level 2 Subcategories */}
+							{lvl2Kids.length > 0 && (
+								<div class="bg-slate-50/50 border-t border-slate-100 pl-6 sm:pl-12 pr-4 sm:pr-5 py-2 space-y-1">
+									{lvl2Kids.map((c2, c2Idx) => {
+										const lvl3Kids = childrenMap[c2.$id] || [];
+										const c2ProdCount = calcBranchProducts(c2.$id);
 
 										return (
-											<div class="py-3 flex items-center justify-between hover:bg-white p-2 rounded-xl transition-colors">
-												<div class="flex items-center gap-3">
-													<ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
-													<div>
-														<div class="flex items-center gap-2">
-															<h4 class="font-bold text-slate-800 text-sm">{child.nombre}</h4>
-															{child.estado === 'oculta' && (
-																<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-																	Oculta
-																</span>
-															)}
+											<div class="rounded-2xl border border-slate-200/60 bg-white shadow-2xs overflow-hidden">
+												<div class="p-3.5 flex items-center justify-between hover:bg-slate-50 transition-colors">
+													<div class="flex items-center gap-3 min-w-0">
+														<div class="flex flex-col items-center gap-0.5 shrink-0">
+															<button 
+																class="btn-reorder p-0.5 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-900 transition-colors disabled:opacity-20 cursor-pointer"
+																data-id={c2.$id}
+																data-dir="up"
+																disabled={c2Idx === 0}
+																title="Subir orden"
+															>
+																<ArrowUp className="w-3 h-3" />
+															</button>
+															<button 
+																class="btn-reorder p-0.5 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-900 transition-colors disabled:opacity-20 cursor-pointer"
+																data-id={c2.$id}
+																data-dir="down"
+																disabled={c2Idx === lvl2Kids.length - 1}
+																title="Bajar orden"
+															>
+																<ArrowDown className="w-3 h-3" />
+															</button>
 														</div>
-														<p class="text-[11px] text-slate-400 font-mono">/{child.slug}</p>
+
+														<ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+														<div class="min-w-0">
+															<div class="flex items-center gap-2">
+																<h4 class="font-bold text-slate-800 text-sm truncate">{c2.nombre}</h4>
+																<span class="px-2 py-0.2 rounded-full text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+																	Nivel 2
+																</span>
+																{c2.estado === 'oculta' && (
+																	<span class="px-2 py-0.2 rounded-full text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+																		Oculta
+																	</span>
+																)}
+															</div>
+															<p class="text-[11px] text-slate-400 font-mono">/{c2.slug}</p>
+														</div>
+													</div>
+
+													<div class="flex items-center gap-2">
+														<span class="text-xs text-slate-500 font-medium">
+															{c2ProdCount} prods
+														</span>
+
+														<button 
+															class="btn-nueva-subcat px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg text-[11px] transition-colors cursor-pointer flex items-center gap-1"
+															data-parent-id={c2.$id}
+															data-parent-name={`${parent.nombre} > ${c2.nombre}`}
+														>
+															<Plus className="w-3 h-3" /> Sub-subnivel
+														</button>
+
+														<button 
+															class="btn-editar-cat p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
+															data-cat={toSafeJson(c2)}
+															title="Editar Subcategoría"
+														>
+															<Edit2 className="w-3.5 h-3.5" />
+														</button>
+
+														<button 
+															class="btn-eliminar-cat p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+															data-id={c2.$id}
+															data-nombre={c2.nombre}
+															title="Eliminar Subcategoría"
+														>
+															<Trash2 className="w-3.5 h-3.5" />
+														</button>
 													</div>
 												</div>
 
-												<div class="flex items-center gap-3">
-													<span class="text-xs text-slate-500 font-medium">
-														{childProdCount} {childProdCount === 1 ? 'producto' : 'productos'}
-													</span>
+												{/* Level 3 Grandchildren Sub-subcategories */}
+												{lvl3Kids.length > 0 && (
+													<div class="bg-slate-50 border-t border-slate-100 pl-8 pr-3 py-2 divide-y divide-slate-100">
+														{lvl3Kids.map((c3, c3Idx) => {
+															const c3ProdCount = prodCountMap[c3.$id] || 0;
+															return (
+																<div class="py-2 flex items-center justify-between hover:bg-white p-2 rounded-xl transition-colors">
+																	<div class="flex items-center gap-2 min-w-0">
+																		<div class="flex flex-col items-center gap-0.5 shrink-0">
+																			<button 
+																				class="btn-reorder p-0.5 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-900 transition-colors disabled:opacity-20 cursor-pointer"
+																				data-id={c3.$id}
+																				data-dir="up"
+																				disabled={c3Idx === 0}
+																				title="Subir orden"
+																			>
+																				<ArrowUp className="w-2.5 h-2.5" />
+																			</button>
+																			<button 
+																				class="btn-reorder p-0.5 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-900 transition-colors disabled:opacity-20 cursor-pointer"
+																				data-id={c3.$id}
+																				data-dir="down"
+																				disabled={c3Idx === lvl3Kids.length - 1}
+																				title="Bajar orden"
+																			>
+																				<ArrowDown className="w-2.5 h-2.5" />
+																			</button>
+																		</div>
+																		<span class="text-slate-400 font-bold text-xs">↳</span>
+																		<div>
+																			<div class="flex items-center gap-2">
+																				<h5 class="font-semibold text-slate-800 text-xs truncate">{c3.nombre}</h5>
+																				<span class="px-1.5 py-0.2 rounded text-[8px] font-bold bg-slate-200 text-slate-700">
+																					Nivel 3
+																				</span>
+																			</div>
+																			<p class="text-[10px] text-slate-400 font-mono">/{c3.slug}</p>
+																		</div>
+																	</div>
 
-													<button 
-														class="btn-editar-cat p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
-														data-cat={toSafeJson(child)}
-														title="Editar Subcategoría"
-													>
-														<Edit2 className="w-3.5 h-3.5" />
-													</button>
+																	<div class="flex items-center gap-2">
+																		<span class="text-[11px] text-slate-500 font-medium">
+																			{c3ProdCount} prods
+																		</span>
 
-													<button 
-														class="btn-eliminar-cat p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
-														data-id={child.$id}
-														data-nombre={child.nombre}
-														title="Eliminar Subcategoría"
-													>
-														<Trash2 className="w-3.5 h-3.5" />
-													</button>
-												</div>
+																		<button 
+																			class="btn-editar-cat p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 transition-colors cursor-pointer"
+																			data-cat={toSafeJson(c3)}
+																			title="Editar Subcategoría"
+																		>
+																			<Edit2 className="w-3 h-3" />
+																		</button>
+
+																		<button 
+																			class="btn-eliminar-cat p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition-colors cursor-pointer"
+																			data-id={c3.$id}
+																			data-nombre={c3.nombre}
+																			title="Eliminar Subcategoría"
+																		>
+																			<Trash2 className="w-3 h-3" />
+																		</button>
+																	</div>
+																</div>
+															);
+														})}
+													</div>
+												)}
 											</div>
 										);
 									})}
@@ -253,11 +413,11 @@ const totalSubcategorias = categories.length - rootCategories.length;
 				</div>
 
 				<div>
-					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nivel / Categoría Padre</label>
-					<select id="cat-parent-id" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600 cursor-pointer">
-						<option value="">Ninguna (Categoría Principal / Nivel Superior)</option>
-						{rootCategories.map(p => (
-							<option value={p.$id}>Subcategoría de: {p.nombre}</option>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nivel / Categoría Padre (Tiendanube Tree)</label>
+					<select id="cat-parent-id" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-600 cursor-pointer">
+						<option value="">📁 Ninguna (Categoría Principal / Nivel 1 Superior)</option>
+						{selectParentOptions.map(opt => (
+							<option value={opt.id}>{opt.label}</option>
 						))}
 					</select>
 				</div>
@@ -403,6 +563,47 @@ const totalSubcategorias = categories.length - rootCategories.length;
 				const { data, error } = await actions.deleteCategory({ id });
 				if (error || !data?.success) {
 					alert(error?.message || 'Error al eliminar categoría');
+				} else {
+					window.location.reload();
+				}
+			});
+		});
+
+		// Buttons for reordering (up/down)
+		document.querySelectorAll('.btn-reorder').forEach(btn => {
+			btn.addEventListener('click', async (e) => {
+				const target = e.currentTarget as HTMLElement;
+				const id = target.dataset.id;
+				const dir = target.dataset.dir;
+				if (!id) return;
+
+				// Find container row and swap order with neighbor
+				const currentBtn = target as HTMLButtonElement;
+				currentBtn.disabled = true;
+
+				// Collect current DOM sibling IDs under same parent to swap positions
+				const parentContainer = currentBtn.closest('.divide-y, .space-y-1, .bg-slate-50');
+				if (!parentContainer) return;
+
+				const buttons = Array.from(parentContainer.querySelectorAll('.btn-reorder[data-dir="' + dir + '"]')) as HTMLButtonElement[];
+				const idx = buttons.indexOf(currentBtn);
+				if (idx === -1) return;
+
+				const neighborIdx = dir === 'up' ? idx - 1 : idx + 1;
+				if (neighborIdx < 0 || neighborIdx >= buttons.length) return;
+
+				const otherId = buttons[neighborIdx].dataset.id;
+				if (!otherId) return;
+
+				const { data, error } = await actions.reorderCategories({
+					items: [
+						{ id, orden: dir === 'up' ? idx - 1 : idx + 1 },
+						{ id: otherId, orden: dir === 'up' ? idx : idx - 1 }
+					]
+				});
+
+				if (error || !data?.success) {
+					alert('Error reordenando categorías');
 				} else {
 					window.location.reload();
 				}

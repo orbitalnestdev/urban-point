@@ -288,7 +288,10 @@ const gastoPromedioCentavos = totalClientesCount > 0 ? Math.round(totalGastadoGe
 								<td class="p-4 text-center text-slate-500">
 									{dateStr}
 								</td>
-								<td class="p-4 text-center" onclick="event.stopPropagation()">
+								<td class="p-4 text-center space-x-1" onclick="event.stopPropagation()">
+									<a href={`/api/admin/impersonate?profile_id=${c.$id}`} title="Ingresar a la app impersonando a este usuario" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px] rounded-xl transition-colors border border-amber-200 inline-block">
+										👁️ Probar
+									</a>
 									<a href={`/admin/clientes/${c.$id}`} class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-xl transition-colors inline-block">
 										Ver Ficha
 									</a>

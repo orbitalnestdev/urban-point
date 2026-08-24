@@ -3,6 +3,7 @@ import '../styles/global.css';
 import '../styles/design-system.css';
 import FloatingWhatsApp from '../components/FloatingWhatsApp.astro';
 import DevUserSwitcher from '../components/DevUserSwitcher.astro';
+import ImpersonationBanner from '../components/ImpersonationBanner.astro';
 import { parseActiveNodeCookie } from '../lib/nodeSession';
 
 interface Props {
@@ -39,6 +40,7 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
 			</div>
 		)}
 
+		<ImpersonationBanner />
 		<slot />
 		<FloatingWhatsApp />
 		<DevUserSwitcher />

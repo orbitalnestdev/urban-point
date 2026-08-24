@@ -233,6 +233,15 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 										)}
 									</td>
 									<td class="p-4 text-right space-x-2 whitespace-nowrap">
+										{puntoProfileId && (
+											<a 
+												href={`/api/admin/impersonate?profile_id=${puntoProfileId}`} 
+												title="Ingresar a la app impersonando a este Canillita" 
+												class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-lg transition-colors border border-amber-200 inline-flex items-center gap-1 cursor-pointer"
+											>
+												👁️ Probar
+											</a>
+										)}
 										{punto.slug && (
 											<button 
 												class="btn-generar-qr px-2.5 py-1 bg-[#E2EFE4] hover:bg-[#D4E5D6] text-[#2D5A27] font-extrabold text-xs rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"

@@ -242,7 +242,12 @@ const totalAdmins = teamMembers.filter(m => m.role === 'admin').length;
                                             </form>
                                         )}
                                     </td>
-                                    <td class="p-4 text-center">
+                                    <td class="p-4 text-center space-x-1">
+                                        {!isSelf && (
+                                            <a href={`/api/admin/impersonate?profile_id=${member.$id}`} title="Ingresar a la app impersonando a este usuario" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] rounded-lg transition-colors border border-amber-200 inline-flex items-center gap-1 cursor-pointer">
+                                                👁️ Probar
+                                            </a>
+                                        )}
                                         {isSelf ? (
                                             <span class="text-slate-300">-</span>
                                         ) : isOnlyAdmin ? (

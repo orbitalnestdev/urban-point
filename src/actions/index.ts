@@ -2263,13 +2263,14 @@ export const server = {
 			descripcion: z.string().optional(),
 			imagen_url: z.string().optional(),
 			estado: z.string().optional(),
+			orden: z.number().optional().nullable(),
 			markup_distribuidor: z.number().optional().nullable(),
 			markup_canillita: z.number().optional().nullable(),
 			markup_publico: z.number().optional().nullable()
 		}),
 		handler: async (input, ctx) => {
 			try {
-				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+				if (!ctx.locals.user || (ctx.locals.user.role !== 'admin' && ctx.locals.user.role !== 'gestion')) {
 					throw new Error('Solo los administradores pueden gestionar categorías');
 				}
 
@@ -2286,6 +2287,7 @@ export const server = {
 					estado: input.estado || 'activa'
 				};
 
+				if (input.orden !== undefined && input.orden !== null) payload.orden = input.orden;
 				if (input.markup_distribuidor !== undefined) payload.markup_distribuidor = input.markup_distribuidor;
 				if (input.markup_canillita !== undefined) payload.markup_canillita = input.markup_canillita;
 				if (input.markup_publico !== undefined) payload.markup_publico = input.markup_publico;
@@ -2298,7 +2300,36 @@ export const server = {
 					categoryId = created.$id;
 				}
 
+				invalidateCatalogCache();
 				return { success: true, id: categoryId };
+			} catch (error: any) {
+				return { success: false, error: error.message };
+			}
+		}
+	}),
+
+	reorderCategories: defineAction({
+		accept: 'json',
+		input: z.object({
+			items: z.array(z.object({
+				id: z.string(),
+				orden: z.number(),
+				parent_id: z.string().optional().nullable()
+			}))
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || (ctx.locals.user.role !== 'admin' && ctx.locals.user.role !== 'gestion')) {
+					throw new Error('Sin permisos');
+				}
+				for (const item of input.items) {
+					await escribirDocumentoTolerante('categories', {
+						orden: item.orden,
+						parent_id: item.parent_id || null
+					}, item.id);
+				}
+				invalidateCatalogCache();
+				return { success: true };
 			} catch (error: any) {
 				return { success: false, error: error.message };
 			}
@@ -2369,6 +2400,7 @@ export const server = {
 					throw new Error('Solo los administradores pueden eliminar categorías');
 				}
 				await db.deleteDocument('urbanpoint', 'categories', input.id);
+				invalidateCatalogCache();
 				return { success: true };
 			} catch (error: any) {
 				return { success: false, error: error.message };

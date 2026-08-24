@@ -160,6 +160,43 @@ export const onRequest = defineMiddleware(async (context, next) => {
 		}
 
 		
+		// Bloque Impersonación / Switch de Usuario
+		const impersonatedTarget = context.cookies.get('up_impersonated_profile')?.value;
+		const adminBackupSession = context.cookies.get('up_admin_session_backup')?.value;
+
+		if (impersonatedTarget && (profile.role === 'admin' || profile.role === 'gestion' || adminBackupSession)) {
+			try {
+				const adminName = profile.nombre || 'Admin';
+				let targetProfile: any = null;
+
+				if (impersonatedTarget.startsWith('synthetic:')) {
+					const sRole = impersonatedTarget.replace('synthetic:', '');
+					targetProfile = {
+						$id: `synthetic-profile-${sRole}`,
+						user_id: `synthetic-user-${sRole}`,
+						role: sRole,
+						nombre: `Prueba ${sRole.charAt(0).toUpperCase()}${sRole.slice(1)}`,
+						email: `prueba-${sRole}@urbanpoint.test`
+					};
+				} else {
+					const { databases } = createAdminClient();
+					targetProfile = await databases.getDocument('urbanpoint', 'profiles', impersonatedTarget);
+				}
+
+				if (targetProfile) {
+					profile = targetProfile;
+					user = {
+						$id: targetProfile.user_id || `imp-user-${targetProfile.$id}`,
+						email: targetProfile.email || ''
+					};
+					context.locals.isImpersonating = true;
+					context.locals.impersonatorAdminName = adminName;
+				}
+			} catch (impErr) {
+				console.error("Error al aplicar impersonación:", impErr);
+			}
+		}
+
 		// Bloque 7 — Protección de Rutas por Rol (admin vs gestion)
 		if (pathname.startsWith('/admin')) {
 			if (profile.role !== 'admin' && profile.role !== 'gestion') {
