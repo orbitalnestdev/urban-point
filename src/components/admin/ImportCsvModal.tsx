@@ -82,21 +82,23 @@ export default function ImportCsvModal({}: Props) {
 
       setHeaders(rawHeaders);
 
+      const normStr = (s: string) => s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
       // Mapeo automático inteligente por nombre de columna
       const newMapping = {
-        nombre: rawHeaders.find(h => /^nombre$|^title$|^producto$/i.test(h)) || rawHeaders.find(h => /nombre|producto/i.test(h)) || rawHeaders[0] || '',
-        sku: rawHeaders.find(h => /^sku$|^codigo$/i.test(h)) || rawHeaders.find(h => /sku|codigo/i.test(h)) || '',
-        precio: rawHeaders.find(h => /^precio$|^precio_venta$|^precio_publico$/i.test(h)) || rawHeaders.find(h => /^precio/i.test(h)) || '',
-        precio_promocional: rawHeaders.find(h => /^precio_promocional$|^precio_promo$|^promo$/i.test(h)) || '',
-        precio_canillita: rawHeaders.find(h => /^precio_canillita$|^canillita$/i.test(h)) || '',
-        precio_distribuidor: rawHeaders.find(h => /^precio_distribuidor$|^distribuidor$|^mayorista$/i.test(h)) || '',
-        costo: rawHeaders.find(h => /^costo$|^precio_costo$/i.test(h)) || '',
-        stock: rawHeaders.find(h => /^stock$|^cantidad$/i.test(h)) || '',
-        estado: rawHeaders.find(h => /^estado$|^status$/i.test(h)) || '',
-        categoria: rawHeaders.find(h => /^categoria$|^categoria_nombre$|^category$/i.test(h)) || '',
-        marca: rawHeaders.find(h => /^marca$|^brand$/i.test(h)) || '',
-        portada_url: rawHeaders.find(h => /^portada_url$|^imagen$|^imagenes$|^fotos$/i.test(h)) || '',
-        descripcion: rawHeaders.find(h => /^descripcion$|^desc$/i.test(h)) || ''
+        nombre: rawHeaders.find(h => /^nombre$|^title$|^producto$/i.test(normStr(h))) || rawHeaders.find(h => /nombre|producto/i.test(normStr(h))) || rawHeaders[0] || '',
+        sku: rawHeaders.find(h => /^sku$|^codigo$/i.test(normStr(h))) || rawHeaders.find(h => /sku|codigo/i.test(normStr(h))) || '',
+        precio: rawHeaders.find(h => /^precio$|^precio_venta$|^precio_publico$|^pvp$/i.test(normStr(h))) || rawHeaders.find(h => /^precio/i.test(normStr(h))) || '',
+        precio_promocional: rawHeaders.find(h => /^precio_promocional$|^precio_promo$|^promo$/i.test(normStr(h))) || '',
+        precio_canillita: rawHeaders.find(h => /^precio_canillita$|^canillita$/i.test(normStr(h))) || '',
+        precio_distribuidor: rawHeaders.find(h => /^precio_distribuidor$|^distribuidor$|^mayorista$/i.test(normStr(h))) || '',
+        costo: rawHeaders.find(h => /^costo$|^precio_costo$/i.test(normStr(h))) || '',
+        stock: rawHeaders.find(h => /^stock$|^cantidad$|^unidades$/i.test(normStr(h))) || '',
+        estado: rawHeaders.find(h => /^estado$|^status$/i.test(normStr(h))) || '',
+        categoria: rawHeaders.find(h => /^categoria$|^categoria_nombre$|^category$|^rubro$/i.test(normStr(h))) || rawHeaders.find(h => /categoria|category|rubro/i.test(normStr(h))) || '',
+        marca: rawHeaders.find(h => /^marca$|^brand$/i.test(normStr(h))) || '',
+        portada_url: rawHeaders.find(h => /^portada_url$|^imagen$|^imagenes$|^fotos$|^portada$/i.test(normStr(h))) || '',
+        descripcion: rawHeaders.find(h => /^descripcion$|^desc$/i.test(normStr(h))) || ''
       };
       setMapping(newMapping);
       setParsedRows(dataRows);

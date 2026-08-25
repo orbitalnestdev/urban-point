@@ -1871,14 +1871,56 @@ export const server = {
 					throw new Error('Solo admin puede importar productos');
 				}
 
-				// Cargar mapa de categorías por nombre
+				// Cargar mapa completo de categorías (con paginación y normalización de acentos)
+				const normCatKey = (s: string) => s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 				const catMap: Record<string, string> = {};
 				try {
-					const catRes = await db.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
-					catRes.documents.forEach((c: any) => {
-						if (c.nombre) catMap[c.nombre.toLowerCase().trim()] = c.$id;
-					});
+					let catOffset = 0;
+					while (true) {
+						const catRes = await db.listDocuments('urbanpoint', 'categories', [
+							Query.limit(100),
+							Query.offset(catOffset)
+						]);
+						catRes.documents.forEach((c: any) => {
+							if (c.$id) catMap[c.$id] = c.$id;
+							if (c.nombre) {
+								catMap[c.nombre.toLowerCase().trim()] = c.$id;
+								catMap[normCatKey(c.nombre)] = c.$id;
+							}
+						});
+						if (catRes.documents.length < 100) break;
+						catOffset += 100;
+					}
 				} catch (e) {}
+
+				const resolveOrCreateCategory = async (catIdOrName?: string | null): Promise<string | null> => {
+					if (!catIdOrName || !catIdOrName.trim()) return null;
+					const raw = catIdOrName.trim();
+					if (catMap[raw]) return catMap[raw];
+					const norm = normCatKey(raw);
+					if (catMap[norm]) return catMap[norm];
+					const lower = raw.toLowerCase();
+					if (catMap[lower]) return catMap[lower];
+
+					// Autocreación de categoría inexistente si viene informada en el CSV
+					try {
+						const catSlug = norm.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || `cat-${Date.now()}`;
+						const created = await escribirDocumentoTolerante('categories', {
+							nombre: raw,
+							slug: catSlug,
+							estado: 'activo'
+						});
+						if (created && created.$id) {
+							catMap[raw] = created.$id;
+							catMap[norm] = created.$id;
+							catMap[lower] = created.$id;
+							return created.$id;
+						}
+					} catch (errCat) {
+						console.error('Error autocreando categoría en importación:', errCat);
+					}
+					return null;
+				};
 
 				let count = 0;
 				for (const item of input.items) {
@@ -1889,11 +1931,7 @@ export const server = {
 						.replace(/(^-|-$)+/g, '') + '-' + Math.floor(Math.random()*1000);
 
 					const sku = item.sku || 'SKU-' + Math.floor(100000 + Math.random() * 900000);
-
-					let catId = item.categoria_id || null;
-					if (!catId && item.categoria_nombre) {
-						catId = catMap[item.categoria_nombre.toLowerCase().trim()] || null;
-					}
+					const catId = await resolveOrCreateCategory(item.categoria_id || item.categoria_nombre);
 
 					const payload: any = {
 						nombre: item.nombre,
@@ -1976,14 +2014,56 @@ export const server = {
 					offset += 100;
 				}
 
-				// Cargar categorías para mapear por nombre si es necesario
+				// Cargar mapa completo de categorías (con paginación y normalización de acentos)
+				const normCatKey = (s: string) => s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 				const catMap: Record<string, string> = {};
 				try {
-					const catRes = await db.listDocuments('urbanpoint', 'categories', [Query.limit(100)]);
-					catRes.documents.forEach((c: any) => {
-						if (c.nombre) catMap[c.nombre.toLowerCase().trim()] = c.$id;
-					});
+					let catOffset = 0;
+					while (true) {
+						const catRes = await db.listDocuments('urbanpoint', 'categories', [
+							Query.limit(100),
+							Query.offset(catOffset)
+						]);
+						catRes.documents.forEach((c: any) => {
+							if (c.$id) catMap[c.$id] = c.$id;
+							if (c.nombre) {
+								catMap[c.nombre.toLowerCase().trim()] = c.$id;
+								catMap[normCatKey(c.nombre)] = c.$id;
+							}
+						});
+						if (catRes.documents.length < 100) break;
+						catOffset += 100;
+					}
 				} catch (e) {}
+
+				const resolveOrCreateCategory = async (catIdOrName?: string | null): Promise<string | null> => {
+					if (!catIdOrName || !catIdOrName.trim()) return null;
+					const raw = catIdOrName.trim();
+					if (catMap[raw]) return catMap[raw];
+					const norm = normCatKey(raw);
+					if (catMap[norm]) return catMap[norm];
+					const lower = raw.toLowerCase();
+					if (catMap[lower]) return catMap[lower];
+
+					// Autocreación de categoría inexistente si viene informada en el CSV
+					try {
+						const catSlug = norm.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || `cat-${Date.now()}`;
+						const created = await escribirDocumentoTolerante('categories', {
+							nombre: raw,
+							slug: catSlug,
+							estado: 'activo'
+						});
+						if (created && created.$id) {
+							catMap[raw] = created.$id;
+							catMap[norm] = created.$id;
+							catMap[lower] = created.$id;
+							return created.$id;
+						}
+					} catch (errCat) {
+						console.error('Error autocreando categoría en importación:', errCat);
+					}
+					return null;
+				};
 
 				let updated = 0;
 				let created = 0;
@@ -2002,10 +2082,7 @@ export const server = {
 						target = allProducts.find(p => p.nombre && p.nombre.trim().toLowerCase() === cleanNombre);
 					}
 
-					let catId = update.categoria_id || null;
-					if (!catId && update.categoria_nombre) {
-						catId = catMap[update.categoria_nombre.toLowerCase().trim()] || null;
-					}
+					const catId = await resolveOrCreateCategory(update.categoria_id || update.categoria_nombre);
 
 					if (target) {
 						const patch: any = {};

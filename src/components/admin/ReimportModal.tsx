@@ -126,11 +126,16 @@ export default function ReimportModal({}: Props) {
       };
 
       const updates = rows.map(row => {
+        const normKeyStr = (s: string) => s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         const getVal = (...keys: string[]): string | undefined => {
           for (const k of keys) {
-            const matchKey = Object.keys(row).find(rk => rk.toLowerCase().trim() === k.toLowerCase().trim() || rk.toLowerCase().trim().replace(/_/g, ' ') === k.toLowerCase().trim());
-            if (matchKey && row[matchKey] !== undefined && row[matchKey].trim().length > 0) {
-              return row[matchKey].trim();
+            const normK = normKeyStr(k);
+            const matchKey = Object.keys(row).find(rk => {
+              const normRk = normKeyStr(rk);
+              return normRk === normK || normRk.replace(/_/g, ' ') === normK || normRk.replace(/ /g, '_') === normK;
+            });
+            if (matchKey && row[matchKey] !== undefined && String(row[matchKey]).trim().length > 0) {
+              return String(row[matchKey]).trim();
             }
           }
           return undefined;
@@ -139,7 +144,7 @@ export default function ReimportModal({}: Props) {
         const id = getVal('id', 'document_id', 'id_producto');
         const sku = getVal('sku', 'codigo', 'codigo_sku');
         const nombre = getVal('nombre', 'title', 'producto');
-        const precioStr = getVal('precio', 'precio_venta', 'precio_minorista');
+        const precioStr = getVal('precio', 'precio_venta', 'precio_minorista', 'precio_publico', 'pvp');
         const promoStr = getVal('precio_promocional', 'precio_promo', 'promo');
         const canillitaStr = getVal('precio_canillita', 'canillita');
         const distribuidorStr = getVal('precio_distribuidor', 'distribuidor', 'mayorista');
@@ -147,9 +152,9 @@ export default function ReimportModal({}: Props) {
         const stockStr = getVal('stock', 'cantidad', 'unidades');
         const estadoStr = getVal('estado', 'status');
         const catIdStr = getVal('categoria_id', 'id_categoria');
-        const catNombreStr = getVal('categoria', 'categoria_nombre', 'category');
+        const catNombreStr = getVal('categoria', 'categoria_nombre', 'category', 'rubro');
         const marcaStr = getVal('marca', 'brand');
-        const portadaStr = getVal('portada_url', 'imagen_url', 'imagen');
+        const portadaStr = getVal('portada_url', 'imagen_url', 'imagen', 'portada');
         const descStr = getVal('descripcion', 'desc');
 
         return {
