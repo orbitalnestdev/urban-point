@@ -143,6 +143,7 @@ const orderTotalCents = itemsSubtotalCents > 0 ? itemsSubtotalCents + (order.cos
 // Financial Payout Calculation (Distribuidor vs Canillita vs UrbanPoint)
 let totalMontoDistribuidorCents = 0;
 let totalMontoCanillitaCents = 0;
+const priceTier = order.price_tier || 'publico';
 
 orderItems.forEach((item: any) => {
 	const matchedProduct = allProducts.find(p => p.$id === (typeof item.product_id === 'string' ? item.product_id : item.product_id?.$id) || p.sku === item.sku_snapshot);
@@ -152,15 +153,23 @@ orderItems.forEach((item: any) => {
 	const pDist = (matchedProduct && matchedProduct.precio_distribuidor) ? matchedProduct.precio_distribuidor : Math.round(itemPrice * 0.7);
 	totalMontoDistribuidorCents += pDist * qty;
 
-	const pCan = (matchedProduct && matchedProduct.precio_canillita) ? matchedProduct.precio_canillita : Math.round(itemPrice * 0.1);
-	totalMontoCanillitaCents += pCan * qty;
+	if (priceTier === 'publico') {
+		// En venta pública, la comisión proyectada estándar es del 10% (salvo regla específica en ledger)
+		const projectedComm = Math.round(itemPrice * 0.10);
+		totalMontoCanillitaCents += projectedComm * qty;
+	}
 });
 
-const actualLedgerTotal = orderLedgers.reduce((acc: number, l: any) => acc + (l.monto_centavos || 0), 0);
-if (actualLedgerTotal > 0) {
-	totalMontoCanillitaCents = actualLedgerTotal;
-} else if (order.comision_total_centavos > 0) {
-	totalMontoCanillitaCents = order.comision_total_centavos;
+if (priceTier !== 'publico') {
+	// Las compras mayoristas en niveles canillita o distribuidor no devengan comisiones
+	totalMontoCanillitaCents = 0;
+} else {
+	const actualLedgerTotal = orderLedgers.reduce((acc: number, l: any) => acc + (l.monto_centavos || 0), 0);
+	if (actualLedgerTotal > 0) {
+		totalMontoCanillitaCents = actualLedgerTotal;
+	} else if (order.comision_total_centavos !== undefined && order.comision_total_centavos !== null && order.comision_total_centavos > 0) {
+		totalMontoCanillitaCents = order.comision_total_centavos;
+	}
 }
 
 const totalMargenUrbanPointCents = Math.max(0, orderTotalCents - totalMontoDistribuidorCents - totalMontoCanillitaCents);
