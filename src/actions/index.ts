@@ -1912,7 +1912,17 @@ export const server = {
 					if (item.costo !== undefined && item.costo !== null) payload.costo = item.costo;
 					if (catId) payload.categoria_id = catId;
 					if (item.marca) payload.marca = item.marca;
-					if (item.portada_url) payload.portada_url = item.portada_url;
+
+					// Manejo inteligente de múltiples fotos: la 1ra es portada, las siguientes van a galería
+					if (item.portada_url) {
+						const urls = item.portada_url.split(/[,|\n;]/).map(u => u.trim()).filter(Boolean);
+						if (urls.length > 0) {
+							payload.portada_url = urls[0];
+							if (urls.length > 1) {
+								payload.galeria_urls = JSON.stringify(urls.slice(1));
+							}
+						}
+					}
 
 					await escribirDocumentoTolerante('products', payload);
 					count++;
@@ -2009,7 +2019,15 @@ export const server = {
 						if (update.estado !== undefined && ['activo', 'borrador', 'pausado', 'inactivo'].includes(update.estado)) patch.estado = update.estado;
 						if (catId) patch.categoria_id = catId;
 						if (update.marca !== undefined) patch.marca = update.marca;
-						if (update.portada_url !== undefined) patch.portada_url = update.portada_url;
+						if (update.portada_url !== undefined) {
+							const urls = (update.portada_url || '').split(/[,|\n;]/).map(u => u.trim()).filter(Boolean);
+							if (urls.length > 0) {
+								patch.portada_url = urls[0];
+								if (urls.length > 1) {
+									patch.galeria_urls = JSON.stringify(urls.slice(1));
+								}
+							}
+						}
 						if (update.descripcion !== undefined) patch.descripcion = update.descripcion;
 
 						if (Object.keys(patch).length > 0) {
@@ -2043,7 +2061,15 @@ export const server = {
 						if (update.costo !== undefined && update.costo !== null) newPayload.costo = update.costo;
 						if (catId) newPayload.categoria_id = catId;
 						if (update.marca) newPayload.marca = update.marca;
-						if (update.portada_url) newPayload.portada_url = update.portada_url;
+						if (update.portada_url) {
+							const urls = update.portada_url.split(/[,|\n;]/).map(u => u.trim()).filter(Boolean);
+							if (urls.length > 0) {
+								newPayload.portada_url = urls[0];
+								if (urls.length > 1) {
+									newPayload.galeria_urls = JSON.stringify(urls.slice(1));
+								}
+							}
+						}
 
 						await escribirDocumentoTolerante('products', newPayload);
 						created++;
