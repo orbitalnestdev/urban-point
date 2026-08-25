@@ -606,6 +606,143 @@ const totalMargenUrbanPointCents = Math.max(0, orderTotalCents - totalMontoDistr
 			</div>
 		</div>
 	</div>
+
+	{/* TEMPLATE DE REMITO PARA IMPRESIÓN (Solo visible en print) */}
+	<div class="printable-remito print-only hidden">
+			<div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px;">
+				<div>
+					<h1 style="font-size: 24px; font-weight: 900; margin: 0; color: #0f172a; letter-spacing: -0.5px;">URBAN POINT</h1>
+					<p style="font-size: 11px; color: #64748b; font-weight: 700; margin: 4px 0 0 0; text-transform: uppercase; letter-spacing: 1px;">Remito de Despacho y Entrega de Mercadería</p>
+				</div>
+				<div style="text-align: right;">
+					<div style="font-size: 18px; font-weight: 900; font-family: monospace; color: #0f172a;">
+						REMITO N° ORD-{order.numero || order.$id.substring(0, 8)}
+					</div>
+					<p style="font-size: 11px; color: #64748b; margin: 4px 0 0 0;">
+						Fecha: {new Date(order.$createdAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+					</p>
+				</div>
+			</div>
+
+			<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; font-size: 12px;">
+				<div style="border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; background: #f8fafc;">
+					<strong style="display: block; font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Datos del Cliente</strong>
+					<p style="font-weight: 800; font-size: 14px; margin: 0 0 4px 0; color: #0f172a;">{customer?.nombre || 'Cliente Registrado'}</p>
+					<p style="margin: 2px 0; color: #334155;">Email: {customer?.email || 'N/A'}</p>
+					<p style="margin: 2px 0; color: #334155;">Teléfono: {customer?.telefono || 'N/A'}</p>
+				</div>
+
+				<div style="border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; background: #f8fafc;">
+					<strong style="display: block; font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">
+						{order.fulfillment === 'retiro' ? 'Punto de Retiro Asignado' : 'Dirección de Envío a Domicilio'}
+					</strong>
+					{order.fulfillment === 'retiro' ? (
+						<>
+							<p style="font-weight: 800; font-size: 14px; margin: 0 0 4px 0; color: #0f172a;">{pickupPointDoc?.nombre_comercial || 'Punto de Retiro'}</p>
+							<p style="margin: 2px 0; color: #334155;">Dirección: {pickupPointDoc?.direccion || 'N/A'}, {pickupPointDoc?.localidad || ''}</p>
+							{order.pickup_code_hash && (
+								<div style="margin-top: 8px; background: #fef3c7; border: 1px solid #f59e0b; padding: 4px 10px; border-radius: 6px; display: inline-block;">
+									<span style="font-size: 10px; font-weight: 800; color: #92400e;">CÓDIGO RETIRO: </span>
+									<strong style="font-family: monospace; font-size: 14px; color: #78350f;">{order.pickup_code_hash}</strong>
+								</div>
+							)}
+						</>
+					) : (
+						<>
+							<p style="font-weight: 800; font-size: 13px; margin: 0 0 4px 0; color: #0f172a;">
+								{order.direccion_envio || 'Dirección de envío a domicilio'}
+							</p>
+							<p style="margin: 2px 0; color: #334155;">Entrega con cadetería / envío a domicilio</p>
+						</>
+					)}
+				</div>
+			</div>
+
+			<table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 12px;">
+				<thead>
+					<tr style="background: #f1f5f9; border-top: 1px solid #cbd5e1; border-bottom: 2px solid #0f172a; text-align: left; font-size: 10px; text-transform: uppercase;">
+						<th style="padding: 10px 8px;">SKU</th>
+						<th style="padding: 10px 8px;">Descripción del Producto</th>
+						<th style="padding: 10px 8px; text-align: center;">Cantidad</th>
+						<th style="padding: 10px 8px; text-align: right;">Precio Unit.</th>
+						<th style="padding: 10px 8px; text-align: right;">Subtotal</th>
+					</tr>
+				</thead>
+				<tbody>
+					{orderItems.map((item: any) => (
+						<tr style="border-bottom: 1px solid #e2e8f0;">
+							<td style="padding: 8px; font-family: monospace; font-weight: 700; color: #475569;">
+								{item.sku_snapshot || 'SKU-N/A'}
+							</td>
+							<td style="padding: 8px; font-weight: 700; color: #0f172a;">
+								{item.nombre_snapshot || 'Producto'}
+							</td>
+							<td style="padding: 8px; text-align: center; font-weight: 800;">
+								{item.cantidad || 1} u.
+							</td>
+							<td style="padding: 8px; text-align: right;">
+								{formateador.format((item.precio_unitario || item.precio_unitario_centavos || 0) / 100)}
+							</td>
+							<td style="padding: 8px; text-align: right; font-weight: 800;">
+								{formateador.format(((item.precio_unitario || item.precio_unitario_centavos || 0) * (item.cantidad || 1)) / 100)}
+							</td>
+						</tr>
+					))}
+				</tbody>
+				<tfoot>
+					<tr style="border-top: 2px solid #0f172a; font-weight: 800;">
+						<td colspan="4" style="padding: 10px; text-align: right; font-size: 12px; color: #0f172a;">TOTAL DEL REMITO:</td>
+						<td style="padding: 10px; text-align: right; font-size: 14px; color: #0f172a;">
+							{formateador.format(orderTotalCents / 100)}
+						</td>
+					</tr>
+				</tfoot>
+			</table>
+
+			<div style="margin-top: 50px; border-top: 1px dashed #cbd5e1; padding-top: 16px;">
+				<p style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 36px; text-align: center;">
+					Conformidad de Recepción de Mercadería
+				</p>
+				<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; font-size: 11px;">
+					<div style="border-top: 1px solid #0f172a; padding-top: 6px; text-align: center;">
+						<strong>Firma del Receptor</strong>
+					</div>
+					<div style="border-top: 1px solid #0f172a; padding-top: 6px; text-align: center;">
+						<strong>Aclaración / Nombre</strong>
+					</div>
+					<div style="border-top: 1px solid #0f172a; padding-top: 6px; text-align: center;">
+						<strong>N° DNI / Fecha</strong>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<style>
+			@media print {
+				/* Hide UI elements on print */
+				aside, nav, header, button, form, iframe, #impersonation-banner, #sidebar-backdrop, .no-print {
+					display: none !important;
+				}
+				body {
+					background: #ffffff !important;
+					color: #000000 !important;
+				}
+				main {
+					padding: 0 !important;
+					margin: 0 !important;
+					max-width: 100% !important;
+				}
+				/* Hide main web detail cards on print */
+				main > div:not(.printable-remito) {
+					display: none !important;
+				}
+				.printable-remito {
+					display: block !important;
+					width: 100% !important;
+					padding: 10px !important;
+				}
+			}
+		</style>
 </AdminLayout>
 
 <script>
