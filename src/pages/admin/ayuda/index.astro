@@ -238,14 +238,14 @@ export const prerender = false;
 						<div class="flex items-center gap-2 font-bold text-purple-300">
 							<span>🏭</span> 1. A Pagar al Distribuidor
 						</div>
-						<p class="text-slate-300">Costo real de mercadería. Es el valor definido en <code class="bg-slate-700 px-1 rounded text-purple-200">precio_distribuidor</code> del producto. Representa lo que hay que rendir al proveedor/distribuidor.</p>
+						<p class="text-slate-300">Costo real de mercadería. Es el valor cargado en <code class="bg-slate-700 px-1 rounded text-purple-200">Precio Distribuidor</code> del producto. Si no se cargó un costo en el producto, el sistema calcula por defecto el <strong>70% del precio público</strong>.</p>
 					</div>
 
 					<div class="bg-slate-800 border border-amber-500/40 p-4 rounded-2xl space-y-2">
 						<div class="flex items-center gap-2 font-bold text-amber-300">
 							<span>📰</span> 2. A Pagar al Canillita / Punto
 						</div>
-						<p class="text-slate-300">Comisión logística por resguardo/entrega del paquete o por referido. Se calcula automáticamente aplicando la regla de comisión correspondiente (ej. 10%).</p>
+						<p class="text-slate-300">Comisión por resguardo y entrega del paquete o por referido. Se calcula multiplicando el precio del producto por el porcentaje de la regla activa (ej. 10%).</p>
 					</div>
 
 					<div class="bg-slate-800 border border-indigo-500/40 p-4 rounded-2xl space-y-2">
@@ -253,6 +253,31 @@ export const prerender = false;
 							<span>⚡</span> 3. Margen UrbanPoint
 						</div>
 						<p class="text-slate-300">Ganancia neta limpia sobrante para la plataforma UrbanPoint:<br/><strong class="text-white">Total Cobrado - Costo Distribuidor - Comisión Canillita</strong>.</p>
+					</div>
+				</div>
+
+				{/* Ejemplo Práctico Numérico */}
+				<div class="bg-slate-800/90 border border-slate-700 p-4 rounded-2xl space-y-3 text-xs">
+					<h4 class="font-bold text-xs uppercase tracking-wider text-amber-300 flex items-center gap-2">
+						<span>💡</span> Ejemplo de Reparto en un Pedido de $10.000,00
+					</h4>
+					<div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-slate-200 font-mono text-[11px]">
+						<div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700">
+							<span class="block text-[10px] text-slate-400 font-sans">Cobrado al Cliente</span>
+							<strong class="text-white text-sm">$10.000,00</strong>
+						</div>
+						<div class="bg-slate-900/80 p-2.5 rounded-xl border border-purple-500/30">
+							<span class="block text-[10px] text-purple-300 font-sans">1. Distribuidor (Costo)</span>
+							<strong class="text-purple-300 text-sm">$7.000,00</strong>
+						</div>
+						<div class="bg-slate-900/80 p-2.5 rounded-xl border border-amber-500/30">
+							<span class="block text-[10px] text-amber-300 font-sans">2. Canillita (10% Com.)</span>
+							<strong class="text-amber-300 text-sm">$1.000,00</strong>
+						</div>
+						<div class="bg-slate-900/80 p-2.5 rounded-xl border border-indigo-500/30">
+							<span class="block text-[10px] text-indigo-300 font-sans">3. Margen UrbanPoint</span>
+							<strong class="text-indigo-300 text-sm">$2.000,00</strong>
+						</div>
 					</div>
 				</div>
 
