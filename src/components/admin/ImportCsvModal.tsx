@@ -11,14 +11,34 @@ export default function ImportCsvModal({}: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<{ nombre: string; sku: string; precio: string; stock: string; estado: string; categoria: string; costo: string }>({
+  const [mapping, setMapping] = useState<{
+    nombre: string;
+    sku: string;
+    precio: string;
+    precio_promocional: string;
+    precio_canillita: string;
+    precio_distribuidor: string;
+    costo: string;
+    stock: string;
+    estado: string;
+    categoria: string;
+    marca: string;
+    portada_url: string;
+    descripcion: string;
+  }>({
     nombre: '',
     sku: '',
     precio: '',
+    precio_promocional: '',
+    precio_canillita: '',
+    precio_distribuidor: '',
+    costo: '',
     stock: '',
     estado: '',
     categoria: '',
-    costo: ''
+    marca: '',
+    portada_url: '',
+    descripcion: ''
   });
   const [isImporting, setIsImporting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -64,13 +84,19 @@ export default function ImportCsvModal({}: Props) {
 
       // Mapeo automático inteligente por nombre de columna
       const newMapping = {
-        nombre: rawHeaders.find(h => /nombre|title|producto|description/i.test(h)) || rawHeaders[0] || '',
+        nombre: rawHeaders.find(h => /^nombre$|^title$|^producto$/i.test(h)) || rawHeaders.find(h => /nombre|producto/i.test(h)) || rawHeaders[0] || '',
         sku: rawHeaders.find(h => /^sku$|^codigo$/i.test(h)) || rawHeaders.find(h => /sku|codigo/i.test(h)) || '',
-        precio: rawHeaders.find(h => /^precio$|^precio_venta$/i.test(h)) || rawHeaders.find(h => /precio|price/i.test(h)) || '',
-        stock: rawHeaders.find(h => /^stock$|^cantidad$/i.test(h)) || rawHeaders.find(h => /stock|cantidad/i.test(h)) || '',
+        precio: rawHeaders.find(h => /^precio$|^precio_venta$|^precio_publico$/i.test(h)) || rawHeaders.find(h => /^precio/i.test(h)) || '',
+        precio_promocional: rawHeaders.find(h => /^precio_promocional$|^precio_promo$|^promo$/i.test(h)) || '',
+        precio_canillita: rawHeaders.find(h => /^precio_canillita$|^canillita$/i.test(h)) || '',
+        precio_distribuidor: rawHeaders.find(h => /^precio_distribuidor$|^distribuidor$|^mayorista$/i.test(h)) || '',
+        costo: rawHeaders.find(h => /^costo$|^precio_costo$/i.test(h)) || '',
+        stock: rawHeaders.find(h => /^stock$|^cantidad$/i.test(h)) || '',
         estado: rawHeaders.find(h => /^estado$|^status$/i.test(h)) || '',
-        categoria: rawHeaders.find(h => /^categoria$|^category$/i.test(h)) || '',
-        costo: rawHeaders.find(h => /^costo$|^cost$/i.test(h)) || ''
+        categoria: rawHeaders.find(h => /^categoria$|^categoria_nombre$|^category$/i.test(h)) || '',
+        marca: rawHeaders.find(h => /^marca$|^brand$/i.test(h)) || '',
+        portada_url: rawHeaders.find(h => /^portada_url$|^imagen$|^imagenes$|^fotos$/i.test(h)) || '',
+        descripcion: rawHeaders.find(h => /^descripcion$|^desc$/i.test(h)) || ''
       };
       setMapping(newMapping);
       setParsedRows(dataRows);
@@ -107,12 +133,18 @@ export default function ImportCsvModal({}: Props) {
 
     const itemsToImport = parsedRows.map(row => ({
       nombre: row[mapping.nombre] || 'Producto Sin Nombre',
-      sku: mapping.sku ? row[mapping.sku] : '',
+      sku: mapping.sku && row[mapping.sku] ? row[mapping.sku] : undefined,
       precio: parseMoney(row[mapping.precio]),
-      costo: mapping.costo ? parseMoney(row[mapping.costo]) : undefined,
+      precio_promocional: mapping.precio_promocional && row[mapping.precio_promocional] ? parseMoney(row[mapping.precio_promocional]) : undefined,
+      precio_canillita: mapping.precio_canillita && row[mapping.precio_canillita] ? parseMoney(row[mapping.precio_canillita]) : undefined,
+      precio_distribuidor: mapping.precio_distribuidor && row[mapping.precio_distribuidor] ? parseMoney(row[mapping.precio_distribuidor]) : undefined,
+      costo: mapping.costo && row[mapping.costo] ? parseMoney(row[mapping.costo]) : undefined,
       stock: parseNum(row[mapping.stock]),
-      estado: mapping.estado ? row[mapping.estado]?.toLowerCase() : 'activo',
-      categoria_nombre: mapping.categoria ? row[mapping.categoria] : undefined
+      estado: mapping.estado && row[mapping.estado] ? row[mapping.estado]?.toLowerCase() : 'activo',
+      categoria_nombre: mapping.categoria && row[mapping.categoria] ? row[mapping.categoria] : undefined,
+      marca: mapping.marca && row[mapping.marca] ? row[mapping.marca] : undefined,
+      portada_url: mapping.portada_url && row[mapping.portada_url] ? row[mapping.portada_url] : undefined,
+      descripcion: mapping.descripcion && row[mapping.descripcion] ? row[mapping.descripcion] : undefined
     })).filter(item => item.nombre.trim().length > 0);
 
     try {
@@ -138,14 +170,14 @@ export default function ImportCsvModal({}: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-100">
+      <div className="bg-white rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col">
         
         {/* Header con Stepper */}
-        <div className="p-6 border-b border-slate-100">
+        <div className="p-6 border-b border-slate-100 shrink-0">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
               <span className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm font-bold">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="12" y2="12"></line><line x1="15" y1="15" x2="12" y2="12"></line></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 1-2 2v16a2 2 0 0 1 2 2h12a2 2 0 0 1 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="12" y2="12"></line><line x1="15" y1="15" x2="12" y2="12"></line></svg>
               </span>
               Importar productos desde CSV
             </h2>
@@ -162,22 +194,22 @@ export default function ImportCsvModal({}: Props) {
             <span className={`flex items-center gap-2 ${step >= 1 ? 'text-slate-900' : ''}`}>
               <span className={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>1</span> Archivo
             </span>
-            <div className="h-0.5 w-12 bg-slate-200"></div>
+            <div className="h-0.5 w-8 bg-slate-200"></div>
             <span className={`flex items-center gap-2 ${step >= 2 ? 'text-slate-900' : ''}`}>
               <span className={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>2</span> Columnas
             </span>
-            <div className="h-0.5 w-12 bg-slate-200"></div>
+            <div className="h-0.5 w-8 bg-slate-200"></div>
             <span className={`flex items-center gap-2 ${step >= 3 ? 'text-slate-900' : ''}`}>
               <span className={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>3</span> Vista previa
             </span>
-            <div className="h-0.5 w-12 bg-slate-200"></div>
+            <div className="h-0.5 w-8 bg-slate-200"></div>
             <span className={`flex items-center gap-2 ${step >= 4 ? 'text-slate-900' : ''}`}>
               <span className={`w-6 h-6 rounded-full flex items-center justify-center ${step >= 4 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>4</span> Importando
             </span>
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto space-y-6">
           {errorMsg && (
             <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl">
               {errorMsg}
@@ -199,26 +231,19 @@ export default function ImportCsvModal({}: Props) {
                 </div>
                 <h3 className="font-extrabold text-slate-900 text-lg mb-1">Click o arrastrá un archivo CSV o XLSX</h3>
                 <p className="text-xs text-slate-400 max-w-sm">
-                  No necesitás un formato específico — mapeamos las columnas automáticamente
+                  Se detectarán y mapearán las columnas automáticamente
                 </p>
               </label>
 
               <div className="flex items-center justify-between pt-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Plantillas:</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Descargar Plantilla Completa:</span>
                 <div className="flex items-center gap-3">
                   <button 
                     onClick={downloadTemplateSimple}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2"
+                    className="px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition-colors flex items-center gap-2"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Productos simples
-                  </button>
-                  <button 
-                    onClick={downloadTemplateVariantes}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Con variantes
+                    Plantilla CSV Completa
                   </button>
                 </div>
               </div>
@@ -228,45 +253,137 @@ export default function ImportCsvModal({}: Props) {
           {/* PASO 2: Mapeo de Columnas */}
           {step === 2 && (
             <div className="space-y-4">
-              <p className="text-sm font-bold text-slate-700">Verificá el mapeo de columnas detectado de tu archivo:</p>
-              <div className="grid grid-cols-2 gap-4">
+              <p className="text-sm font-bold text-slate-700">Asociá las columnas de tu archivo CSV con los campos del sistema:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Nombre del producto *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Nombre Producto *</label>
                   <select 
                     value={mapping.nombre} 
                     onChange={e => setMapping({ ...mapping, nombre: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold bg-white"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
                   >
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">SKU</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">SKU / Código</label>
                   <select 
                     value={mapping.sku} 
                     onChange={e => setMapping({ ...mapping, sku: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold bg-white"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
                   >
+                    <option value="">(Generar Automático)</option>
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Precio (ARS)</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Categoría</label>
+                  <select 
+                    value={mapping.categoria} 
+                    onChange={e => setMapping({ ...mapping, categoria: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Ninguna)</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Precio Público (ARS) *</label>
                   <select 
                     value={mapping.precio} 
                     onChange={e => setMapping({ ...mapping, precio: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold bg-white"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
                   >
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Stock</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Precio Canillita</label>
+                  <select 
+                    value={mapping.precio_canillita} 
+                    onChange={e => setMapping({ ...mapping, precio_canillita: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Ninguna)</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Precio Distribuidor</label>
+                  <select 
+                    value={mapping.precio_distribuidor} 
+                    onChange={e => setMapping({ ...mapping, precio_distribuidor: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Ninguna)</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Precio Promocional</label>
+                  <select 
+                    value={mapping.precio_promocional} 
+                    onChange={e => setMapping({ ...mapping, precio_promocional: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Ninguna)</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Costo Neto</label>
+                  <select 
+                    value={mapping.costo} 
+                    onChange={e => setMapping({ ...mapping, costo: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Ninguna)</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Stock Inicial *</label>
                   <select 
                     value={mapping.stock} 
                     onChange={e => setMapping({ ...mapping, stock: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold bg-white"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
                   >
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Marca</label>
+                  <select 
+                    value={mapping.marca} 
+                    onChange={e => setMapping({ ...mapping, marca: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Ninguna)</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Imágenes / Fotos URL</label>
+                  <select 
+                    value={mapping.portada_url} 
+                    onChange={e => setMapping({ ...mapping, portada_url: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Ninguna)</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Descripción</label>
+                  <select 
+                    value={mapping.descripcion} 
+                    onChange={e => setMapping({ ...mapping, descripcion: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Ninguna)</option>
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
                 </div>
@@ -291,7 +408,10 @@ export default function ImportCsvModal({}: Props) {
                     <tr>
                       <th className="p-3">Nombre</th>
                       <th className="p-3">SKU</th>
-                      <th className="p-3">Precio</th>
+                      <th className="p-3">Categoría</th>
+                      <th className="p-3">P. Público</th>
+                      <th className="p-3">P. Canillita</th>
+                      <th className="p-3">P. Distribuidor</th>
                       <th className="p-3">Stock</th>
                     </tr>
                   </thead>
@@ -299,8 +419,11 @@ export default function ImportCsvModal({}: Props) {
                     {parsedRows.slice(0, 5).map((row, idx) => (
                       <tr key={idx}>
                         <td className="p-3 font-bold text-slate-900">{row[mapping.nombre]}</td>
-                        <td className="p-3 font-mono text-slate-500">{row[mapping.sku] || '-'}</td>
-                        <td className="p-3 font-bold text-slate-900">${row[mapping.precio] || '0'}</td>
+                        <td className="p-3 font-mono text-slate-500">{mapping.sku && row[mapping.sku] ? row[mapping.sku] : '(Auto)'}</td>
+                        <td className="p-3 font-medium text-slate-600">{mapping.categoria && row[mapping.categoria] ? row[mapping.categoria] : '-'}</td>
+                        <td className="p-3 font-bold text-emerald-600">${row[mapping.precio] || '0'}</td>
+                        <td className="p-3 font-bold text-amber-600">{mapping.precio_canillita && row[mapping.precio_canillita] ? `$${row[mapping.precio_canillita]}` : '-'}</td>
+                        <td className="p-3 font-bold text-purple-600">{mapping.precio_distribuidor && row[mapping.precio_distribuidor] ? `$${row[mapping.precio_distribuidor]}` : '-'}</td>
                         <td className="p-3 font-bold text-slate-900">{row[mapping.stock] || '0'}</td>
                       </tr>
                     ))}
