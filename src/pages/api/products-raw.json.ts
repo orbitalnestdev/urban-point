@@ -9,7 +9,10 @@ export const prerender = false;
  */
 export const GET: APIRoute = async ({ locals }) => {
 	const user = locals.user;
-	if (!user || (user.role !== 'admin' && user.role !== 'gestion')) {
+	const profile = locals.profile;
+	const role = profile?.role || user?.role;
+
+	if (!user || (role !== 'admin' && role !== 'gestion')) {
 		return new Response(JSON.stringify({ error: 'No autorizado' }), {
 			status: 403,
 			headers: { 'Content-Type': 'application/json' }

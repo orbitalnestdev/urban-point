@@ -987,10 +987,12 @@ const paginationItems = filteredPages.map((p, index) => ({
 	});
 
 	document.getElementById('btn-import-csv')?.addEventListener('click', () => {
+		document.dispatchEvent(new CustomEvent('modal:import-csv'));
 		window.dispatchEvent(new CustomEvent('modal:import-csv'));
 	});
 
 	document.getElementById('btn-reimport-csv')?.addEventListener('click', () => {
+		document.dispatchEvent(new CustomEvent('modal:reimport-xlsx'));
 		window.dispatchEvent(new CustomEvent('modal:reimport-xlsx'));
 	});
 

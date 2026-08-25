@@ -12,6 +12,7 @@ declare namespace App {
       role: string;
       profileId: string;
     };
+    profile?: any;
     isImpersonating?: boolean;
     impersonatorAdminName?: string;
   }
