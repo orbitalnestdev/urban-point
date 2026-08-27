@@ -19,7 +19,29 @@ let catalogoDegradado = false;
 try {
 	const cache = await getCachedCatalog();
 	products = cache.products;
-	categories = cache.categories;
+	
+	// Calculate product counts for each category to improve UX
+	const categoriesWithCounts = cache.categories.map((cat: any) => {
+		const isParent = !cat.parent_id;
+		// Count products exactly in this category
+		const exactProducts = products.filter((p: any) => (p.categoria_id?.$id || p.categoria_id) === cat.$id).length;
+		
+		let totalProducts = exactProducts;
+		
+		// If it's a parent, add the products from all its subcategories
+		if (isParent) {
+			const childrenIds = cache.categories
+				.filter((c: any) => (typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id) === cat.$id)
+				.map((c: any) => c.$id);
+			
+			const childrenProducts = products.filter((p: any) => childrenIds.includes(p.categoria_id?.$id || p.categoria_id)).length;
+			totalProducts += childrenProducts;
+		}
+		
+		return { ...cat, productCount: totalProducts };
+	});
+	
+	categories = categoriesWithCounts;
 	pickupPoints = cache.pickupPoints;
 	catalogoDegradado = Boolean(cache.degradado);
 } catch (e: any) {
@@ -93,6 +115,8 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 								Todos los productos
 							</button>
 							{categories.filter(c => !c.parent_id).map((parent) => {
+								if (parent.productCount === 0) return null;
+								
 								const children = categories.filter(c => (typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id) === parent.$id);
 								const childIds = children.map(c => c.$id);
 								const familyIds = [parent.$id, ...childIds].join(',');
@@ -104,9 +128,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 										data-parent-id={parent.$id}
 									>
 										{parent.nombre}
-										{children.length > 0 && (
-											<span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-extrabold">{children.length}</span>
-										)}
+										<span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-extrabold">{parent.productCount}</span>
 									</button>
 								);
 							})}
@@ -355,7 +377,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 					if (parentId && subRow && subContainer) {
 						const children = allCategories.filter((c: any) => {
 							const pid = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id;
-							return pid === parentId;
+							return pid === parentId && c.productCount > 0;
 						});
 
 						if (children.length > 0) {
@@ -364,8 +386,9 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 									Todas las de ${pill.textContent?.replace(/\d+/g, '').trim()}
 								</button>
 								${children.map((child: any) => `
-									<button class="sub-cat-pill px-3 py-1 rounded-lg text-xs font-semibold bg-white text-slate-700 hover:bg-emerald-50 hover:text-[#2D5A27] border border-slate-200 shrink-0 cursor-pointer" data-category="${child.$id}">
+									<button class="sub-cat-pill px-3 py-1 rounded-lg text-xs font-semibold bg-white text-slate-700 hover:bg-emerald-50 hover:text-[#2D5A27] border border-slate-200 shrink-0 cursor-pointer flex items-center gap-1.5" data-category="${child.$id}">
 										${child.nombre}
+										<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded-full font-extrabold">${child.productCount}</span>
 									</button>
 								`).join('')}
 							`;

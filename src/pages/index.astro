@@ -19,7 +19,13 @@ let catalogoDegradado = false;
 try {
 	const cache = await getCachedCatalog();
 	featuredProducts = cache.products.slice(0, 8);
-	categories = cache.categories;
+	
+	// Create a set of category IDs that have at least one active product in the catalog
+	const activeCategoryIds = new Set(cache.products.map((p: any) => p.categoria_id?.$id || p.categoria_id));
+	
+	// Filter categories to only those that are not empty
+	categories = cache.categories.filter((cat: any) => activeCategoryIds.has(cat.$id));
+	
 	pickupPoints = cache.pickupPoints;
 	catalogoDegradado = Boolean(cache.degradado);
 } catch (e) {
