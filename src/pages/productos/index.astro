@@ -3,7 +3,6 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
-import AddToCartBtn from '../../components/shop/AddToCartBtn';
 import { getCachedCatalog, getOptimizedImageUrl } from '../../lib/server/catalogCache';
 
 import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
@@ -50,6 +49,37 @@ try {
 }
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+
+/**
+ * La grilla renderizaba las 3457 tarjetas en el servidor: 13 MB de HTML, con
+ * una isla React por tarjeta hidratada de entrada. Ahora el servidor manda sólo
+ * la primera tanda y el catálogo entero viaja como JSON compacto (~960 KB),
+ * sobre el que el cliente filtra, ordena y va renderizando de a tandas.
+ *
+ * Los precios se calculan acá con pricing.ts, que es la única fuente de verdad:
+ * duplicar esa lógica en el cliente es exactamente como se llegó a mostrar un
+ * precio distinto del que se cobraba.
+ */
+const TARJETAS_POR_TANDA = 48;
+
+const catalogoCompacto = products.map((prod: any) => {
+	const ventaCentavos = precioDeVentaCentavos(prod);
+	const listaCentavos = precioListaCentavos(prod);
+	return {
+		i: prod.$id,
+		s: prod.slug,
+		n: prod.nombre,
+		m: prod.marca || '',
+		p: ventaCentavos / 100,
+		l: listaCentavos === null ? null : listaCentavos / 100,
+		k: typeof prod.stock === 'number' ? prod.stock : null,
+		c: (typeof prod.categoria_id === 'object' ? prod.categoria_id?.$id : prod.categoria_id) || 'none',
+		u: getOptimizedImageUrl(prod.portada_url || '', 400, 400, 80),
+		q: prod.sku || prod.$id
+	};
+});
+
+const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 ---
 
 <Layout title="Tienda Minorista | UrbanPoint">
@@ -172,7 +202,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 				</div>
 			) : (
 				<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" id="products-grid">
-					{products.map((prod) => {
+					{productosIniciales.map((prod) => {
 						const precioMinorista = precioDeVentaCentavos(prod) / 100;
 						const listaCentavos = precioListaCentavos(prod);
 						const precioLista = listaCentavos === null ? null : listaCentavos / 100;
@@ -246,24 +276,34 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 										<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Envío / Retiro</span>
 										<span class="text-xs font-extrabold text-[#2D5A27]">GRATIS en Punto</span>
 									</div>
-									<AddToCartBtn
-										client:load
-										item={{
-											id: prod.$id,
-											nombre: prod.nombre,
-											precio: precioMinorista,
-											imagen: getOptimizedImageUrl(prod.portada_url || '', 200, 200, 75),
-											sku: prod.sku || prod.$id
-										}}
-										variant="plus"
+									<button
+										class="btn-add w-10 h-10 rounded-2xl border transition-all flex items-center justify-center font-bold text-xl shadow-sm shrink-0 bg-white hover:bg-[#2D5A27] text-[#2D5A27] hover:text-white border-slate-200/90 hover:border-[#2D5A27] hover:scale-105 active:scale-95 disabled:bg-slate-100 disabled:text-slate-300 disabled:border-slate-200 disabled:cursor-not-allowed disabled:hover:scale-100"
+										data-id={prod.$id}
+										data-nombre={prod.nombre}
+										data-precio={precioMinorista}
+										data-sku={prod.sku || prod.$id}
+										data-imagen={getOptimizedImageUrl(prod.portada_url || '', 200, 200, 75)}
 										disabled={typeof prod.stock === 'number' && prod.stock <= 0}
-									/>
+										aria-label="Agregar al carrito"
+										title="Agregar al carrito"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+									</button>
 								</div>
 							</div>
 						);
 					})}
 				</div>
 			)}
+
+			<div id="ver-mas-box" class="mt-10 text-center">
+				<button id="btn-ver-mas" class="px-8 py-3.5 bg-white hover:bg-[#F2F7F3] text-[#2D5A27] border-2 border-slate-200 hover:border-[#2D5A27] rounded-2xl font-extrabold text-sm transition-all shadow-sm cursor-pointer">
+					Ver más productos
+				</button>
+				<p class="text-xs text-slate-500 font-semibold mt-3">
+					Mostrando <span id="rango-mostrado">{Math.min(TARJETAS_POR_TANDA, products.length)}</span> de <span id="rango-total">{products.length}</span>
+				</p>
+			</div>
 		</div>
 	</main>
 
@@ -271,8 +311,19 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 	<Footer />
 
 	<script type="application/json" id="categories-json-data" set:html={toSafeJson(categories)} />
+	<script type="application/json" id="catalogo-json-data" set:html={toSafeJson(catalogoCompacto)} />
 
 	<script>
+		import { addCartItem } from '../../store/cart';
+
+		const TANDA = 48;
+
+		type Item = {
+			i: string; s: string; n: string; m: string;
+			p: number; l: number | null; k: number | null;
+			c: string; u: string; q: string;
+		};
+
 		document.addEventListener('DOMContentLoaded', () => {
 			const searchInput = document.getElementById('search-input') as HTMLInputElement;
 			const sortSelect = document.getElementById('sort-select') as HTMLSelectElement;
@@ -283,88 +334,193 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 			const btnResetFilters = document.getElementById('btn-reset-filters');
 			const subRow = document.getElementById('sub-category-pills');
 			const subContainer = document.getElementById('sub-pills-container');
+			const verMasBox = document.getElementById('ver-mas-box');
+			const btnVerMas = document.getElementById('btn-ver-mas');
+			const rangoMostrado = document.getElementById('rango-mostrado');
+			const rangoTotal = document.getElementById('rango-total');
 
-			let allCategories: any[] = [];
-			try {
-				const jsonText = document.getElementById('categories-json-data')?.textContent || '[]';
-				allCategories = JSON.parse(jsonText);
-			} catch (e) {}
+			const leerJson = (id: string) => {
+				try { return JSON.parse(document.getElementById(id)?.textContent || '[]'); }
+				catch { return []; }
+			};
+
+			const allCategories: any[] = leerJson('categories-json-data');
+			const catalogo: Item[] = leerJson('catalogo-json-data');
+
+			// Indice de busqueda precalculado una sola vez: hacerlo dentro del
+			// filtro obligaba a recorrer y bajar a minusculas 3457 nombres en
+			// cada tecla.
+			const indice = catalogo.map((it) => ({
+				it,
+				n: (it.n || '').toLowerCase(),
+				m: (it.m || '').toLowerCase()
+			}));
+
+			const moneda = new Intl.NumberFormat('es-AR', {
+				style: 'currency', currency: 'ARS', maximumFractionDigits: 0
+			});
 
 			let activeCategory = 'all';
+			let mostrados = TANDA;
+			let filtrados: Item[] = catalogo;
+			// El servidor ya pinto la primera tanda: no se re-renderiza hasta que
+			// el usuario toca un filtro, para no tirar el HTML que ya esta en
+			// pantalla ni rehacer el trabajo en la carga inicial.
+			let gridEsDelServidor = true;
 
-			function filterAndSort() {
+			const esc = (v: unknown) =>
+				String(v ?? '')
+					.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+					.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+			const SVG_MAS = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
+			const SVG_OK = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+			const SVG_SIN_FOTO = '<div class="w-full h-full flex items-center justify-center text-slate-300"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>';
+
+			function tarjeta(it: Item): string {
+				const sinStock = typeof it.k === 'number' && it.k <= 0;
+				const imagen = it.u
+					? `<img src="${esc(it.u)}" alt="${esc(it.n)}" loading="lazy" decoding="async" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />`
+					: SVG_SIN_FOTO;
+				const tachado = it.l === null ? '' :
+					`<span class="text-xs text-slate-400 line-through font-medium">${moneda.format(it.l)}</span>`;
+
+				return `<div class="product-card group bg-white rounded-3xl border border-slate-200/70 p-5 shadow-sm hover:shadow-2xl hover:border-[#2D5A27]/40 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between relative overflow-hidden">
+	<div>
+		<a href="/productos/${esc(it.s)}" class="block aspect-square rounded-2xl bg-slate-50 mb-4 overflow-hidden relative cursor-pointer group-hover:opacity-95 p-3 flex items-center justify-center">
+			${imagen}
+			<div class="absolute top-3 left-3 flex flex-col items-start gap-1 z-10 pointer-events-none">
+				<span class="px-3 py-1 bg-[#2D5A27] text-white text-[10px] font-extrabold uppercase tracking-wider rounded-full shadow-md text-center leading-tight">3 sin interés</span>
+			</div>
+		</a>
+		<div class="mb-3">
+			<span class="text-[11px] font-extrabold text-[#2D5A27] uppercase tracking-wider block mb-1">${esc(it.m || 'UrbanPoint')}</span>
+			<a href="/productos/${esc(it.s)}" class="font-bold text-slate-900 text-sm line-clamp-2 hover:text-[#2D5A27] transition-colors leading-snug">${esc(it.n)}</a>
+		</div>
+		<div class="mb-3">
+			<div class="flex items-baseline gap-2 mb-1">
+				<span class="text-2xl font-black text-slate-900 tracking-tight leading-none">${moneda.format(it.p)}</span>
+				${tachado}
+			</div>
+			<p class="text-xs font-bold text-[#2D5A27] flex items-center gap-1 mt-1">
+				<span>3 cuotas sin interés</span>
+				<span class="text-slate-500 font-medium">de ${moneda.format(Math.round(it.p / 3))}</span>
+			</p>
+		</div>
+	</div>
+	<div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 mt-2">
+		<div class="flex flex-col">
+			<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Envío / Retiro</span>
+			<span class="text-xs font-extrabold text-[#2D5A27]">GRATIS en Punto</span>
+		</div>
+		<button class="btn-add w-10 h-10 rounded-2xl border transition-all flex items-center justify-center font-bold text-xl shadow-sm shrink-0 bg-white hover:bg-[#2D5A27] text-[#2D5A27] hover:text-white border-slate-200/90 hover:border-[#2D5A27] hover:scale-105 active:scale-95 disabled:bg-slate-100 disabled:text-slate-300 disabled:border-slate-200 disabled:cursor-not-allowed disabled:hover:scale-100"
+			data-id="${esc(it.i)}" data-nombre="${esc(it.n)}" data-precio="${it.p}" data-sku="${esc(it.q)}" data-imagen="${esc(it.u)}"
+			${sinStock ? 'disabled' : ''} aria-label="Agregar al carrito" title="Agregar al carrito">${SVG_MAS}</button>
+	</div>
+</div>`;
+			}
+
+			function pintar() {
 				if (!grid) return;
-				const cards = Array.from(grid.querySelectorAll('.product-card')) as HTMLElement[];
+				const tanda = filtrados.slice(0, mostrados);
+				grid.innerHTML = tanda.map(tarjeta).join('');
+				gridEsDelServidor = false;
+				actualizarContadores();
+			}
+
+			function actualizarContadores() {
+				const visibles = Math.min(mostrados, filtrados.length);
+				if (countSpan) countSpan.textContent = String(filtrados.length);
+				if (rangoMostrado) rangoMostrado.textContent = String(visibles);
+				if (rangoTotal) rangoTotal.textContent = String(filtrados.length);
+				if (verMasBox) verMasBox.classList.toggle('hidden', filtrados.length <= mostrados);
+				if (noResultsBox) noResultsBox.classList.toggle('hidden', filtrados.length !== 0);
+				if (grid) grid.classList.toggle('hidden', filtrados.length === 0);
+			}
+
+			function aplicarFiltros() {
 				const term = searchInput ? searchInput.value.toLowerCase().trim() : '';
 				const sortMode = sortSelect ? sortSelect.value : 'default';
-				const allowedCats = activeCategory.split(',');
+				const permitidas = activeCategory.split(',');
+				const todas = activeCategory === 'all';
 
-				let visibleCards = cards.filter(card => {
-					const name = card.getAttribute('data-name') || '';
-					const brand = card.getAttribute('data-brand') || '';
-					const cat = card.getAttribute('data-category') || '';
+				const res = indice.filter((e) =>
+					(!term || e.n.includes(term) || e.m.includes(term)) &&
+					(todas || permitidas.includes(e.it.c))
+				).map((e) => e.it);
 
-					const matchesSearch = !term || name.includes(term) || brand.includes(term);
-					const matchesCat = activeCategory === 'all' || allowedCats.includes(cat);
+				if (sortMode === 'price-asc') res.sort((a, b) => a.p - b.p);
+				else if (sortMode === 'price-desc') res.sort((a, b) => b.p - a.p);
+				else if (sortMode === 'name-asc') res.sort((a, b) => a.n.localeCompare(b.n));
 
-					return matchesSearch && matchesCat;
-				});
+				filtrados = res;
+				mostrados = TANDA;
+				pintar();
+			}
 
-				// Sort
-				if (sortMode === 'price-asc') {
-					visibleCards.sort((a, b) => Number(a.getAttribute('data-price')) - Number(b.getAttribute('data-price')));
-				} else if (sortMode === 'price-desc') {
-					visibleCards.sort((a, b) => Number(b.getAttribute('data-price')) - Number(a.getAttribute('data-price')));
-				} else if (sortMode === 'name-asc') {
-					visibleCards.sort((a, b) => (a.getAttribute('data-name') || '').localeCompare(b.getAttribute('data-name') || ''));
+			// El carrito ya no necesita una isla React por tarjeta: un solo
+			// listener delegado cubre todo el catalogo, incluidas las tarjetas
+			// que se pintan despues.
+			grid?.addEventListener('click', (ev) => {
+				const btn = (ev.target as HTMLElement)?.closest('.btn-add') as HTMLButtonElement | null;
+				if (!btn || btn.disabled) return;
+				ev.preventDefault();
+				ev.stopPropagation();
+
+				addCartItem({
+					id: btn.dataset.id || '',
+					nombre: btn.dataset.nombre || '',
+					precio: Number(btn.dataset.precio) || 0,
+					imagen: btn.dataset.imagen || '',
+					sku: btn.dataset.sku || btn.dataset.id || ''
+				}, 1);
+
+				document.dispatchEvent(new CustomEvent('cart:open'));
+
+				btn.innerHTML = SVG_OK;
+				btn.classList.add('bg-[#2D5A27]', 'text-white', 'border-[#2D5A27]', 'scale-105');
+				window.setTimeout(() => {
+					btn.innerHTML = SVG_MAS;
+					btn.classList.remove('bg-[#2D5A27]', 'text-white', 'border-[#2D5A27]', 'scale-105');
+				}, 2000);
+			});
+
+			btnVerMas?.addEventListener('click', () => {
+				mostrados += TANDA;
+				if (gridEsDelServidor) {
+					pintar();
+				} else if (grid) {
+					// Solo se agregan las nuevas: repintar todo perderia el scroll.
+					const nuevas = filtrados.slice(mostrados - TANDA, mostrados);
+					grid.insertAdjacentHTML('beforeend', nuevas.map(tarjeta).join(''));
+					actualizarContadores();
 				}
+			});
 
-				// Render
-				cards.forEach(card => card.style.display = 'none');
-				visibleCards.forEach(card => {
-					card.style.display = 'flex';
-					grid.appendChild(card); // re-append in sorted order
-				});
+			searchInput?.addEventListener('input', aplicarFiltros);
+			sortSelect?.addEventListener('change', aplicarFiltros);
 
-				if (countSpan) {
-					countSpan.textContent = visibleCards.length.toString();
-				}
-
-				// Toggle empty search box
-				if (noResultsBox) {
-					if (visibleCards.length === 0) {
-						noResultsBox.classList.remove('hidden');
-					} else {
-						noResultsBox.classList.add('hidden');
+			btnResetFilters?.addEventListener('click', () => {
+				if (searchInput) searchInput.value = '';
+				if (sortSelect) sortSelect.value = 'default';
+				activeCategory = 'all';
+				subRow?.classList.add('hidden');
+				catPills.forEach((pill, idx) => {
+					pill.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-sm');
+					pill.classList.add('bg-slate-100', 'text-slate-600');
+					if (idx === 0) {
+						pill.classList.remove('bg-slate-100', 'text-slate-600');
+						pill.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-sm');
 					}
-				}
-			}
-
-			if (searchInput) searchInput.addEventListener('input', filterAndSort);
-			if (sortSelect) sortSelect.addEventListener('change', filterAndSort);
-
-			if (btnResetFilters) {
-				btnResetFilters.addEventListener('click', () => {
-					if (searchInput) searchInput.value = '';
-					activeCategory = 'all';
-					if (subRow) subRow.classList.add('hidden');
-					catPills.forEach((p, idx) => {
-						p.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-sm');
-						p.classList.add('bg-slate-100', 'text-slate-600');
-						if (idx === 0) {
-							p.classList.remove('bg-slate-100', 'text-slate-600');
-							p.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-sm');
-						}
-					});
-					filterAndSort();
 				});
-			}
+				aplicarFiltros();
+			});
 
-			catPills.forEach(pill => {
+			catPills.forEach((pill) => {
 				pill.addEventListener('click', () => {
 					const parentId = pill.getAttribute('data-parent-id');
 
-					catPills.forEach(p => {
+					catPills.forEach((p) => {
 						p.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-sm');
 						p.classList.add('bg-slate-100', 'text-slate-600');
 					});
@@ -373,30 +529,29 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 
 					activeCategory = pill.getAttribute('data-category') || 'all';
 
-					// Render subcategories row if available
 					if (parentId && subRow && subContainer) {
-						const children = allCategories.filter((c: any) => {
+						const hijas = allCategories.filter((c: any) => {
 							const pid = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id;
 							return pid === parentId && c.productCount > 0;
 						});
 
-						if (children.length > 0) {
+						if (hijas.length > 0) {
 							subContainer.innerHTML = `
 								<button class="sub-cat-pill active px-3 py-1 rounded-lg text-xs font-bold bg-[#2D5A27] text-white shadow-xs shrink-0 cursor-pointer" data-category="${activeCategory}">
-									Todas las de ${pill.textContent?.replace(/\d+/g, '').trim()}
+									Todas las de ${esc(pill.textContent?.replace(/\d+/g, '').trim())}
 								</button>
-								${children.map((child: any) => `
-									<button class="sub-cat-pill px-3 py-1 rounded-lg text-xs font-semibold bg-white text-slate-700 hover:bg-emerald-50 hover:text-[#2D5A27] border border-slate-200 shrink-0 cursor-pointer flex items-center gap-1.5" data-category="${child.$id}">
-										${child.nombre}
+								${hijas.map((child: any) => `
+									<button class="sub-cat-pill px-3 py-1 rounded-lg text-xs font-semibold bg-white text-slate-700 hover:bg-emerald-50 hover:text-[#2D5A27] border border-slate-200 shrink-0 cursor-pointer flex items-center gap-1.5" data-category="${esc(child.$id)}">
+										${esc(child.nombre)}
 										<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded-full font-extrabold">${child.productCount}</span>
 									</button>
 								`).join('')}
 							`;
 							subRow.classList.remove('hidden');
 
-							subContainer.querySelectorAll('.sub-cat-pill').forEach(subBtn => {
+							subContainer.querySelectorAll('.sub-cat-pill').forEach((subBtn) => {
 								subBtn.addEventListener('click', (e) => {
-									subContainer.querySelectorAll('.sub-cat-pill').forEach(sb => {
+									subContainer.querySelectorAll('.sub-cat-pill').forEach((sb) => {
 										sb.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-xs');
 										sb.classList.add('bg-white', 'text-slate-700');
 									});
@@ -405,19 +560,21 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 									target.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-xs');
 
 									activeCategory = target.getAttribute('data-category') || 'all';
-									filterAndSort();
+									aplicarFiltros();
 								});
 							});
 						} else {
 							subRow.classList.add('hidden');
 						}
 					} else {
-						if (subRow) subRow.classList.add('hidden');
+						subRow?.classList.add('hidden');
 					}
 
-					filterAndSort();
+					aplicarFiltros();
 				});
 			});
+
+			actualizarContadores();
 		});
 	</script>
 </Layout>
