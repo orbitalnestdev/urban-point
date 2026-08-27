@@ -4,14 +4,11 @@ import Layout from '../../layouts/Layout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import AddToCartBtn from '../../components/shop/AddToCartBtn';
-import { createAdminClient } from '../../lib/server/appwrite';
-import { Query } from 'node-appwrite';
 import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
-import { getOptimizedImageUrl } from '../../lib/server/catalogCache';
+import { getCachedCatalog, getOptimizedImageUrl } from '../../lib/server/catalogCache';
 import { sanitizeRichHtml } from '../../lib/sanitizeHtml';
 
 const { slug } = Astro.params;
-const { databases } = createAdminClient();
 
 let product: any = null;
 let category: any = null;
@@ -20,24 +17,28 @@ let galleryImages: string[] = [];
 let barcode = '';
 
 try {
-	// 1. Fetch Product by Slug
-	// Sólo productos activos: sin este filtro, borradores y pausados quedaban
-	// públicos (y comprables) para quien conociera el slug.
-	const prodRes = await databases.listDocuments('urbanpoint', 'products', [
-		Query.equal('slug', slug as string),
-		Query.equal('estado', 'activo'),
-		Query.limit(1)
-	]);
+	// Todo sale del catálogo ya cacheado en memoria: producto, categoría y
+	// relacionados. Antes esta página consultaba Appwrite en cada visita —el
+	// producto por slug, después categoría y relacionados, y a veces una cuarta
+	// de "recientes"— sin caché de ningún tipo. Contra un backend de ~550 ms de
+	// RTT eso daba 2,0 a 4,5 s de TTFB, y no mejoraba al repetir.
+	//
+	// El caché público ya trae los documentos completos y filtrados con el mismo
+	// criterio que usaba esta página (activo y con precio cargado), así que
+	// además de ahorrar los viajes elimina una inconsistencia: hasta ahora la
+	// vitrina y la ficha podían discrepar sobre qué producto está publicado.
+	const cache = await getCachedCatalog();
+	const catalogo: any[] = cache.products || [];
 
-	if (prodRes.documents.length === 0) {
+	product = catalogo.find((p: any) => p.slug === slug) || null;
+
+	if (!product) {
 		// 404 real en vez del redirect a /productos: el soft-404 confundía a
 		// los buscadores y no le decía nada al usuario.
 		return Astro.rewrite('/404');
 	}
 
-	product = prodRes.documents[0];
-
-	// 3. Extract Gallery Images
+	// Galería: portada primero, después el resto sin repetir.
 	if (product.portada_url) {
 		galleryImages.push(product.portada_url);
 	}
@@ -54,7 +55,7 @@ try {
 		} catch (e) {}
 	}
 
-	// 4. Extract Barcode from envio_config
+	// Código de barras, guardado dentro de envio_config.
 	if (product.envio_config) {
 		try {
 			const parsedEnv = typeof product.envio_config === 'string' ? JSON.parse(product.envio_config) : product.envio_config;
@@ -64,39 +65,26 @@ try {
 		} catch (e) {}
 	}
 
-	// 5 y 6. Categoría y relacionados en paralelo: son consultas independientes
-	// entre sí, no hay motivo para encadenarlas y sumar latencia.
 	const catId = product.categoria_id
 		? (typeof product.categoria_id === 'string' ? product.categoria_id : product.categoria_id.$id)
 		: null;
 
-	const [catDoc, relRes] = await Promise.all([
-		catId
-			? databases.getDocument('urbanpoint', 'categories', catId).catch(() => null)
-			: Promise.resolve(null),
-		// Relacionados de la MISMA categoría: la sección promete "te puede
-		// interesar", no cinco productos al azar.
-		databases.listDocuments('urbanpoint', 'products', [
-			Query.equal('estado', 'activo'),
-			...(catId ? [Query.equal('categoria_id', catId)] : []),
-			Query.orderDesc('$createdAt'),
-			Query.limit(5)
-		]).catch(() => ({ documents: [] as any[] }))
-	]);
+	category = catId ? (cache.categories || []).find((c: any) => c.$id === catId) || null : null;
 
-	category = catDoc;
-	relatedProducts = relRes.documents.filter((p: any) => p.$id !== product.$id).slice(0, 4);
+	const idCategoria = (p: any) =>
+		p.categoria_id ? (typeof p.categoria_id === 'string' ? p.categoria_id : p.categoria_id.$id) : null;
+
+	// Relacionados de la MISMA categoría: la sección promete "te puede
+	// interesar", no cuatro productos al azar.
+	relatedProducts = catId
+		? catalogo.filter((p: any) => p.$id !== product.$id && idCategoria(p) === catId).slice(0, 4)
+		: [];
 
 	// Fallback: si la categoría no tiene suficientes, se completa con recientes.
+	// El catálogo ya viene ordenado por $createdAt descendente.
 	if (relatedProducts.length < 4) {
-		const recRes = await databases.listDocuments('urbanpoint', 'products', [
-			Query.equal('estado', 'activo'),
-			Query.orderDesc('$createdAt'),
-			Query.limit(9)
-		]).catch(() => ({ documents: [] as any[] }));
-
 		const yaUsados = new Set([product.$id, ...relatedProducts.map((p: any) => p.$id)]);
-		for (const p of recRes.documents as any[]) {
+		for (const p of catalogo) {
 			if (relatedProducts.length >= 4) break;
 			if (!yaUsados.has(p.$id)) {
 				relatedProducts.push(p);
