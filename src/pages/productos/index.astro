@@ -112,7 +112,10 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 	<Header activePage="catalogo" />
 
 	<main class="py-12 bg-slate-50 min-h-screen">
-		<div class="max-w-7xl mx-auto px-6">
+		<!-- El catálogo usa casi todo el ancho: con max-w-7xl quedaba clavado en
+		     1280 px y en una pantalla de 1920 se desperdiciaban 640 px, dejando la
+		     grilla en 912 px con tarjetas de 210 px. -->
+		<div class="max-w-[1800px] mx-auto px-6 lg:px-10">
 			
 			<!-- Hero Banner Minorista -->
 			<div class="bg-gradient-to-r from-slate-900 via-[#1E3E1B] to-slate-900 rounded-3xl p-8 md:p-12 text-white shadow-xl mb-12 relative overflow-hidden">
@@ -268,7 +271,11 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 			) : (
 				<div id="paginacion-arriba" class="hidden mb-6"></div>
 
-				<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" id="products-grid">
+				<!-- auto-fill con un mínimo de 220px: la cantidad de columnas sale del
+					     ancho real disponible, no de adivinar breakpoints. Con columnas fijas
+					     las tarjetas quedaban en 186px a 1440 y 213px a 1920, que es lo que
+					     se veía amontonado. -->
+					<div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-6" id="products-grid">
 					{productosIniciales.map((prod) => {
 						const precioMinorista = precioDeVentaCentavos(prod) / 100;
 						const listaCentavos = precioListaCentavos(prod);

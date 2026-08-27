@@ -10,7 +10,6 @@ import { precioDeVentaCentavos, precioListaCentavos } from '../lib/pricing';
 import { toSafeJson } from '../lib/safeJson';
 
 let featuredProducts: any[] = [];
-let categories: any[] = [];
 let pickupPoints: any[] = [];
 
 // Distingue "no hay productos" de "no pudimos cargarlos".
@@ -18,13 +17,30 @@ let catalogoDegradado = false;
 
 try {
 	const cache = await getCachedCatalog();
-	featuredProducts = cache.products.slice(0, 8);
-	
-	// Create a set of category IDs that have at least one active product in the catalog
-	const activeCategoryIds = new Set(cache.products.map((p: any) => p.categoria_id?.$id || p.categoria_id));
-	
-	// Filter categories to only those that are not empty
-	categories = cache.categories.filter((cat: any) => activeCategoryIds.has(cat.$id));
+	// Destacados primero, después los más nuevos. El catálogo ya viene ordenado
+	// por fecha de alta descendente, así que alcanza con subir los marcados sin
+	// tocar el orden del resto.
+	//
+	// Antes era sólo slice(0, 8): un producto quedaba arriba mientras fuera el
+	// último cargado y se caía solo al subir otro. Ahora se fija con el atributo
+	// `destacado`, que es el que el panel de admin ya venía intentando escribir
+	// sin que existiera en el esquema.
+	const destacados = cache.products.filter((prod: any) => prod.destacado === true);
+	const recientes = cache.products.filter((prod: any) => prod.destacado !== true);
+
+	// Un nombre por tarjeta. El catalogo tiene lotes importados donde varias
+	// variantes comparten nombre exacto —hay ocho "Bross 8170 Pregraduados Blue
+	// Blocker - Gris Oscuro" cargados en el mismo minuto—, y sin esto la vitrina
+	// quedaba con siete copias del mismo producto.
+	const vistos = new Set<string>();
+	featuredProducts = [...destacados, ...recientes]
+		.filter((prod: any) => {
+			const clave = (prod.nombre || prod.$id).trim().toLowerCase();
+			if (vistos.has(clave)) return false;
+			vistos.add(clave);
+			return true;
+		})
+		.slice(0, 8);
 	
 	pickupPoints = cache.pickupPoints;
 	catalogoDegradado = Boolean(cache.degradado);
@@ -244,18 +260,6 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 					</a>
 				</div>
 
-				<!-- Category Filter Pills -->
-				<div class="flex items-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-none">
-					<button class="cat-pill active px-4 py-2 bg-[#2D5A27] text-white rounded-full text-xs font-bold whitespace-nowrap shadow-sm transition-all" data-category="all">
-						Todos los productos
-					</button>
-					{categories.map((cat) => (
-						<button class="cat-pill px-4 py-2 bg-white hover:bg-slate-200 text-slate-700 rounded-full text-xs font-semibold whitespace-nowrap border border-slate-200 transition-all" data-category={cat.$id}>
-							{cat.nombre}
-						</button>
-					))}
-				</div>
-
 				{catalogoDegradado && featuredProducts.length === 0 && (
 					<div class="bg-white rounded-2xl border-2 border-amber-200 p-10 text-center shadow-sm mb-6">
 						<svg class="w-12 h-12 text-amber-500 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -341,14 +345,6 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 				<!-- Mensaje cuando el filtro de categoría no matchea ningún destacado.
 				     La home sólo muestra 8 productos: sin esto, filtrar dejaba la
 				     grilla vacía en silencio. -->
-				<div id="cat-empty-msg" class="hidden bg-white rounded-2xl border border-slate-200 p-10 text-center shadow-sm">
-					<p class="text-slate-700 font-bold mb-3">No hay productos de esta categoría en destacados</p>
-					<a id="cat-empty-link" href="/productos" class="inline-flex items-center gap-2 text-sm font-bold text-[#2D5A27] hover:text-[#23471F] transition-colors">
-						Ver catálogo completo
-						<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-					</a>
-				</div>
-
 				<!-- Member Sign-Up Incentive Banner -->
 				<div class="mt-12 bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
 					<div>
@@ -725,44 +721,6 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 	<Footer />
 
 	<script>
-		// Interactive Category Filter Pills
-		const catPills = document.querySelectorAll('.cat-pill');
-		const prodItems = document.querySelectorAll('.prod-item');
-		const catEmptyMsg = document.getElementById('cat-empty-msg');
-		const catEmptyLink = document.getElementById('cat-empty-link') as HTMLAnchorElement | null;
-
-		catPills.forEach(pill => {
-			pill.addEventListener('click', () => {
-				catPills.forEach(p => {
-					p.classList.remove('bg-[#2D5A27]', 'text-white', 'active');
-					p.classList.add('bg-white', 'text-slate-700');
-				});
-				pill.classList.remove('bg-white', 'text-slate-700');
-				pill.classList.add('bg-[#2D5A27]', 'text-white', 'active');
-
-				const catId = pill.getAttribute('data-category');
-				let visibles = 0;
-				prodItems.forEach(item => {
-					const itemCat = item.getAttribute('data-cat-id');
-					if (catId === 'all' || itemCat === catId) {
-						(item as HTMLElement).style.display = 'flex';
-						visibles++;
-					} else {
-						(item as HTMLElement).style.display = 'none';
-					}
-				});
-
-				// El filtro opera sólo sobre los 8 destacados: si no matchea nada,
-				// se avisa y se ofrece el catálogo completo de esa categoría.
-				if (catEmptyMsg) {
-					catEmptyMsg.classList.toggle('hidden', visibles > 0);
-					if (visibles === 0 && catEmptyLink && catId && catId !== 'all') {
-						catEmptyLink.href = `/productos?categoria=${encodeURIComponent(catId)}`;
-					}
-				}
-			});
-		});
-
 		// Interactive Neighborhood Checker
 		const locationInput = document.getElementById('search-location-input') as HTMLInputElement;
 		const checkBtn = document.getElementById('btn-check-location');
