@@ -141,6 +141,22 @@ async function setup() {
     await db.createIntegerAttribute(DB_ID, 'products', 'stock_reservado', false, 0, 999999, 0);
     await db.createBooleanAttribute(DB_ID, 'products', 'permite_retiro', false, true);
     await db.createBooleanAttribute(DB_ID, 'products', 'permite_envio', false, true);
+
+    // Fijado en la vitrina. El panel de admin ya tenía el checkbox y la action
+    // lo enviaba, pero el atributo no existía: se escribía al vacío y el
+    // producto "destacado" duraba hasta que se cargaba otro más nuevo.
+    await db.createBooleanAttribute(DB_ID, 'products', 'destacado', false, false);
+
+    // Modos de precio por nivel. Los lee el formulario de edición para los
+    // selectores "Heredar / Override Porcentaje / Precio Fijo Manual", y sin
+    // ellos updateProduct mandaba nueve campos inexistentes: pasaba los diez
+    // reintentos de escribirDocumentoTolerante y guardar un producto fallaba
+    // con "demasiados atributos desconocidos".
+    for (const nivel of ['distribuidor', 'canillita', 'publico']) {
+      await db.createEnumAttribute(DB_ID, 'products', `${nivel}_mode`, ['inherit', 'percent', 'fixed'], false, 'inherit');
+      await db.createFloatAttribute(DB_ID, 'products', `${nivel}_percent`, false);
+      await db.createIntegerAttribute(DB_ID, 'products', `${nivel}_fixed_price`, false, 0, 999999999);
+    }
   });
 
   await createCollection('Product Images', 'product_images', async () => {
@@ -161,6 +177,18 @@ async function setup() {
     await db.createRelationshipAttribute(DB_ID, 'orders', 'pickup_points', 'manyToOne', false, 'pickup_point_id', 'orders', 'setNull');
     await db.createStringAttribute(DB_ID, 'orders', 'direccion_envio', 1000, false);
     await db.createIntegerAttribute(DB_ID, 'orders', 'subtotal', true, 0, 999999999);
+
+    // Nivel de precio con el que se cerró la compra. Es lo que hace cumplir la
+    // regla de que comisión y margen son excluyentes: sin este atributo,
+    // resolverComisiones leía `order.price_tier || 'publico'` y devengaba
+    // comisión en TODOS los pedidos, así que un canillita se llevaba el
+    // descuento y además la comisión.
+    await db.createEnumAttribute(DB_ID, 'orders', 'price_tier', ['publico', 'canillita', 'distribuidor'], false, 'publico');
+
+    // Marca de idempotencia del descuento de stock. La necesita el camino de
+    // comisión cero, que no crea asientos y por lo tanto no puede apoyarse en
+    // el libro para saber si ya se procesó.
+    await db.createBooleanAttribute(DB_ID, 'orders', 'stock_descontado', false, false);
     await db.createIntegerAttribute(DB_ID, 'orders', 'descuento', false, 0, 999999999, 0);
     await db.createIntegerAttribute(DB_ID, 'orders', 'costo_envio', false, 0, 999999999, 0);
     await db.createIntegerAttribute(DB_ID, 'orders', 'total', true, 0, 999999999);
