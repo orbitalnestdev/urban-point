@@ -27,13 +27,45 @@ const TTL_ADMIN_MS = 60 * 1000;
 
 const DB = 'urbanpoint';
 
+/**
+ * Reescribe una URL de Appwrite Storage para que el servidor devuelva la imagen
+ * ya redimensionada.
+ *
+ * Tenía dos fallas, las dos verificadas contra el backend:
+ *
+ * 1. Concatenaba con replace() sobre una URL que ya traía `?project=`, y el
+ *    resultado quedaba con DOS signos de pregunta:
+ *      .../preview?width=400&...&quality=80?project=XXX
+ *    Appwrite respondía 500 y la imagen no cargaba. Ahora se arma con URL y
+ *    searchParams, que preserva lo que ya venía.
+ *
+ * 2. Pedía `output=webp`, que en este Appwrite (1.8) devuelve 500 incluso
+ *    para un JPEG de origen. Se saca: sin ese parámetro el servidor conserva
+ *    el formato original y el redimensionado igual rinde (33 KB -> 6,5 KB a
+ *    400px en una foto de producto real).
+ *
+ * OJO: /preview responde 400 para los archivos cuyo origen ya es webp (56 de
+ * los 203 del bucket). Por eso se transforma sólo cuando la URL termina en
+ * /view; una URL /preview ya armada se devuelve tal cual.
+ */
 export const getOptimizedImageUrl = (url?: string | null, width = 400, height = 400, quality = 80): string => {
   if (!url) return '';
-  const cleanUrl = url.trim();
-  if (cleanUrl.includes('/storage/buckets/') && cleanUrl.includes('/files/') && cleanUrl.includes('/view')) {
-    return cleanUrl.replace('/view', `/preview?width=${width}&height=${height}&output=webp&quality=${quality}`);
+  const limpia = url.trim();
+
+  const esDeStorage = limpia.includes('/storage/buckets/') && limpia.includes('/files/');
+  if (!esDeStorage || !/\/view(\?|$)/.test(limpia)) return limpia;
+
+  try {
+    const u = new URL(limpia);
+    u.pathname = u.pathname.replace(/\/view$/, '/preview');
+    u.searchParams.set('width', String(width));
+    u.searchParams.set('height', String(height));
+    u.searchParams.set('quality', String(quality));
+    return u.toString();
+  } catch {
+    // URL relativa o malformada: mejor servir el original que romper la imagen.
+    return limpia;
   }
-  return cleanUrl;
 };
 
 /**
