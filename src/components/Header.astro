@@ -123,13 +123,28 @@ const accountText = user?.role === 'canillita' ? 'Panel Canillita' : (user?.role
   </div>
 
   <!-- Cart Drawer Component Mounted Globally.
-       client:idle: se monta en todas las páginas públicas y no necesita
-       hidratarse antes del primer frame — con load bloqueaba de entrada. -->
-  <CartDrawer client:idle />
+       client:only: el contenido del drawer sale de cartItems, un store
+       persistido en localStorage. Renderizarlo en el servidor lo pintaba
+       siempre vacío —'Tu Carrito de Compras (0)'— y al hidratar, con el
+       carrito ya cargado, React encontraba otro texto y tiraba
+       'Hydration failed', dejando la consola con un error en cada página.
+       No se pierde nada por no renderizarlo en el servidor: arranca cerrado
+       y fuera de pantalla, y no aporta ni SEO ni primer pintado. -->
+  <CartDrawer client:only="react" />
 </header>
 
 <script>
   // Open Cart drawer event
+  // El drawer es client:only, así que no existe hasta que React lo monta. Un
+  // "agregar al carrito" en ese intervalo disparaba cart:open sin oyente y el
+  // drawer no abría: el producto entraba al carrito, pero sin feedback. Acá se
+  // anota la intención y el drawer la consume al montarse.
+  const anotarAperturaPendiente = () => {
+    (window as any).__upCartOpenPendiente = true;
+  };
+  window.addEventListener('cart:open', anotarAperturaPendiente);
+  document.addEventListener('cart:open', anotarAperturaPendiente);
+
   const cartBtn = document.getElementById('btn-open-cart-floating');
   if (cartBtn) {
     cartBtn.addEventListener('click', (e) => {

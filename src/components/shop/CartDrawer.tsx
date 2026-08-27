@@ -13,9 +13,19 @@ export default function CartDrawer(_props?: { pickupPoints?: any[] }) {
 
   useEffect(() => {
     // Escuchar eventos para abrir el drawer
-    const openDrawer = () => setIsOpen(true);
+    const openDrawer = () => {
+      (window as any).__upCartOpenPendiente = false;
+      setIsOpen(true);
+    };
     window.addEventListener('cart:open', openDrawer);
     document.addEventListener('cart:open', openDrawer);
+
+    // Este componente es client:only: si el usuario agregó algo al carrito
+    // antes de que montara, el cart:open de ese momento no tuvo oyente. El
+    // script del Header lo dejó anotado; se consume acá.
+    if ((window as any).__upCartOpenPendiente) {
+      openDrawer();
+    }
 
     return () => {
       window.removeEventListener('cart:open', openDrawer);
