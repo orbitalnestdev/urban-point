@@ -1,18 +1,30 @@
-import { Client, Databases, Query } from 'node-appwrite';
+import { Query } from 'node-appwrite';
 import { createAdminClient } from './appwrite';
 
 const globalObj = global as any;
 
-if (!globalObj.__urbanpointCache) {
-  globalObj.__urbanpointCache = {
-    products: null,
-    categories: null,
-    pickupPoints: null,
-    lastFetch: 0
-  };
-}
+/**
+ * Tamaño de página. Medido contra este backend (RTT ~550 ms), 1000 es el punto
+ * óptimo para los 4971 productos: 5 requests en vez de 50.
+ *   100  -> 50 requests -> 33,0 s
+ *   1000 ->  5 requests -> 13,2 s
+ *   2500 ->  2 requests -> 26,8 s  (respuestas demasiado grandes)
+ */
+const TAMANO_PAGINA = 1000;
 
-const CACHE_TTL = 30000; // 30 seconds
+/**
+ * El catálogo público cambia poco y se revalida de fondo, así que el TTL puede
+ * ser largo. El de admin es más corto porque se edita en vivo, y además
+ * invalidateCatalogCache() lo limpia en cada escritura.
+ *
+ * Antes el TTL era de 30 s (público) y 15 s (admin), pero llenar el caché
+ * tardaba 29 s y 54 s: vencía antes de terminar de escribirse, así que cada
+ * request rehacía el trabajo completo. La home tardaba 60 s y /admin 90 s.
+ */
+const TTL_PUBLICO_MS = 5 * 60 * 1000;
+const TTL_ADMIN_MS = 60 * 1000;
+
+const DB = 'urbanpoint';
 
 export const getOptimizedImageUrl = (url?: string | null, width = 400, height = 400, quality = 80): string => {
   if (!url) return '';
@@ -23,62 +35,133 @@ export const getOptimizedImageUrl = (url?: string | null, width = 400, height = 
   return cleanUrl;
 };
 
-export const getCachedCatalog = async () => {
-  const cache = globalObj.__urbanpointCache;
-  const now = Date.now();
+/**
+ * Trae una colección entera paginando EN PARALELO.
+ *
+ * La primera página informa el total; el resto se dispara de una sola vez. En
+ * serie —un `while` con await adentro— cada página pagaba el RTT completo:
+ * 4971 productos tardaban 54 s contra los 13 s de esta versión.
+ *
+ * `filtros` debe incluir un orden estable: sin él, la paginación por offset
+ * puede repetir o saltear documentos entre páginas.
+ */
+async function traerColeccionCompleta(
+  databases: any,
+  coleccion: string,
+  filtros: any[] = []
+): Promise<any[]> {
+  const primera = await databases.listDocuments(DB, coleccion, [
+    ...filtros,
+    Query.limit(TAMANO_PAGINA),
+    Query.offset(0)
+  ]);
 
-  if (cache.products && (now - cache.lastFetch < CACHE_TTL)) {
-    return cache;
+  const total = typeof primera.total === 'number' ? primera.total : primera.documents.length;
+  const paginas = Math.ceil(total / TAMANO_PAGINA);
+  if (paginas <= 1) return primera.documents;
+
+  const resto = await Promise.all(
+    Array.from({ length: paginas - 1 }, (_, i) =>
+      databases.listDocuments(DB, coleccion, [
+        ...filtros,
+        Query.limit(TAMANO_PAGINA),
+        Query.offset((i + 1) * TAMANO_PAGINA)
+      ])
+    )
+  );
+
+  return primera.documents.concat(...resto.map((r: any) => r.documents));
+}
+
+type EntradaCache = {
+  datos: any | null;
+  obtenidoEn: number;
+  enVuelo: Promise<any> | null;
+};
+
+function obtenerEntrada(clave: string): EntradaCache {
+  if (!globalObj[clave]) {
+    globalObj[clave] = { datos: null, obtenidoEn: 0, enVuelo: null };
+  }
+  return globalObj[clave];
+}
+
+/**
+ * Sirve del caché con revalidación en segundo plano.
+ *
+ * - Si está fresco, se devuelve tal cual.
+ * - Si está vencido pero hay datos, se devuelven los viejos AL INSTANTE y la
+ *   recarga sigue de fondo: ningún visitante espera el refetch.
+ * - Sólo se espera cuando no hay absolutamente nada que mostrar.
+ * - Una sola recarga en vuelo a la vez (single-flight): si entran veinte
+ *   requests juntos, no disparan veinte paginaciones completas.
+ */
+/** Arranca una recarga si no hay otra en vuelo. Devuelve la promesa en curso. */
+function iniciarCarga(entrada: EntradaCache, cargar: () => Promise<any>): Promise<any> {
+  if (!entrada.enVuelo) {
+    entrada.enVuelo = cargar()
+      .then((datos) => {
+        entrada.datos = datos;
+        entrada.obtenidoEn = Date.now();
+        return datos;
+      })
+      .finally(() => {
+        entrada.enVuelo = null;
+      });
+  }
+  return entrada.enVuelo;
+}
+
+/**
+ * Sirve del caché con revalidación en segundo plano.
+ *
+ * - Si está fresco, se devuelve tal cual.
+ * - Si está vencido pero hay datos, se devuelven los viejos AL INSTANTE y la
+ *   recarga sigue de fondo: ningún visitante espera el refetch.
+ * - Sólo se espera cuando no hay absolutamente nada que mostrar.
+ * - Una sola recarga en vuelo a la vez (single-flight): si entran veinte
+ *   requests juntos, no disparan veinte paginaciones completas.
+ */
+async function servirConRevalidacion(
+  entrada: EntradaCache,
+  ttlMs: number,
+  cargar: () => Promise<any>
+): Promise<any> {
+  if (entrada.datos && Date.now() - entrada.obtenidoEn < ttlMs) {
+    return entrada.datos;
   }
 
-  try {
-    const { databases } = createAdminClient();
-    cache.degradado = false;
+  const enCurso = iniciarCarga(entrada, cargar);
 
-    // Fetch all products
-    const allProducts: any[] = [];
-    let pOffset = 0;
-    while (true) {
-      const pRes = await databases.listDocuments('urbanpoint', 'products', [
-        Query.notEqual('estado', 'borrador'),
-        Query.limit(100),
-        Query.offset(pOffset),
-        Query.orderDesc('$createdAt')
-      ]);
-      allProducts.push(...pRes.documents);
-      if (pRes.documents.length < 100) break;
-      pOffset += 100;
-    }
+  if (entrada.datos) {
+    // El error de una revalidación de fondo no debe tumbar la request que ya
+    // tiene datos válidos para mostrar; queda logueado en el cargador.
+    enCurso.catch(() => {});
+    return entrada.datos;
+  }
 
-    // Fetch all categories
-    const allCategories: any[] = [];
-    let cOffset = 0;
-    while (true) {
-      const cRes = await databases.listDocuments('urbanpoint', 'categories', [
-        Query.limit(100),
-        Query.offset(cOffset)
-      ]);
-      allCategories.push(...cRes.documents);
-      if (cRes.documents.length < 100) break;
-      cOffset += 100;
-    }
+  return enCurso;
+}
 
-    // Fetch all pickup points
-    const allPickupPoints: any[] = [];
-    let pkOffset = 0;
-    while (true) {
-      const pkRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
-        Query.limit(100),
-        Query.offset(pkOffset)
-      ]);
-      allPickupPoints.push(...pkRes.documents);
-      if (pkRes.documents.length < 100) break;
-      pkOffset += 100;
-    }
+async function cargarCatalogoPublico() {
+  const { databases } = createAdminClient();
 
-    cache.products = allProducts.filter((p: any) => p.estado === 'activo' || !p.estado);
-    cache.categories = allCategories;
-    cache.pickupPoints = allPickupPoints
+  // Las tres colecciones en paralelo: antes se encadenaban una tras otra.
+  const [productos, categorias, puntos] = await Promise.all([
+    traerColeccionCompleta(databases, 'products', [
+      Query.notEqual('estado', 'borrador'),
+      Query.orderDesc('$createdAt')
+    ]),
+    traerColeccionCompleta(databases, 'categories', [Query.orderAsc('$createdAt')]),
+    traerColeccionCompleta(databases, 'pickup_points', [Query.orderAsc('$createdAt')])
+  ]);
+
+  return {
+    products: productos.filter((p: any) => p.estado === 'activo' || !p.estado),
+    categories: categorias,
+    // Allowlist explícita: esto se serializa dentro del HTML, así que no puede
+    // arrastrar CBU, condición fiscal, profile_id ni los tokens de Mercado Pago.
+    pickupPoints: puntos
       .filter((p: any) => p.estado === 'activo' || !p.estado)
       .map((p: any) => ({
         $id: p.$id,
@@ -91,88 +174,63 @@ export const getCachedCatalog = async () => {
         lng: p.lng,
         slug: p.slug || '',
         telefono: p.telefono || ''
-      }));
+      })),
+    degradado: false
+  };
+}
 
-    cache.lastFetch = now;
+async function cargarCatalogoAdmin() {
+  const { databases } = createAdminClient();
+
+  // El admin sí necesita los borradores: /admin/catalogo cuenta y filtra por
+  // estado. Por eso acá no se filtra como en el catálogo público.
+  const [productos, categorias] = await Promise.all([
+    traerColeccionCompleta(databases, 'products', [Query.orderDesc('$createdAt')]),
+    traerColeccionCompleta(databases, 'categories', [Query.orderAsc('$createdAt')])
+  ]);
+
+  return { products: productos, categories: categorias };
+}
+
+export const getCachedCatalog = async () => {
+  const entrada = obtenerEntrada('__urbanpointCache');
+  try {
+    return await servirConRevalidacion(entrada, TTL_PUBLICO_MS, cargarCatalogoPublico);
   } catch (err: any) {
-    console.error('[Cache] Fatal Appwrite connection error:', err.message);
-    cache.degradado = true;
-    if (!cache.products) cache.products = [];
-    if (!cache.categories) cache.categories = [];
-    if (!cache.pickupPoints) cache.pickupPoints = [];
+    // Distinguir "no hay catálogo" de "no pudimos cargarlo": si no, un fallo de
+    // backend se ve igual que una tienda vacía y el cliente no se entera.
+    console.error('[Cache] Error cargando el catálogo público:', err?.message || err);
+    return { products: [], categories: [], pickupPoints: [], degradado: true };
   }
-
-  return cache;
 };
 
 export const getAdminCachedCatalog = async () => {
-  const cache = globalObj.__urbanpointAdminCache || {
-    products: null,
-    categories: null,
-    lastFetch: 0
-  };
-  globalObj.__urbanpointAdminCache = cache;
-
-  const now = Date.now();
-  if (cache.products && (now - cache.lastFetch < 15000)) { // 15s TTL
-    return cache;
-  }
-
+  const entrada = obtenerEntrada('__urbanpointAdminCache');
   try {
-    const { databases } = createAdminClient();
-
-    // Fetch all products
-    const allProducts: any[] = [];
-    let pOffset = 0;
-    while (true) {
-      const pRes = await databases.listDocuments('urbanpoint', 'products', [
-        Query.limit(100),
-        Query.offset(pOffset),
-        Query.orderDesc('$createdAt')
-      ]);
-      allProducts.push(...pRes.documents);
-      if (pRes.documents.length < 100) break;
-      pOffset += 100;
-    }
-
-    // Fetch all categories
-    const allCategories: any[] = [];
-    let cOffset = 0;
-    while (true) {
-      const cRes = await databases.listDocuments('urbanpoint', 'categories', [
-        Query.limit(100),
-        Query.offset(cOffset)
-      ]);
-      allCategories.push(...cRes.documents);
-      if (cRes.documents.length < 100) break;
-      cOffset += 100;
-    }
-
-    cache.products = allProducts;
-    cache.categories = allCategories;
-    cache.lastFetch = now;
+    return await servirConRevalidacion(entrada, TTL_ADMIN_MS, cargarCatalogoAdmin);
   } catch (err: any) {
-    console.error('[AdminCache] Error:', err.message);
-    if (!cache.products) cache.products = [];
-    if (!cache.categories) cache.categories = [];
+    console.error('[AdminCache] Error cargando el catálogo de admin:', err?.message || err);
+    return { products: [], categories: [] };
   }
-
-  return cache;
 };
 
 export const invalidateCatalogCache = () => {
-  if (globalObj.__urbanpointCache) {
-    globalObj.__urbanpointCache.products = null;
-    globalObj.__urbanpointCache.categories = null;
-    globalObj.__urbanpointCache.pickupPoints = null;
-    globalObj.__urbanpointCache.lastFetch = 0;
-  }
-  if (globalObj.__urbanpointAdminCache) {
-    globalObj.__urbanpointAdminCache.products = null;
-    globalObj.__urbanpointAdminCache.categories = null;
-    globalObj.__urbanpointAdminCache.lastFetch = 0;
+  const cargadores: Array<[string, () => Promise<any>]> = [
+    ['__urbanpointCache', cargarCatalogoPublico],
+    ['__urbanpointAdminCache', cargarCatalogoAdmin]
+  ];
+
+  for (const [clave, cargar] of cargadores) {
+    const entrada = obtenerEntrada(clave);
+    entrada.datos = null;
+    entrada.obtenidoEn = 0;
+
+    // Se arranca la recarga YA, sin esperarla. Invalidar y nada más dejaba al
+    // siguiente que abriera el panel pagando la paginación entera; así, cuando
+    // el admin vuelve al listado después de guardar, el refetch ya viene en
+    // curso y su request se engancha al mismo vuelo en vez de iniciar otro.
+    iniciarCarga(entrada, cargar).catch((err: any) => {
+      console.error('[Cache] Falló la recarga tras invalidar:', err?.message || err);
+    });
   }
 };
-
-
-
