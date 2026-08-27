@@ -135,106 +135,112 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 				</div>
 			</div>
 
-			<!-- Search & Filter Controls -->
-			<div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm mb-10 space-y-6">
-				<div class="flex flex-col md:flex-row gap-4 items-center justify-between">
-					<!-- Search Input -->
-					<div class="relative w-full md:w-96">
+			<!-- Barra superior: búsqueda, orden y, en mobile, el botón de filtros. -->
+			<div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm mb-6">
+				<div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+					<div class="relative flex-1 md:max-w-md">
 						<input type="text" id="search-input" placeholder="Buscar por nombre, marca o modelo..." class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D5A27] focus:bg-white transition-all font-medium" />
 						<svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
 					</div>
 
-					<!-- Sort Controls & Product Count -->
-					<div class="flex flex-wrap items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-						<div class="text-sm font-semibold text-slate-500">
-							Mostrando <span id="prod-count" class="text-slate-900 font-black">{products.length}</span> productos
+					<div class="flex items-center gap-3 justify-between md:justify-end">
+						<button
+							id="btn-filtros"
+							class="lg:hidden inline-flex items-center gap-2 px-4 py-2.5 bg-[#2D5A27] text-white rounded-xl text-sm font-bold shadow-sm cursor-pointer"
+							aria-expanded="false"
+							aria-controls="sidebar-filtros"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+							Filtros
+						</button>
+
+						<div class="text-sm font-semibold text-slate-500 shrink-0">
+							<span id="prod-count" class="text-slate-900 font-black">{products.length}</span> productos
 						</div>
 
-						<label class="flex items-center gap-2 cursor-pointer select-none" title="Ocultar los productos agotados">
-							<input type="checkbox" id="solo-disponibles" class="w-4 h-4 accent-[#2D5A27] cursor-pointer" />
-							<span class="text-sm font-semibold text-slate-600">Solo disponibles</span>
-						</label>
-						<select id="sort-select" class="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#2D5A27] cursor-pointer">
-							<option value="default">Ordenar por: Relevancia</option>
-							<option value="price-asc">Precio: Menor a Mayor</option>
-							<option value="price-desc">Precio: Mayor a Menor</option>
+						<select id="sort-select" class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#2D5A27] cursor-pointer">
+							<option value="default">Relevancia</option>
+							<option value="price-asc">Precio: menor a mayor</option>
+							<option value="price-desc">Precio: mayor a menor</option>
 							<option value="name-asc">Nombre: A - Z</option>
 						</select>
 					</div>
 				</div>
+			</div>
 
-				<!-- Categorías: las más cargadas quedan a la vista; el resto en el panel. -->
-				{categoriasPadre.length > 0 && (
-					<div class="space-y-2 pt-2 border-t border-slate-100">
-						<div class="flex flex-wrap items-center gap-2" id="main-category-pills">
-							<button
-								class="cat-pill active px-4 py-2 rounded-xl text-xs font-bold transition-all bg-[#2D5A27] text-white shadow-sm max-w-full cursor-pointer"
-								data-category="all"
-							>
-								Todos los productos
-							</button>
-							{categoriasDestacadas.map((parent, i) => (
-								<button
-									class={`cat-pill px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-[#F2F7F3] hover:text-[#2D5A27] cursor-pointer items-center gap-1.5 text-left max-w-[calc(50%-0.25rem)] sm:max-w-full ${i < 4 ? 'flex' : 'hidden sm:flex'}`}
-									data-category={idsDeFamilia(parent)}
-									data-parent-id={parent.$id}
-								>
-									<span class="min-w-0 truncate">{parent.nombre}</span>
-									<span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-extrabold">{parent.productCount}</span>
-								</button>
-							))}
+			<div class="flex flex-col lg:flex-row gap-6 lg:gap-8 lg:items-start">
 
-							{categoriasPadre.length > CATEGORIAS_A_LA_VISTA && (
-								<button
-									id="btn-ver-categorias"
-									class="px-4 py-2 rounded-xl text-xs font-extrabold transition-all bg-white text-[#2D5A27] border-2 border-[#D4E5D6] hover:border-[#2D5A27] max-w-full cursor-pointer flex items-center gap-1.5"
-									aria-expanded="false"
-									aria-controls="panel-categorias"
-								>
-									Ver todas ({categoriasPadre.length})
-									<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
-								</button>
-							)}
+				<!-- Sidebar de filtros.
+				     Antes las 78 categorías eran pills en una fila con scroll
+				     horizontal: 14.724 px de ancho contra 421 px de pantalla. Una
+				     lista larga se lee de arriba abajo, no de izquierda a derecha,
+				     así que la columna le da el espacio vertical que necesita y deja
+				     los filtros a la vista mientras se recorren los productos. -->
+				<aside id="sidebar-filtros" class="hidden lg:block w-full lg:w-64 xl:w-72 shrink-0 lg:sticky lg:top-24">
+					<div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm divide-y divide-slate-100">
+
+						<div class="p-4">
+							<div class="flex items-center justify-between mb-3">
+								<h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-400">Filtros</h2>
+								<button id="btn-limpiar-filtros" class="text-[11px] font-bold text-[#2D5A27] hover:underline cursor-pointer">Limpiar</button>
+							</div>
+							<label class="flex items-center gap-2.5 cursor-pointer select-none">
+								<input type="checkbox" id="solo-disponibles" class="w-4 h-4 accent-[#2D5A27] cursor-pointer" />
+								<span class="text-sm font-semibold text-slate-700">Solo disponibles</span>
+							</label>
 						</div>
 
-						<!-- Panel con todas las categorías -->
-						<div id="panel-categorias" class="hidden pt-3 mt-1 border-t border-slate-100">
-							<div class="relative mb-3">
+						<div class="p-4">
+							<h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-3">
+								Categorías <span class="text-slate-300 font-bold">({categoriasPadre.length})</span>
+							</h2>
+
+							<div class="relative mb-2.5">
 								<input
 									type="text"
 									id="buscar-categoria"
 									placeholder="Buscar categoría..."
-									class="w-full md:w-80 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#2D5A27] focus:bg-white transition-all"
+									class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#2D5A27] focus:bg-white transition-all"
 								/>
-								<svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+								<svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
 							</div>
-							<div id="grilla-categorias" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-80 overflow-y-auto pr-1">
+
+							<div id="lista-categorias" class="space-y-0.5 max-h-[26rem] overflow-y-auto pr-1 -mr-1">
+								<button
+									class="cat-item activa w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center justify-between gap-2 bg-[#F2F7F3] text-[#2D5A27]"
+									data-category="all"
+									data-nombre="todos los productos"
+								>
+									<span class="truncate">Todos los productos</span>
+									<span class="text-[10px] font-extrabold shrink-0 opacity-70">{products.length}</span>
+								</button>
+
 								{categoriasPadre.map((parent) => (
 									<button
-										class="cat-panel-item text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-[#F2F7F3] hover:text-[#2D5A27] transition-colors cursor-pointer flex items-center justify-between gap-2"
+										class="cat-item w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#2D5A27] transition-colors cursor-pointer flex items-center justify-between gap-2"
 										data-category={idsDeFamilia(parent)}
 										data-parent-id={parent.$id}
 										data-nombre={parent.nombre.toLowerCase()}
+										title={parent.nombre}
 									>
 										<span class="truncate">{parent.nombre}</span>
 										<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-extrabold shrink-0">{parent.productCount}</span>
 									</button>
 								))}
 							</div>
-							<p id="sin-categorias" class="hidden text-xs text-slate-500 font-medium py-3">No hay categorías que coincidan.</p>
-						</div>
 
-						<!-- Subcategorías del padre activo, si tiene -->
-						<div id="sub-category-pills" class="hidden flex items-center gap-2 overflow-x-auto pb-1 pt-1.5 border-t border-slate-100/80 bg-slate-50/70 p-2 rounded-xl">
-							<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">Subcategorías:</span>
-							<div id="sub-pills-container" class="flex items-center gap-2 overflow-x-auto scrollbar-none">
+							<p id="sin-categorias" class="hidden text-xs text-slate-500 font-medium py-3">No hay categorías que coincidan.</p>
+
+							<!-- Subcategorías del padre activo, si tiene. -->
+							<div id="sub-categorias" class="hidden mt-3 pt-3 border-t border-slate-100">
+								<h3 class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Subcategorías</h3>
+								<div id="sub-lista" class="space-y-0.5"></div>
 							</div>
 						</div>
 					</div>
-				)}
-			</div>
+				</aside>
 
-			<!-- Dynamic Empty Search Result Message -->
+				<div class="flex-1 min-w-0">
 			<div id="no-results-box" class="hidden bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm mb-8">
 				<div class="w-16 h-16 rounded-2xl bg-[#F2F7F3] text-[#2D5A27] flex items-center justify-center mx-auto mb-4">
 					<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -373,7 +379,9 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 						<option value="96">96</option>
 						<option value="192">192</option>
 					</select>
-				</label>
+					</label>
+					</div>
+				</div>
 			</div>
 		</div>
 	</main>
@@ -404,15 +412,17 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 			const countSpan = $('prod-count');
 			const noResultsBox = $('no-results-box');
 			const btnReset = $('btn-reset-filters');
-			const subRow = $('sub-category-pills');
-			const subContainer = $('sub-pills-container');
+			const btnLimpiar = $('btn-limpiar-filtros');
+			const listaCategorias = $('lista-categorias');
+			const subRow = $('sub-categorias');
+			const subContainer = $('sub-lista');
+			const btnFiltros = $('btn-filtros');
+			const sidebar = $('sidebar-filtros');
 			const pagArriba = $('paginacion-arriba');
 			const pagAbajo = $('paginacion-abajo');
 			const rangoDesde = $('rango-desde');
 			const rangoHasta = $('rango-hasta');
 			const rangoTotal = $('rango-total');
-			const btnVerCategorias = $('btn-ver-categorias');
-			const panelCategorias = $('panel-categorias');
 			const buscarCategoria = $('buscar-categoria') as HTMLInputElement;
 			const sinCategorias = $('sin-categorias');
 
@@ -618,37 +628,42 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 
 			soloDispo?.addEventListener('change', () => aplicarFiltros());
 
-			// --- Panel de todas las categorías ---
-			btnVerCategorias?.addEventListener('click', () => {
-				const abierto = !panelCategorias?.classList.contains('hidden');
-				panelCategorias?.classList.toggle('hidden', abierto);
-				btnVerCategorias.setAttribute('aria-expanded', String(!abierto));
-				if (!abierto) buscarCategoria?.focus();
+			// --- Sidebar: en mobile se despliega con el botón "Filtros" ---
+			btnFiltros?.addEventListener('click', () => {
+				const oculto = sidebar?.classList.contains('hidden');
+				sidebar?.classList.toggle('hidden', !oculto);
+				btnFiltros.setAttribute('aria-expanded', String(!!oculto));
 			});
 
 			buscarCategoria?.addEventListener('input', () => {
 				const t = normalizar(buscarCategoria.value.trim());
 				let visibles = 0;
-				document.querySelectorAll('.cat-panel-item').forEach((el) => {
-					const nombre = normalizar((el as HTMLElement).dataset.nombre || '');
-					const coincide = !t || nombre.includes(t);
-					(el as HTMLElement).classList.toggle('hidden', !coincide);
-					if (coincide) visibles++;
+				listaCategorias?.querySelectorAll('.cat-item').forEach((el) => {
+					const item = el as HTMLElement;
+					// "Todos los productos" no se filtra: es la salida para volver atrás.
+					const esTodos = item.dataset.category === 'all';
+					const coincide = esTodos || !t || normalizar(item.dataset.nombre || '').includes(t);
+					item.classList.toggle('hidden', !coincide);
+					if (coincide && !esTodos) visibles++;
 				});
-				sinCategorias?.classList.toggle('hidden', visibles !== 0);
+				sinCategorias?.classList.toggle('hidden', visibles !== 0 || !t);
 			});
 
-			function activarCategoria(valor: string, parentId: string | null, etiqueta: string) {
-				activeCategory = valor;
-
-				document.querySelectorAll('#main-category-pills .cat-pill').forEach((p) => {
-					const suyo = p.getAttribute('data-category') === valor;
-					p.classList.toggle('bg-[#2D5A27]', suyo);
-					p.classList.toggle('text-white', suyo);
-					p.classList.toggle('shadow-sm', suyo);
-					p.classList.toggle('bg-slate-100', !suyo);
-					p.classList.toggle('text-slate-600', !suyo);
+			function marcarActiva(valor: string) {
+				listaCategorias?.querySelectorAll('.cat-item').forEach((el) => {
+					const suya = el.getAttribute('data-category') === valor;
+					el.classList.toggle('activa', suya);
+					el.classList.toggle('bg-[#F2F7F3]', suya);
+					el.classList.toggle('text-[#2D5A27]', suya);
+					el.classList.toggle('font-bold', suya);
+					el.classList.toggle('font-semibold', !suya);
+					el.classList.toggle('text-slate-700', !suya);
 				});
+			}
+
+			function activarCategoria(valor: string, parentId: string | null, etiqueta: string, cerrarEnMobile = true) {
+				activeCategory = valor;
+				marcarActiva(valor);
 
 				// Subcategorías, sólo si el padre tiene hijas con productos.
 				const hijas = parentId
@@ -660,11 +675,11 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 
 				if (hijas.length > 0 && subRow && subContainer) {
 					subContainer.innerHTML =
-						'<button class="sub-cat-pill px-3 py-1 rounded-lg text-xs font-bold bg-[#2D5A27] text-white shadow-xs shrink-0 cursor-pointer" data-category="' + esc(valor) + '">Todas las de ' + esc(etiqueta) + '</button>' +
+						'<button class="sub-item w-full text-left px-3 py-1.5 rounded-lg text-xs font-bold bg-[#F2F7F3] text-[#2D5A27] cursor-pointer" data-category="' + esc(valor) + '">Todas las de ' + esc(etiqueta) + '</button>' +
 						hijas.map((c: any) =>
-							'<button class="sub-cat-pill px-3 py-1 rounded-lg text-xs font-semibold bg-white text-slate-700 hover:bg-emerald-50 hover:text-[#2D5A27] border border-slate-200 shrink-0 cursor-pointer flex items-center gap-1.5" data-category="' + esc(c.$id) + '">' +
-							esc(c.nombre) +
-							'<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded-full font-extrabold">' + c.productCount + '</span></button>'
+							'<button class="sub-item w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-[#2D5A27] cursor-pointer flex items-center justify-between gap-2" data-category="' + esc(c.$id) + '">' +
+							'<span class="truncate">' + esc(c.nombre) + '</span>' +
+							'<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-extrabold shrink-0">' + c.productCount + '</span></button>'
 						).join('');
 					subRow.classList.remove('hidden');
 				} else {
@@ -672,41 +687,36 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 				}
 
 				aplicarFiltros();
+
+				// En mobile el sidebar tapa la grilla: se cierra al elegir, para que
+				// se vea el resultado de lo que se acaba de pedir. No al limpiar:
+				// ahí el usuario sigue filtrando y cerrarle el panel lo obliga a
+				// volver a abrirlo.
+				if (cerrarEnMobile && window.matchMedia('(max-width: 1023px)').matches) {
+					sidebar?.classList.add('hidden');
+					btnFiltros?.setAttribute('aria-expanded', 'false');
+				}
 			}
 
-			document.getElementById('main-category-pills')?.addEventListener('click', (ev) => {
-				const pill = (ev.target as HTMLElement)?.closest('.cat-pill') as HTMLElement | null;
-				if (!pill) return;
-				activarCategoria(
-					pill.getAttribute('data-category') || 'all',
-					pill.getAttribute('data-parent-id'),
-					(pill.textContent || '').replace(/\d+/g, '').trim()
-				);
-			});
-
-			document.getElementById('grilla-categorias')?.addEventListener('click', (ev) => {
-				const item = (ev.target as HTMLElement)?.closest('.cat-panel-item') as HTMLElement | null;
+			listaCategorias?.addEventListener('click', (ev) => {
+				const item = (ev.target as HTMLElement)?.closest('.cat-item') as HTMLElement | null;
 				if (!item) return;
 				activarCategoria(
 					item.getAttribute('data-category') || 'all',
 					item.getAttribute('data-parent-id'),
-					(item.dataset.nombre || '')
+					item.dataset.nombre || ''
 				);
-				// Se cierra el panel: dejarlo abierto tapa los resultados que el
-				// usuario acaba de pedir.
-				panelCategorias?.classList.add('hidden');
-				btnVerCategorias?.setAttribute('aria-expanded', 'false');
 			});
 
-			document.getElementById('sub-pills-container')?.addEventListener('click', (ev) => {
-				const btn = (ev.target as HTMLElement)?.closest('.sub-cat-pill') as HTMLElement | null;
+			subContainer?.addEventListener('click', (ev) => {
+				const btn = (ev.target as HTMLElement)?.closest('.sub-item') as HTMLElement | null;
 				if (!btn) return;
-				document.querySelectorAll('#sub-pills-container .sub-cat-pill').forEach((sb) => {
-					sb.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-xs');
-					sb.classList.add('bg-white', 'text-slate-700');
+				subContainer.querySelectorAll('.sub-item').forEach((sb) => {
+					sb.classList.remove('bg-[#F2F7F3]', 'text-[#2D5A27]', 'font-bold');
+					sb.classList.add('text-slate-600', 'font-semibold');
 				});
-				btn.classList.remove('bg-white', 'text-slate-700');
-				btn.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-xs');
+				btn.classList.remove('text-slate-600', 'font-semibold');
+				btn.classList.add('bg-[#F2F7F3]', 'text-[#2D5A27]', 'font-bold');
 				activeCategory = btn.getAttribute('data-category') || 'all';
 				aplicarFiltros();
 			});
@@ -739,13 +749,22 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 			searchInput?.addEventListener('input', () => aplicarFiltros());
 			sortSelect?.addEventListener('change', () => aplicarFiltros());
 
-			btnReset?.addEventListener('click', () => {
+			const limpiarTodo = () => {
 				if (searchInput) searchInput.value = '';
 				if (sortSelect) sortSelect.value = 'default';
 				if (soloDispo) soloDispo.checked = false;
+				if (buscarCategoria) {
+					buscarCategoria.value = '';
+					buscarCategoria.dispatchEvent(new Event('input'));
+				}
 				subRow?.classList.add('hidden');
-				activarCategoria('all', null, '');
-			});
+				activarCategoria('all', null, '', false);
+			};
+
+			// Dos entradas al mismo reset: el del sidebar y el de la caja de
+			// "no se encontraron productos".
+			btnReset?.addEventListener('click', limpiarTodo);
+			btnLimpiar?.addEventListener('click', limpiarTodo);
 
 			pintarPaginacion();
 			actualizarContadores();
