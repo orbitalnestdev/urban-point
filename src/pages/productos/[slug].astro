@@ -23,9 +23,15 @@ try {
 	// 1. Fetch Product by Slug
 	// Sólo productos activos: sin este filtro, borradores y pausados quedaban
 	// públicos (y comprables) para quien conociera el slug.
+	//
+	// Y sólo con precio cargado, por el mismo motivo: un producto en cero se
+	// mostraba acá a "$ 0" con el botón habilitado, así que se podía comprar
+	// gratis entrando por la URL. Excluirlo de la vitrina no alcanzaba, porque
+	// la ficha se sirve por consulta directa.
 	const prodRes = await databases.listDocuments('urbanpoint', 'products', [
 		Query.equal('slug', slug as string),
 		Query.equal('estado', 'activo'),
+		Query.greaterThan('precio', 0),
 		Query.limit(1)
 	]);
 
@@ -78,6 +84,7 @@ try {
 		// interesar", no cinco productos al azar.
 		databases.listDocuments('urbanpoint', 'products', [
 			Query.equal('estado', 'activo'),
+			Query.greaterThan('precio', 0),
 			...(catId ? [Query.equal('categoria_id', catId)] : []),
 			Query.orderDesc('$createdAt'),
 			Query.limit(5)
@@ -91,6 +98,7 @@ try {
 	if (relatedProducts.length < 4) {
 		const recRes = await databases.listDocuments('urbanpoint', 'products', [
 			Query.equal('estado', 'activo'),
+			Query.greaterThan('precio', 0),
 			Query.orderDesc('$createdAt'),
 			Query.limit(9)
 		]).catch(() => ({ documents: [] as any[] }));

@@ -1,5 +1,6 @@
 import { Query } from 'node-appwrite';
 import { createAdminClient } from './appwrite';
+import { precioDeVentaCentavos } from '../pricing';
 
 const globalObj = global as any;
 
@@ -156,8 +157,24 @@ async function cargarCatalogoPublico() {
     traerColeccionCompleta(databases, 'pickup_points', [Query.orderAsc('$createdAt')])
   ]);
 
+  // Un producto sin precio no se puede vender, y mostrarlo igual es peor que
+  // no listarlo: aparecía en la vitrina como "$ 0" —primero de todo al ordenar
+  // por precio ascendente— y, si además tenía stock, se podía agregar al
+  // carrito y comprar a cero. El botón sólo se deshabilitaba por falta de
+  // stock. Se excluyen acá, junto con los borradores, y se deja registro para
+  // que no sea una desaparición silenciosa.
+  const activos = productos.filter((p: any) => p.estado === 'activo' || !p.estado);
+  const vendibles = activos.filter((p: any) => precioDeVentaCentavos(p) > 0);
+  const sinPrecio = activos.length - vendibles.length;
+  if (sinPrecio > 0) {
+    console.warn(
+      `[Cache] ${sinPrecio} producto(s) activo(s) sin precio quedaron fuera de la vitrina. ` +
+      'Cargales el precio en /admin/catalogo para que vuelvan a publicarse.'
+    );
+  }
+
   return {
-    products: productos.filter((p: any) => p.estado === 'activo' || !p.estado),
+    products: vendibles,
     categories: categorias,
     // Allowlist explícita: esto se serializa dentro del HTML, así que no puede
     // arrastrar CBU, condición fiscal, profile_id ni los tokens de Mercado Pago.
