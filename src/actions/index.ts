@@ -1667,7 +1667,9 @@ export const server = {
 				if (input.marca !== undefined) updateData.marca = input.marca;
 				
 				const finalCost = input.cost !== undefined ? input.cost : (input.costo !== undefined ? input.costo : currentDoc.cost ?? currentDoc.costo);
-				updateData.cost = finalCost;
+				// Sólo `costo`. `cost` no existe en la colección: era un alias en
+				// inglés que se escribía al vacío y consumía uno de los diez
+				// reintentos de escribirDocumentoTolerante.
 				updateData.costo = finalCost;
 
 				if (input.distribuidor_mode !== undefined) updateData.distribuidor_mode = input.distribuidor_mode;
@@ -1710,14 +1712,18 @@ export const server = {
 				}
 				const settings = await getSiteSettings();
 
+				// Un solo nombre por precio. Antes cada uno se escribía dos veces
+				// —precio_x y price_x—, y los price_* ni siquiera existían en la
+				// colección: trece campos desconocidos contra diez reintentos, así
+				// que guardar un producto fallaba con "demasiados atributos
+				// desconocidos". Dos campos para el mismo número son además dos
+				// fuentes de verdad que se pueden desincronizar.
 				const recalculated = recalculateProductPrices(merged, catDoc, settings);
 
 				if (recalculated.price_distribuidor !== null) {
-					updateData.price_distribuidor = recalculated.price_distribuidor;
 					updateData.precio_distribuidor = recalculated.price_distribuidor;
 				}
 				if (recalculated.price_canillita !== null) {
-					updateData.price_canillita = recalculated.price_canillita;
 					updateData.precio_canillita = recalculated.price_canillita;
 				}
 				// Si el admin tipeó un precio nuevo, esa decisión explícita gana
@@ -1726,13 +1732,10 @@ export const server = {
 				const adminCambioPrecio = input.precio !== undefined && input.precio !== (currentDoc.precio ?? null);
 				if (adminCambioPrecio) {
 					updateData.precio = input.precio;
-					updateData.price_publico = input.precio;
 				} else if (recalculated.price_publico !== null) {
-					updateData.price_publico = recalculated.price_publico;
 					updateData.precio = recalculated.price_publico;
 				} else if (input.precio !== undefined) {
 					updateData.precio = input.precio;
-					updateData.price_publico = input.precio;
 				}
 
 				if (input.precio_promocional !== undefined) {
