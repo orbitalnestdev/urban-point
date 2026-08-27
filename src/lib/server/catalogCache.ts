@@ -35,23 +35,50 @@ export const getCachedCatalog = async () => {
     const { databases } = createAdminClient();
     cache.degradado = false;
 
-    const [pRes, cRes, pkRes] = await Promise.all([
-      databases.listDocuments('urbanpoint', 'products', [
+    // Fetch all products
+    const allProducts: any[] = [];
+    let pOffset = 0;
+    while (true) {
+      const pRes = await databases.listDocuments('urbanpoint', 'products', [
         Query.notEqual('estado', 'borrador'),
         Query.limit(100),
+        Query.offset(pOffset),
         Query.orderDesc('$createdAt')
-      ]).catch((e: any) => {
-        console.error('[Cache] Error fetching products:', e.message);
-        cache.degradado = true;
-        return { documents: cache.products || [] };
-      }),
-      databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]).catch(() => ({ documents: cache.categories || [] })),
-      databases.listDocuments('urbanpoint', 'pickup_points', [Query.limit(100)]).catch(() => ({ documents: cache.pickupPoints || [] }))
-    ]);
+      ]);
+      allProducts.push(...pRes.documents);
+      if (pRes.documents.length < 100) break;
+      pOffset += 100;
+    }
 
-    cache.products = (pRes.documents || []).filter((p: any) => p.estado === 'activo' || !p.estado);
-    cache.categories = cRes.documents || [];
-    cache.pickupPoints = (pkRes.documents || [])
+    // Fetch all categories
+    const allCategories: any[] = [];
+    let cOffset = 0;
+    while (true) {
+      const cRes = await databases.listDocuments('urbanpoint', 'categories', [
+        Query.limit(100),
+        Query.offset(cOffset)
+      ]);
+      allCategories.push(...cRes.documents);
+      if (cRes.documents.length < 100) break;
+      cOffset += 100;
+    }
+
+    // Fetch all pickup points
+    const allPickupPoints: any[] = [];
+    let pkOffset = 0;
+    while (true) {
+      const pkRes = await databases.listDocuments('urbanpoint', 'pickup_points', [
+        Query.limit(100),
+        Query.offset(pkOffset)
+      ]);
+      allPickupPoints.push(...pkRes.documents);
+      if (pkRes.documents.length < 100) break;
+      pkOffset += 100;
+    }
+
+    cache.products = allProducts.filter((p: any) => p.estado === 'activo' || !p.estado);
+    cache.categories = allCategories;
+    cache.pickupPoints = allPickupPoints
       .filter((p: any) => p.estado === 'activo' || !p.estado)
       .map((p: any) => ({
         $id: p.$id,
@@ -60,9 +87,6 @@ export const getCachedCatalog = async () => {
         localidad: p.localidad,
         provincia: p.provincia,
         horarios: p.horarios,
-        // Campos que necesitan /puntos-de-retiro y /checkout/retiro para el
-        // mapa y el contacto: así esas páginas pueden leer del caché en vez
-        // de paginar pickup_points en cada request.
         lat: p.lat,
         lng: p.lng,
         slug: p.slug || '',
@@ -97,18 +121,35 @@ export const getAdminCachedCatalog = async () => {
   try {
     const { databases } = createAdminClient();
 
-    const [pRes, cRes] = await Promise.all([
-      databases.listDocuments('urbanpoint', 'products', [
-        Query.limit(300),
+    // Fetch all products
+    const allProducts: any[] = [];
+    let pOffset = 0;
+    while (true) {
+      const pRes = await databases.listDocuments('urbanpoint', 'products', [
+        Query.limit(100),
+        Query.offset(pOffset),
         Query.orderDesc('$createdAt')
-      ]).catch(() => ({ documents: cache.products || [] })),
-      databases.listDocuments('urbanpoint', 'categories', [
-        Query.limit(100)
-      ]).catch(() => ({ documents: cache.categories || [] }))
-    ]);
+      ]);
+      allProducts.push(...pRes.documents);
+      if (pRes.documents.length < 100) break;
+      pOffset += 100;
+    }
 
-    cache.products = pRes.documents || [];
-    cache.categories = cRes.documents || [];
+    // Fetch all categories
+    const allCategories: any[] = [];
+    let cOffset = 0;
+    while (true) {
+      const cRes = await databases.listDocuments('urbanpoint', 'categories', [
+        Query.limit(100),
+        Query.offset(cOffset)
+      ]);
+      allCategories.push(...cRes.documents);
+      if (cRes.documents.length < 100) break;
+      cOffset += 100;
+    }
+
+    cache.products = allProducts;
+    cache.categories = allCategories;
     cache.lastFetch = now;
   } catch (err: any) {
     console.error('[AdminCache] Error:', err.message);
