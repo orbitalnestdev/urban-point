@@ -60,7 +60,17 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
  * duplicar esa lógica en el cliente es exactamente como se llegó a mostrar un
  * precio distinto del que se cobraba.
  */
-const TARJETAS_POR_TANDA = 48;
+const POR_PAGINA_DEFECTO = 48;
+
+/**
+ * Cuántas categorías quedan como pills a la vista. El resto vive en el panel
+ * "Ver todas".
+ *
+ * Había 79 categorías de primer nivel en una sola fila con scroll horizontal:
+ * 14.724 px de ancho contra 421 px de pantalla, o sea 35 pantallas de scroll
+ * lateral para llegar a la última. Inutilizable, sobre todo en mobile.
+ */
+const CATEGORIAS_A_LA_VISTA = 8;
 
 const catalogoCompacto = products.map((prod: any) => {
 	const ventaCentavos = precioDeVentaCentavos(prod);
@@ -79,7 +89,22 @@ const catalogoCompacto = products.map((prod: any) => {
 	};
 });
 
-const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
+const productosIniciales = products.slice(0, POR_PAGINA_DEFECTO);
+
+// Padres con productos, de mayor a menor. Las destacadas van como pills; todas
+// entran al panel.
+const categoriasPadre = categories
+	.filter((c: any) => !c.parent_id && c.productCount > 0)
+	.sort((a: any, b: any) => (b.productCount || 0) - (a.productCount || 0));
+
+const idsDeFamilia = (parent: any) => {
+	const hijas = categories.filter(
+		(c: any) => (typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id) === parent.$id
+	);
+	return [parent.$id, ...hijas.map((c: any) => c.$id)].join(',');
+};
+
+const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 ---
 
 <Layout title="Tienda Minorista | UrbanPoint">
@@ -120,10 +145,15 @@ const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 					</div>
 
 					<!-- Sort Controls & Product Count -->
-					<div class="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+					<div class="flex flex-wrap items-center gap-4 w-full md:w-auto justify-between md:justify-end">
 						<div class="text-sm font-semibold text-slate-500">
 							Mostrando <span id="prod-count" class="text-slate-900 font-black">{products.length}</span> productos
 						</div>
+
+						<label class="flex items-center gap-2 cursor-pointer select-none" title="Ocultar los productos agotados">
+							<input type="checkbox" id="solo-disponibles" class="w-4 h-4 accent-[#2D5A27] cursor-pointer" />
+							<span class="text-sm font-semibold text-slate-600">Solo disponibles</span>
+						</label>
 						<select id="sort-select" class="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#2D5A27] cursor-pointer">
 							<option value="default">Ordenar por: Relevancia</option>
 							<option value="price-asc">Precio: Menor a Mayor</option>
@@ -133,42 +163,71 @@ const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 					</div>
 				</div>
 
-				<!-- Category Pills Filter (2-Level Hierarchy) -->
-				{categories.length > 0 && (
+				<!-- Categorías: las más cargadas quedan a la vista; el resto en el panel. -->
+				{categoriasPadre.length > 0 && (
 					<div class="space-y-2 pt-2 border-t border-slate-100">
-						<!-- Main Categories Pills Row -->
-						<div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" id="main-category-pills">
-							<button 
-								class="cat-pill active px-4 py-2 rounded-xl text-xs font-bold transition-all bg-[#2D5A27] text-white shadow-sm shrink-0 cursor-pointer" 
+						<div class="flex flex-wrap items-center gap-2" id="main-category-pills">
+							<button
+								class="cat-pill active px-4 py-2 rounded-xl text-xs font-bold transition-all bg-[#2D5A27] text-white shadow-sm max-w-full cursor-pointer"
 								data-category="all"
 							>
 								Todos los productos
 							</button>
-							{categories.filter(c => !c.parent_id).map((parent) => {
-								if (parent.productCount === 0) return null;
-								
-								const children = categories.filter(c => (typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id) === parent.$id);
-								const childIds = children.map(c => c.$id);
-								const familyIds = [parent.$id, ...childIds].join(',');
+							{categoriasDestacadas.map((parent, i) => (
+								<button
+									class={`cat-pill px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-[#F2F7F3] hover:text-[#2D5A27] cursor-pointer items-center gap-1.5 text-left max-w-[calc(50%-0.25rem)] sm:max-w-full ${i < 4 ? 'flex' : 'hidden sm:flex'}`}
+									data-category={idsDeFamilia(parent)}
+									data-parent-id={parent.$id}
+								>
+									<span class="min-w-0 truncate">{parent.nombre}</span>
+									<span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-extrabold">{parent.productCount}</span>
+								</button>
+							))}
 
-								return (
-									<button 
-										class="cat-pill px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-[#F2F7F3] hover:text-[#2D5A27] shrink-0 cursor-pointer flex items-center gap-1.5" 
-										data-category={familyIds}
-										data-parent-id={parent.$id}
-									>
-										{parent.nombre}
-										<span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-extrabold">{parent.productCount}</span>
-									</button>
-								);
-							})}
+							{categoriasPadre.length > CATEGORIAS_A_LA_VISTA && (
+								<button
+									id="btn-ver-categorias"
+									class="px-4 py-2 rounded-xl text-xs font-extrabold transition-all bg-white text-[#2D5A27] border-2 border-[#D4E5D6] hover:border-[#2D5A27] max-w-full cursor-pointer flex items-center gap-1.5"
+									aria-expanded="false"
+									aria-controls="panel-categorias"
+								>
+									Ver todas ({categoriasPadre.length})
+									<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
+								</button>
+							)}
 						</div>
 
-						<!-- Subcategories Pills Row (Dynamically Shown when a Parent Category is Active) -->
+						<!-- Panel con todas las categorías -->
+						<div id="panel-categorias" class="hidden pt-3 mt-1 border-t border-slate-100">
+							<div class="relative mb-3">
+								<input
+									type="text"
+									id="buscar-categoria"
+									placeholder="Buscar categoría..."
+									class="w-full md:w-80 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#2D5A27] focus:bg-white transition-all"
+								/>
+								<svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+							</div>
+							<div id="grilla-categorias" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-80 overflow-y-auto pr-1">
+								{categoriasPadre.map((parent) => (
+									<button
+										class="cat-panel-item text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-[#F2F7F3] hover:text-[#2D5A27] transition-colors cursor-pointer flex items-center justify-between gap-2"
+										data-category={idsDeFamilia(parent)}
+										data-parent-id={parent.$id}
+										data-nombre={parent.nombre.toLowerCase()}
+									>
+										<span class="truncate">{parent.nombre}</span>
+										<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-extrabold shrink-0">{parent.productCount}</span>
+									</button>
+								))}
+							</div>
+							<p id="sin-categorias" class="hidden text-xs text-slate-500 font-medium py-3">No hay categorías que coincidan.</p>
+						</div>
+
+						<!-- Subcategorías del padre activo, si tiene -->
 						<div id="sub-category-pills" class="hidden flex items-center gap-2 overflow-x-auto pb-1 pt-1.5 border-t border-slate-100/80 bg-slate-50/70 p-2 rounded-xl">
 							<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">Subcategorías:</span>
 							<div id="sub-pills-container" class="flex items-center gap-2 overflow-x-auto scrollbar-none">
-								<!-- Populated by JavaScript when a parent category is clicked -->
 							</div>
 						</div>
 					</div>
@@ -201,6 +260,8 @@ const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 					<p class="text-slate-500 text-sm">Pronto cargaremos nuevas ofertas a la tienda minorista.</p>
 				</div>
 			) : (
+				<div id="paginacion-arriba" class="hidden mb-6"></div>
+
 				<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" id="products-grid">
 					{productosIniciales.map((prod) => {
 						const precioMinorista = precioDeVentaCentavos(prod) / 100;
@@ -296,13 +357,23 @@ const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 				</div>
 			)}
 
-			<div id="ver-mas-box" class="mt-10 text-center">
-				<button id="btn-ver-mas" class="px-8 py-3.5 bg-white hover:bg-[#F2F7F3] text-[#2D5A27] border-2 border-slate-200 hover:border-[#2D5A27] rounded-2xl font-extrabold text-sm transition-all shadow-sm cursor-pointer">
-					Ver más productos
-				</button>
-				<p class="text-xs text-slate-500 font-semibold mt-3">
-					Mostrando <span id="rango-mostrado">{Math.min(TARJETAS_POR_TANDA, products.length)}</span> de <span id="rango-total">{products.length}</span>
-				</p>
+			<!-- Paginación del lado del cliente: el catálogo entero ya viajó en el
+			     JSON, así que cambiar de página no toca el servidor. El "Ver más"
+			     que había antes exigía 71 clics para llegar al final. -->
+			<div id="paginacion-abajo" class="mt-10"></div>
+
+			<div class="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs text-slate-500 font-semibold">
+				<span>
+					Mostrando <span id="rango-desde">1</span>–<span id="rango-hasta">{Math.min(POR_PAGINA_DEFECTO, products.length)}</span> de <span id="rango-total">{products.length}</span>
+				</span>
+				<label class="flex items-center gap-2">
+					<span>Por página:</span>
+					<select id="por-pagina" class="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#2D5A27] cursor-pointer">
+						<option value="48">48</option>
+						<option value="96">96</option>
+						<option value="192">192</option>
+					</select>
+				</label>
 			</div>
 		</div>
 	</main>
@@ -316,8 +387,6 @@ const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 	<script>
 		import { addCartItem } from '../../store/cart';
 
-		const TANDA = 48;
-
 		type Item = {
 			i: string; s: string; n: string; m: string;
 			p: number; l: number | null; k: number | null;
@@ -325,35 +394,42 @@ const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 		};
 
 		document.addEventListener('DOMContentLoaded', () => {
-			const searchInput = document.getElementById('search-input') as HTMLInputElement;
-			const sortSelect = document.getElementById('sort-select') as HTMLSelectElement;
-			const catPills = document.querySelectorAll('#main-category-pills .cat-pill');
-			const grid = document.getElementById('products-grid');
-			const countSpan = document.getElementById('prod-count');
-			const noResultsBox = document.getElementById('no-results-box');
-			const btnResetFilters = document.getElementById('btn-reset-filters');
-			const subRow = document.getElementById('sub-category-pills');
-			const subContainer = document.getElementById('sub-pills-container');
-			const verMasBox = document.getElementById('ver-mas-box');
-			const btnVerMas = document.getElementById('btn-ver-mas');
-			const rangoMostrado = document.getElementById('rango-mostrado');
-			const rangoTotal = document.getElementById('rango-total');
+			const $ = (id: string) => document.getElementById(id);
+
+			const searchInput = $('search-input') as HTMLInputElement;
+			const sortSelect = $('sort-select') as HTMLSelectElement;
+			const porPaginaSel = $('por-pagina') as HTMLSelectElement;
+			const soloDispo = $('solo-disponibles') as HTMLInputElement;
+			const grid = $('products-grid');
+			const countSpan = $('prod-count');
+			const noResultsBox = $('no-results-box');
+			const btnReset = $('btn-reset-filters');
+			const subRow = $('sub-category-pills');
+			const subContainer = $('sub-pills-container');
+			const pagArriba = $('paginacion-arriba');
+			const pagAbajo = $('paginacion-abajo');
+			const rangoDesde = $('rango-desde');
+			const rangoHasta = $('rango-hasta');
+			const rangoTotal = $('rango-total');
+			const btnVerCategorias = $('btn-ver-categorias');
+			const panelCategorias = $('panel-categorias');
+			const buscarCategoria = $('buscar-categoria') as HTMLInputElement;
+			const sinCategorias = $('sin-categorias');
 
 			const leerJson = (id: string) => {
-				try { return JSON.parse(document.getElementById(id)?.textContent || '[]'); }
-				catch { return []; }
+				try { return JSON.parse($(id)?.textContent || '[]'); } catch { return []; }
 			};
-
 			const allCategories: any[] = leerJson('categories-json-data');
 			const catalogo: Item[] = leerJson('catalogo-json-data');
 
-			// Indice de busqueda precalculado una sola vez: hacerlo dentro del
-			// filtro obligaba a recorrer y bajar a minusculas 3457 nombres en
-			// cada tecla.
+			// Índice de búsqueda precalculado y sin acentos: recorrer y normalizar
+			// 3439 nombres en cada tecla era trabajo tirado, y con tildes "Rock de
+			// Aca" no encontraba "Rock de Acá".
+			const normalizar = (t: string) => t.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
 			const indice = catalogo.map((it) => ({
 				it,
-				n: (it.n || '').toLowerCase(),
-				m: (it.m || '').toLowerCase()
+				n: normalizar(it.n || ''),
+				m: normalizar(it.m || '')
 			}));
 
 			const moneda = new Intl.NumberFormat('es-AR', {
@@ -361,11 +437,11 @@ const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 			});
 
 			let activeCategory = 'all';
-			let mostrados = TANDA;
+			let pagina = 1;
+			let porPagina = Number(porPaginaSel?.value) || 48;
 			let filtrados: Item[] = catalogo;
-			// El servidor ya pinto la primera tanda: no se re-renderiza hasta que
-			// el usuario toca un filtro, para no tirar el HTML que ya esta en
-			// pantalla ni rehacer el trabajo en la carga inicial.
+			// El servidor ya pintó la primera página: no se repinta hasta que el
+			// usuario toca algo, para no tirar el HTML que ya está en pantalla.
 			let gridEsDelServidor = true;
 
 			const esc = (v: unknown) =>
@@ -376,7 +452,6 @@ const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 			const SVG_MAS = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
 			const SVG_OK = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
 			const SVG_SIN_FOTO = '<div class="w-full h-full flex items-center justify-center text-slate-300"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>';
-
 			function tarjeta(it: Item): string {
 				const sinStock = typeof it.k === 'number' && it.k <= 0;
 				const imagen = it.u
@@ -420,33 +495,91 @@ const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 </div>`;
 			}
 
+
+			const totalPaginas = () => Math.max(1, Math.ceil(filtrados.length / porPagina));
+
 			function pintar() {
 				if (!grid) return;
-				const tanda = filtrados.slice(0, mostrados);
-				grid.innerHTML = tanda.map(tarjeta).join('');
+				const desde = (pagina - 1) * porPagina;
+				grid.innerHTML = filtrados.slice(desde, desde + porPagina).map(tarjeta).join('');
 				gridEsDelServidor = false;
+				pintarPaginacion();
 				actualizarContadores();
 			}
 
-			function actualizarContadores() {
-				const visibles = Math.min(mostrados, filtrados.length);
-				if (countSpan) countSpan.textContent = String(filtrados.length);
-				if (rangoMostrado) rangoMostrado.textContent = String(visibles);
-				if (rangoTotal) rangoTotal.textContent = String(filtrados.length);
-				if (verMasBox) verMasBox.classList.toggle('hidden', filtrados.length <= mostrados);
-				if (noResultsBox) noResultsBox.classList.toggle('hidden', filtrados.length !== 0);
-				if (grid) grid.classList.toggle('hidden', filtrados.length === 0);
+			/**
+			 * Ventana de páginas alrededor de la actual: con 72 páginas no se pueden
+			 * listar todas, así que se muestran primera, última y las vecinas.
+			 */
+			function ventana(actual: number, total: number): (number | string)[] {
+				if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+				const out: (number | string)[] = [1];
+				const desde = Math.max(2, actual - 1);
+				const hasta = Math.min(total - 1, actual + 1);
+				if (desde > 2) out.push('...');
+				for (let i = desde; i <= hasta; i++) out.push(i);
+				if (hasta < total - 1) out.push('...');
+				out.push(total);
+				return out;
 			}
 
-			function aplicarFiltros() {
-				const term = searchInput ? searchInput.value.toLowerCase().trim() : '';
+			function pintarPaginacion() {
+				const total = totalPaginas();
+				const html = total <= 1 ? '' : [
+					'<nav class="flex flex-wrap items-center justify-center gap-1.5" aria-label="Paginación">',
+					botonPag(pagina - 1, '&larr;', pagina === 1, 'Página anterior'),
+					...ventana(pagina, total).map((v) =>
+						v === '...'
+							? '<span class="px-2 text-slate-400 font-bold">…</span>'
+							: botonPag(v as number, String(v), false, 'Página ' + v, v === pagina)
+					),
+					botonPag(pagina + 1, '&rarr;', pagina === total, 'Página siguiente'),
+					'</nav>'
+				].join('');
+
+				if (pagArriba) {
+					pagArriba.innerHTML = html;
+					pagArriba.classList.toggle('hidden', total <= 1);
+				}
+				if (pagAbajo) pagAbajo.innerHTML = html;
+			}
+
+			function botonPag(destino: number, texto: string, deshabilitado: boolean, etiqueta: string, activo = false) {
+				const base = 'min-w-9 h-9 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer border';
+				const estilo = activo
+					? 'bg-[#2D5A27] text-white border-[#2D5A27] shadow-sm'
+					: deshabilitado
+						? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+						: 'bg-white text-slate-700 border-slate-200 hover:border-[#2D5A27] hover:text-[#2D5A27]';
+				return '<button class="btn-pag ' + base + ' ' + estilo + '" data-pagina="' + destino + '"' +
+					(deshabilitado ? ' disabled' : '') +
+					(activo ? ' aria-current="page"' : '') +
+					' aria-label="' + etiqueta + '">' + texto + '</button>';
+			}
+
+			function actualizarContadores() {
+				const hay = filtrados.length;
+				const desde = hay === 0 ? 0 : (pagina - 1) * porPagina + 1;
+				const hasta = Math.min(pagina * porPagina, hay);
+				if (countSpan) countSpan.textContent = String(hay);
+				if (rangoDesde) rangoDesde.textContent = String(desde);
+				if (rangoHasta) rangoHasta.textContent = String(hasta);
+				if (rangoTotal) rangoTotal.textContent = String(hay);
+				if (noResultsBox) noResultsBox.classList.toggle('hidden', hay !== 0);
+				if (grid) grid.classList.toggle('hidden', hay === 0);
+			}
+
+			function aplicarFiltros(resetearPagina = true) {
+				const term = normalizar(searchInput ? searchInput.value.trim() : '');
 				const sortMode = sortSelect ? sortSelect.value : 'default';
 				const permitidas = activeCategory.split(',');
 				const todas = activeCategory === 'all';
+				const soloConStock = !!soloDispo?.checked;
 
 				const res = indice.filter((e) =>
 					(!term || e.n.includes(term) || e.m.includes(term)) &&
-					(todas || permitidas.includes(e.it.c))
+					(todas || permitidas.includes(e.it.c)) &&
+					(!soloConStock || e.it.k === null || e.it.k > 0)
 				).map((e) => e.it);
 
 				if (sortMode === 'price-asc') res.sort((a, b) => a.p - b.p);
@@ -454,13 +587,131 @@ const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 				else if (sortMode === 'name-asc') res.sort((a, b) => a.n.localeCompare(b.n));
 
 				filtrados = res;
-				mostrados = TANDA;
+				if (resetearPagina) pagina = 1;
+				if (pagina > totalPaginas()) pagina = totalPaginas();
 				pintar();
 			}
 
-			// El carrito ya no necesita una isla React por tarjeta: un solo
-			// listener delegado cubre todo el catalogo, incluidas las tarjetas
-			// que se pintan despues.
+			function irAPagina(n: number) {
+				const total = totalPaginas();
+				pagina = Math.min(Math.max(1, n), total);
+				if (gridEsDelServidor) { aplicarFiltros(false); return; }
+				pintar();
+				// Volver al inicio de la grilla: cambiar de página dejando al usuario
+				// en mitad del listado anterior es desorientador.
+				grid?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			}
+
+			[pagArriba, pagAbajo].forEach((cont) => {
+				cont?.addEventListener('click', (ev) => {
+					const btn = (ev.target as HTMLElement)?.closest('.btn-pag') as HTMLButtonElement | null;
+					if (!btn || btn.disabled) return;
+					irAPagina(Number(btn.dataset.pagina));
+				});
+			});
+
+			porPaginaSel?.addEventListener('change', () => {
+				porPagina = Number(porPaginaSel.value) || 48;
+				pagina = 1;
+				if (gridEsDelServidor) aplicarFiltros(); else pintar();
+			});
+
+			soloDispo?.addEventListener('change', () => aplicarFiltros());
+
+			// --- Panel de todas las categorías ---
+			btnVerCategorias?.addEventListener('click', () => {
+				const abierto = !panelCategorias?.classList.contains('hidden');
+				panelCategorias?.classList.toggle('hidden', abierto);
+				btnVerCategorias.setAttribute('aria-expanded', String(!abierto));
+				if (!abierto) buscarCategoria?.focus();
+			});
+
+			buscarCategoria?.addEventListener('input', () => {
+				const t = normalizar(buscarCategoria.value.trim());
+				let visibles = 0;
+				document.querySelectorAll('.cat-panel-item').forEach((el) => {
+					const nombre = normalizar((el as HTMLElement).dataset.nombre || '');
+					const coincide = !t || nombre.includes(t);
+					(el as HTMLElement).classList.toggle('hidden', !coincide);
+					if (coincide) visibles++;
+				});
+				sinCategorias?.classList.toggle('hidden', visibles !== 0);
+			});
+
+			function activarCategoria(valor: string, parentId: string | null, etiqueta: string) {
+				activeCategory = valor;
+
+				document.querySelectorAll('#main-category-pills .cat-pill').forEach((p) => {
+					const suyo = p.getAttribute('data-category') === valor;
+					p.classList.toggle('bg-[#2D5A27]', suyo);
+					p.classList.toggle('text-white', suyo);
+					p.classList.toggle('shadow-sm', suyo);
+					p.classList.toggle('bg-slate-100', !suyo);
+					p.classList.toggle('text-slate-600', !suyo);
+				});
+
+				// Subcategorías, sólo si el padre tiene hijas con productos.
+				const hijas = parentId
+					? allCategories.filter((c: any) => {
+						const pid = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id;
+						return pid === parentId && c.productCount > 0;
+					})
+					: [];
+
+				if (hijas.length > 0 && subRow && subContainer) {
+					subContainer.innerHTML =
+						'<button class="sub-cat-pill px-3 py-1 rounded-lg text-xs font-bold bg-[#2D5A27] text-white shadow-xs shrink-0 cursor-pointer" data-category="' + esc(valor) + '">Todas las de ' + esc(etiqueta) + '</button>' +
+						hijas.map((c: any) =>
+							'<button class="sub-cat-pill px-3 py-1 rounded-lg text-xs font-semibold bg-white text-slate-700 hover:bg-emerald-50 hover:text-[#2D5A27] border border-slate-200 shrink-0 cursor-pointer flex items-center gap-1.5" data-category="' + esc(c.$id) + '">' +
+							esc(c.nombre) +
+							'<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded-full font-extrabold">' + c.productCount + '</span></button>'
+						).join('');
+					subRow.classList.remove('hidden');
+				} else {
+					subRow?.classList.add('hidden');
+				}
+
+				aplicarFiltros();
+			}
+
+			document.getElementById('main-category-pills')?.addEventListener('click', (ev) => {
+				const pill = (ev.target as HTMLElement)?.closest('.cat-pill') as HTMLElement | null;
+				if (!pill) return;
+				activarCategoria(
+					pill.getAttribute('data-category') || 'all',
+					pill.getAttribute('data-parent-id'),
+					(pill.textContent || '').replace(/\d+/g, '').trim()
+				);
+			});
+
+			document.getElementById('grilla-categorias')?.addEventListener('click', (ev) => {
+				const item = (ev.target as HTMLElement)?.closest('.cat-panel-item') as HTMLElement | null;
+				if (!item) return;
+				activarCategoria(
+					item.getAttribute('data-category') || 'all',
+					item.getAttribute('data-parent-id'),
+					(item.dataset.nombre || '')
+				);
+				// Se cierra el panel: dejarlo abierto tapa los resultados que el
+				// usuario acaba de pedir.
+				panelCategorias?.classList.add('hidden');
+				btnVerCategorias?.setAttribute('aria-expanded', 'false');
+			});
+
+			document.getElementById('sub-pills-container')?.addEventListener('click', (ev) => {
+				const btn = (ev.target as HTMLElement)?.closest('.sub-cat-pill') as HTMLElement | null;
+				if (!btn) return;
+				document.querySelectorAll('#sub-pills-container .sub-cat-pill').forEach((sb) => {
+					sb.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-xs');
+					sb.classList.add('bg-white', 'text-slate-700');
+				});
+				btn.classList.remove('bg-white', 'text-slate-700');
+				btn.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-xs');
+				activeCategory = btn.getAttribute('data-category') || 'all';
+				aplicarFiltros();
+			});
+
+			// --- Carrito: un solo listener delegado para toda la grilla ---
 			grid?.addEventListener('click', (ev) => {
 				const btn = (ev.target as HTMLElement)?.closest('.btn-add') as HTMLButtonElement | null;
 				if (!btn || btn.disabled) return;
@@ -485,95 +736,18 @@ const productosIniciales = products.slice(0, TARJETAS_POR_TANDA);
 				}, 2000);
 			});
 
-			btnVerMas?.addEventListener('click', () => {
-				mostrados += TANDA;
-				if (gridEsDelServidor) {
-					pintar();
-				} else if (grid) {
-					// Solo se agregan las nuevas: repintar todo perderia el scroll.
-					const nuevas = filtrados.slice(mostrados - TANDA, mostrados);
-					grid.insertAdjacentHTML('beforeend', nuevas.map(tarjeta).join(''));
-					actualizarContadores();
-				}
-			});
+			searchInput?.addEventListener('input', () => aplicarFiltros());
+			sortSelect?.addEventListener('change', () => aplicarFiltros());
 
-			searchInput?.addEventListener('input', aplicarFiltros);
-			sortSelect?.addEventListener('change', aplicarFiltros);
-
-			btnResetFilters?.addEventListener('click', () => {
+			btnReset?.addEventListener('click', () => {
 				if (searchInput) searchInput.value = '';
 				if (sortSelect) sortSelect.value = 'default';
-				activeCategory = 'all';
+				if (soloDispo) soloDispo.checked = false;
 				subRow?.classList.add('hidden');
-				catPills.forEach((pill, idx) => {
-					pill.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-sm');
-					pill.classList.add('bg-slate-100', 'text-slate-600');
-					if (idx === 0) {
-						pill.classList.remove('bg-slate-100', 'text-slate-600');
-						pill.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-sm');
-					}
-				});
-				aplicarFiltros();
+				activarCategoria('all', null, '');
 			});
 
-			catPills.forEach((pill) => {
-				pill.addEventListener('click', () => {
-					const parentId = pill.getAttribute('data-parent-id');
-
-					catPills.forEach((p) => {
-						p.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-sm');
-						p.classList.add('bg-slate-100', 'text-slate-600');
-					});
-					pill.classList.remove('bg-slate-100', 'text-slate-600');
-					pill.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-sm');
-
-					activeCategory = pill.getAttribute('data-category') || 'all';
-
-					if (parentId && subRow && subContainer) {
-						const hijas = allCategories.filter((c: any) => {
-							const pid = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id;
-							return pid === parentId && c.productCount > 0;
-						});
-
-						if (hijas.length > 0) {
-							subContainer.innerHTML = `
-								<button class="sub-cat-pill active px-3 py-1 rounded-lg text-xs font-bold bg-[#2D5A27] text-white shadow-xs shrink-0 cursor-pointer" data-category="${activeCategory}">
-									Todas las de ${esc(pill.textContent?.replace(/\d+/g, '').trim())}
-								</button>
-								${hijas.map((child: any) => `
-									<button class="sub-cat-pill px-3 py-1 rounded-lg text-xs font-semibold bg-white text-slate-700 hover:bg-emerald-50 hover:text-[#2D5A27] border border-slate-200 shrink-0 cursor-pointer flex items-center gap-1.5" data-category="${esc(child.$id)}">
-										${esc(child.nombre)}
-										<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded-full font-extrabold">${child.productCount}</span>
-									</button>
-								`).join('')}
-							`;
-							subRow.classList.remove('hidden');
-
-							subContainer.querySelectorAll('.sub-cat-pill').forEach((subBtn) => {
-								subBtn.addEventListener('click', (e) => {
-									subContainer.querySelectorAll('.sub-cat-pill').forEach((sb) => {
-										sb.classList.remove('bg-[#2D5A27]', 'text-white', 'shadow-xs');
-										sb.classList.add('bg-white', 'text-slate-700');
-									});
-									const target = e.currentTarget as HTMLElement;
-									target.classList.remove('bg-white', 'text-slate-700');
-									target.classList.add('bg-[#2D5A27]', 'text-white', 'shadow-xs');
-
-									activeCategory = target.getAttribute('data-category') || 'all';
-									aplicarFiltros();
-								});
-							});
-						} else {
-							subRow.classList.add('hidden');
-						}
-					} else {
-						subRow?.classList.add('hidden');
-					}
-
-					aplicarFiltros();
-				});
-			});
-
+			pintarPaginacion();
 			actualizarContadores();
 		});
 	</script>
