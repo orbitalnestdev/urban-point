@@ -8,8 +8,10 @@ import AddToCartBtn from '../components/shop/AddToCartBtn';
 import { getCachedCatalog, getOptimizedImageUrl } from '../lib/server/catalogCache';
 import { precioDeVentaCentavos, precioListaCentavos } from '../lib/pricing';
 import { toSafeJson } from '../lib/safeJson';
+import { agruparVariantes } from '../lib/variantes';
 
 let featuredProducts: any[] = [];
+let gruposDestacados: any[] = [];
 let pickupPoints: any[] = [];
 
 // Distingue "no hay productos" de "no pudimos cargarlos".
@@ -28,19 +30,12 @@ try {
 	const destacados = cache.products.filter((prod: any) => prod.destacado === true);
 	const recientes = cache.products.filter((prod: any) => prod.destacado !== true);
 
-	// Un nombre por tarjeta. El catalogo tiene lotes importados donde varias
-	// variantes comparten nombre exacto —hay ocho "Bross 8170 Pregraduados Blue
-	// Blocker - Gris Oscuro" cargados en el mismo minuto—, y sin esto la vitrina
-	// quedaba con siete copias del mismo producto.
-	const vistos = new Set<string>();
-	featuredProducts = [...destacados, ...recientes]
-		.filter((prod: any) => {
-			const clave = (prod.nombre || prod.$id).trim().toLowerCase();
-			if (vistos.has(clave)) return false;
-			vistos.add(clave);
-			return true;
-		})
-		.slice(0, 8);
+	// Una tarjeta por GRUPO, igual que en /productos. Deduplicar por nombre no
+	// alcanzaba: las variantes tienen nombres distintos —"Remera - Talle S",
+	// "Remera - Talle M"— así que los destacados se llenaban con tres talles de
+	// la misma remera y tres colores del mismo anteojo.
+	gruposDestacados = agruparVariantes([...destacados, ...recientes]).slice(0, 8);
+	featuredProducts = gruposDestacados.map((g: any) => g.principal);
 	
 	pickupPoints = cache.pickupPoints;
 	catalogoDegradado = Boolean(cache.degradado);
@@ -269,8 +264,11 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 				)}
 
 				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="product-grid">
-					{featuredProducts.map((prod) => {
-						const precioVentaCentavos = precioDeVentaCentavos(prod);
+					{gruposDestacados.map((grupo: any) => {
+						const prod: any = grupo.principal;
+						const preciosGrupo = grupo.variantes.map((v: any) => precioDeVentaCentavos(v)).filter((n: number) => n > 0);
+						const hayVarias = grupo.variantes.length > 1;
+						const precioVentaCentavos = preciosGrupo.length ? Math.min(...preciosGrupo) : precioDeVentaCentavos(prod);
 						const precioMinorista = precioVentaCentavos / 100;
 						const listaCentavos = precioListaCentavos(prod);
 						const precioLista = listaCentavos === null ? null : listaCentavos / 100;
@@ -305,7 +303,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 											{prod.marca || 'UrbanPoint'}
 										</span>
 										<a href={`/productos/${prod.slug}`} class="font-bold text-slate-900 text-sm line-clamp-2 hover:text-[#2D5A27] transition-colors leading-snug">
-											{prod.nombre}
+											{grupo.base}
 										</a>
 									</div>
 

@@ -11,6 +11,7 @@ import { Query } from 'node-appwrite';
 import { serializeActiveNodeCookie, REF_COOKIE_NAME, REF_COOKIE_MAX_AGE } from '../lib/nodeSession';
 import { precioDeVentaCentavos, precioListaCentavos } from '../lib/pricing';
 import { toSafeJson } from '../lib/safeJson';
+import { agruparVariantes } from '../lib/variantes';
 import { esSlugReservado } from '../lib/slugs';
 
 const rawSlug = Astro.params.slug || '';
@@ -23,6 +24,7 @@ if (esSlugReservado(rawSlug)) {
 
 let activeNode: any = null;
 let featuredProducts: any[] = [];
+let gruposDestacados: any[] = [];
 let categories: any[] = [];
 let pickupPoints: any[] = [];
 
@@ -91,7 +93,16 @@ try {
   }
 
   const cache = await getCachedCatalog();
-  featuredProducts = cache.products.slice(0, 8);
+  // Misma seleccion que la home: los marcados como destacado van primero y
+  // despues los mas nuevos. La pagina del nodo muestra el mismo catalogo
+  // global, asi que un producto fijado tiene que verse fijado tambien aca.
+  //
+  // Una tarjeta por grupo: si no, el nodo se llenaba con tres talles de la
+  // misma remera.
+  const destacados = cache.products.filter((prod: any) => prod.destacado === true);
+  const recientes = cache.products.filter((prod: any) => prod.destacado !== true);
+  gruposDestacados = agruparVariantes([...destacados, ...recientes]).slice(0, 8);
+  featuredProducts = gruposDestacados.map((g: any) => g.principal);
   categories = cache.categories;
   pickupPoints = cache.pickupPoints;
 } catch (e) {
@@ -315,8 +326,10 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 				</div>
 
 				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="product-grid">
-					{featuredProducts.map((prod) => {
-						const precioMinorista = precioDeVentaCentavos(prod) / 100;
+					{gruposDestacados.map((grupo: any) => {
+						const prod: any = grupo.principal;
+						const preciosGrupo = grupo.variantes.map((v: any) => precioDeVentaCentavos(v)).filter((n: number) => n > 0);
+						const precioMinorista = (preciosGrupo.length ? Math.min(...preciosGrupo) : precioDeVentaCentavos(prod)) / 100;
 						const listaCentavos = precioListaCentavos(prod);
 						const precioLista = listaCentavos === null ? null : listaCentavos / 100;
 
@@ -348,7 +361,7 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 											{prod.marca || 'UrbanPoint'}
 										</span>
 										<a href={`/productos/${prod.slug}`} class="font-bold text-slate-900 text-sm line-clamp-2 hover:text-[#2D5A27] transition-colors leading-snug">
-											{prod.nombre}
+											{grupo.base}
 										</a>
 									</div>
 
