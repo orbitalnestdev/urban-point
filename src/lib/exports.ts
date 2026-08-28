@@ -80,47 +80,9 @@ export function exportErpCsv(products: any[]) {
 	downloadCsv(`export_erp_urbanpoint_${new Date().toISOString().slice(0, 10)}.csv`, csv);
 }
 
-export function downloadTemplateSimple() {
-	const rows = [
-		{ 
-			Nombre: 'Gorro de Invierno Tejido', 
-			SKU: 'GOR-001', 
-			Categoria: 'Accesorios', 
-			Marca: 'UrbanStyle', 
-			Precio: '12500', 
-			Precio_Promocional: '10900', 
-			Precio_Canillita: '8500', 
-			Precio_Distribuidor: '6500', 
-			Costo: '5000', 
-			Stock: '15', 
-			Portada_URL: 'https://images.unsplash.com/photo-1576871337632-b9aef4c17ab9, https://images.unsplash.com/photo-1576871337622-98d48d1cf531', 
-			Descripcion: 'Gorro de lana de alta densidad ideal para invierno.' 
-		},
-		{ 
-			Nombre: 'Botella Térmica 500ml Acero', 
-			SKU: 'BOT-500', 
-			Categoria: 'Bazar y Bazar', 
-			Marca: 'TermoMax', 
-			Precio: '18900', 
-			Precio_Promocional: '', 
-			Precio_Canillita: '13000', 
-			Precio_Distribuidor: '10000', 
-			Costo: '7500', 
-			Stock: '20', 
-			Portada_URL: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8', 
-			Descripcion: 'Mantiene frío 24hs y calor 12hs.' 
-		}
-	];
-	const csv = generateCsvString(rows);
-	downloadCsv('plantilla_productos_completos_urbanpoint.csv', csv);
-}
-
-export function downloadTemplateVariantes() {
-	const rows = [
-		{ Nombre: 'Remera Algodón 100%', SKU: 'REM-S-NEGRO', Talle: 'S', Color: 'Negro', Categoria: 'Indumentaria', Precio: '8500', Precio_Canillita: '6000', Stock: '10' },
-		{ Nombre: 'Remera Algodón 100%', SKU: 'REM-M-NEGRO', Talle: 'M', Color: 'Negro', Categoria: 'Indumentaria', Precio: '8500', Precio_Canillita: '6000', Stock: '12' },
-		{ Nombre: 'Remera Algodón 100%', SKU: 'REM-L-AZUL', Talle: 'L', Color: 'Azul', Categoria: 'Indumentaria', Precio: '8500', Precio_Canillita: '6000', Stock: '8' }
-	];
-	const csv = generateCsvString(rows);
-	downloadCsv('plantilla_productos_variantes_urbanpoint.csv', csv);
-}
+/*
+ * Las plantillas CSV vivían acá y también en /api/admin/template-csv, con
+ * contenido distinto. El botón de descarga disparaba las dos a la vez —el href
+ * al endpoint y el onClick a esta versión—, así que el admin se bajaba dos
+ * archivos que no coincidían. Queda sólo el endpoint como fuente.
+ */

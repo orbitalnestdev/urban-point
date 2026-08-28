@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { actions } from 'astro:actions';
-import { downloadTemplateSimple, downloadTemplateVariantes } from '../../lib/exports';
 import { parseCsvText } from '../../lib/csvParser';
 
 type Props = {};
@@ -25,6 +24,8 @@ export default function ImportCsvModal({}: Props) {
     marca: string;
     portada_url: string;
     descripcion: string;
+    grupo: string;
+    orden: string;
   }>({
     nombre: '',
     sku: '',
@@ -38,7 +39,9 @@ export default function ImportCsvModal({}: Props) {
     categoria: '',
     marca: '',
     portada_url: '',
-    descripcion: ''
+    descripcion: '',
+    grupo: '',
+    orden: ''
   });
   const [isImporting, setIsImporting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -98,7 +101,13 @@ export default function ImportCsvModal({}: Props) {
         categoria: rawHeaders.find(h => /^categoria$|^categoria_nombre$|^category$|^rubro$/i.test(normStr(h))) || rawHeaders.find(h => /categoria|category|rubro/i.test(normStr(h))) || '',
         marca: rawHeaders.find(h => /^marca$|^brand$/i.test(normStr(h))) || '',
         portada_url: rawHeaders.find(h => /^portada_url$|^imagen$|^imagenes$|^fotos$|^portada$/i.test(normStr(h))) || '',
-        descripcion: rawHeaders.find(h => /^descripcion$|^desc$/i.test(normStr(h))) || ''
+        descripcion: rawHeaders.find(h => /^descripcion$|^desc$/i.test(normStr(h))) || '',
+        // Agrupa las variantes bajo un mismo producto en la vitrina. Opcional:
+        // sin esta columna el grupo se deduce del nombre, cortando lo que va
+        // después del último " - ".
+        grupo: rawHeaders.find(h => /^grupo$|^familia$|^coleccion$|^serie$/i.test(normStr(h))) || '',
+        // Prioridad de aparición. Mayor primero.
+        orden: rawHeaders.find(h => /^orden$|^prioridad$|^posicion$/i.test(normStr(h))) || ''
       };
       setMapping(newMapping);
       setParsedRows(dataRows);
@@ -146,7 +155,9 @@ export default function ImportCsvModal({}: Props) {
       categoria_nombre: mapping.categoria && row[mapping.categoria] ? row[mapping.categoria] : undefined,
       marca: mapping.marca && row[mapping.marca] ? row[mapping.marca] : undefined,
       portada_url: mapping.portada_url && row[mapping.portada_url] ? row[mapping.portada_url] : undefined,
-      descripcion: mapping.descripcion && row[mapping.descripcion] ? row[mapping.descripcion] : undefined
+      descripcion: mapping.descripcion && row[mapping.descripcion] ? row[mapping.descripcion] : undefined,
+      grupo: mapping.grupo && row[mapping.grupo] ? row[mapping.grupo] : undefined,
+      orden: mapping.orden && row[mapping.orden] ? parseNum(row[mapping.orden]) : undefined
     })).filter(item => item.nombre.trim().length > 0);
 
     try {
@@ -237,16 +248,29 @@ export default function ImportCsvModal({}: Props) {
                 </p>
               </label>
 
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-2 gap-3 border-t border-slate-100">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Descargar Plantilla CSV Ejemplo:</span>
+              <div className="pt-3 border-t border-slate-100 space-y-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                  <p className="text-xs font-extrabold text-slate-700">¿El producto tiene variantes?</p>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Una variante es el mismo producto en otra versión: talle, color, sabor, número de fascículo.
+                    Va <strong>una fila por variante</strong>, igual que cualquier otro producto.
+                  </p>
+                  <div className="text-[11px] text-slate-600 leading-relaxed space-y-1">
+                    <p><strong className="text-slate-800">Nombre</strong> — el producto más la variante. Es lo que las distingue.</p>
+                    <p><strong className="text-slate-800">Grupo</strong> — lo que comparten. Junta las filas en una sola ficha de la tienda.</p>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed border-t border-slate-200 pt-2">
+                    Si no ponés la columna <strong>Grupo</strong>, se deduce del Nombre cortando lo que va después del último <code className="bg-white border border-slate-200 rounded px-1">-</code>.
+                    Y si el producto no tiene variantes, no hace falta ninguna de las dos: se sube como siempre.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Descargar plantilla de ejemplo:</span>
                 <div className="flex items-center gap-2 flex-wrap">
                   <a 
                     href="/api/admin/template-csv?tipo=completa"
                     download="plantilla_productos_completos_urbanpoint.csv"
-                    onClick={(e) => {
-                      // Se intenta primero la descarga local dinámicos; si el navegador bloquea la descarga, la URL nativa href responde.
-                      downloadTemplateSimple();
-                    }}
                     className="px-3.5 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition-colors flex items-center gap-2"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -255,14 +279,12 @@ export default function ImportCsvModal({}: Props) {
                   <a 
                     href="/api/admin/template-csv?tipo=variantes"
                     download="plantilla_productos_variantes_urbanpoint.csv"
-                    onClick={(e) => {
-                      downloadTemplateVariantes();
-                    }}
                     className="px-3.5 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-800 hover:bg-indigo-100 transition-colors flex items-center gap-2"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                     Plantilla Variantes CSV
                   </a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -404,6 +426,30 @@ export default function ImportCsvModal({}: Props) {
                     <option value="">(Ninguna)</option>
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Grupo de variantes</label>
+                  <select 
+                    value={mapping.grupo} 
+                    onChange={e => setMapping({ ...mapping, grupo: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Se deduce del nombre)</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                  <p className="text-[10px] text-slate-400 font-medium mt-1">Junta las variantes bajo una sola ficha. Si no la indicás, se deduce cortando lo que va después del último " - " del nombre.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Orden / prioridad</label>
+                  <select 
+                    value={mapping.orden} 
+                    onChange={e => setMapping({ ...mapping, orden: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Ninguna)</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                  <p className="text-[10px] text-slate-400 font-medium mt-1">Número: mayor aparece antes en la tienda. Sin esta columna manda la fecha de alta.</p>
                 </div>
               </div>
               <div className="pt-4 flex justify-between">

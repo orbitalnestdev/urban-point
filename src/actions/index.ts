@@ -1865,7 +1865,13 @@ export const server = {
 				categoria_nombre: z.string().optional().nullable(),
 				marca: z.string().optional(),
 				portada_url: z.string().optional(),
-				descripcion: z.string().optional()
+				descripcion: z.string().optional(),
+				// Agrupado de variantes. Si no viene, se deduce del nombre al mostrar
+				// (ver src/lib/variantes.ts): la columna sólo hace falta cuando el
+				// nombre no alcanza para separar el grupo de la variante.
+				grupo: z.string().optional().nullable(),
+				// Prioridad en la vitrina. Mayor primero; empata por fecha de alta.
+				orden: z.number().optional().nullable()
 			}))
 		}),
 		handler: async (input, ctx) => {
@@ -1953,6 +1959,8 @@ export const server = {
 					if (item.costo !== undefined && item.costo !== null) payload.costo = item.costo;
 					if (catId) payload.categoria_id = catId;
 					if (item.marca) payload.marca = item.marca;
+					if (item.grupo && item.grupo.trim()) payload.grupo = item.grupo.trim();
+					if (item.orden !== undefined && item.orden !== null) payload.orden = item.orden;
 
 					// Manejo inteligente de múltiples fotos: la 1ra es portada, las siguientes van a galería
 					if (item.portada_url) {
