@@ -270,23 +270,28 @@ export const getAdminCachedCatalog = async () => {
   }
 };
 
+/**
+ * Invalidación tras una escritura del panel.
+ *
+ * Los dos cachés necesitan cosas distintas, y tratarlos igual costaba caro:
+ *
+ * - El de ADMIN se vacía. Quien acaba de guardar tiene que ver su cambio, no
+ *   una copia vieja. La próxima lectura lo llena.
+ *
+ * - El PÚBLICO se marca vencido pero conserva los datos. Que la tienda muestre
+ *   un precio con unos segundos de atraso no molesta a nadie, y así ningún
+ *   visitante espera la paginación completa: se le sirve lo viejo y la recarga
+ *   corre de fondo.
+ *
+ * Antes esto vaciaba los dos y además disparaba la recarga en el acto. Con
+ * 6.495 productos, cada guardado del panel encolaba una paginación completa que
+ * competía con el guardado siguiente: los tiempos saltaban de 2 a 11 segundos.
+ */
 export const invalidateCatalogCache = () => {
-  const cargadores: Array<[string, () => Promise<any>]> = [
-    ['__urbanpointCache', cargarCatalogoPublico],
-    ['__urbanpointAdminCache', cargarCatalogoAdmin]
-  ];
+  const admin = obtenerEntrada('__urbanpointAdminCache');
+  admin.datos = null;
+  admin.obtenidoEn = 0;
 
-  for (const [clave, cargar] of cargadores) {
-    const entrada = obtenerEntrada(clave);
-    entrada.datos = null;
-    entrada.obtenidoEn = 0;
-
-    // Se arranca la recarga YA, sin esperarla. Invalidar y nada más dejaba al
-    // siguiente que abriera el panel pagando la paginación entera; así, cuando
-    // el admin vuelve al listado después de guardar, el refetch ya viene en
-    // curso y su request se engancha al mismo vuelo en vez de iniciar otro.
-    iniciarCarga(entrada, cargar).catch((err: any) => {
-      console.error('[Cache] Falló la recarga tras invalidar:', err?.message || err);
-    });
-  }
+  const publico = obtenerEntrada('__urbanpointCache');
+  publico.obtenidoEn = 0;
 };

@@ -1654,7 +1654,21 @@ export const server = {
 			try {
 				requireRole(ctx, 'admin', 'gestion');
 
-				const currentDoc = await db.getDocument('urbanpoint', 'products', input.id);
+				// El panel manda la categoría junto con el resto, así que se puede
+				// pedir en paralelo con el producto en vez de esperar a saber cuál es.
+				// Eran tres viajes encadenados —producto, categoría, escritura— contra
+				// un backend de ~1,1 s de ida y vuelta: el guardado del modal tardaba
+				// una mediana de 4,7 s.
+				const catIdDelInput = input.categoria_id
+					? (typeof input.categoria_id === 'string' ? input.categoria_id : (input.categoria_id as any).$id)
+					: null;
+
+				const [currentDoc, catDocAdelantado] = await Promise.all([
+					db.getDocument('urbanpoint', 'products', input.id),
+					catIdDelInput
+						? db.getDocument('urbanpoint', 'categories', catIdDelInput).catch(() => null)
+						: Promise.resolve(null)
+				]);
 				const updateData: any = {};
 
 				if (input.nombre !== undefined) updateData.nombre = input.nombre;
@@ -1702,10 +1716,11 @@ export const server = {
 				// Merged document for recalculation
 				const merged = { ...currentDoc, ...updateData };
 
-				// Fetch category and site settings
-				let catDoc = null;
+				// La categoría ya vino en paralelo si el panel la mandó. Sólo se pide
+				// acá cuando cambió respecto de lo que se adelantó, que es el caso raro.
 				const targetCatId = merged.categoria_id ? (typeof merged.categoria_id === 'string' ? merged.categoria_id : merged.categoria_id.$id) : null;
-				if (targetCatId) {
+				let catDoc = catIdDelInput && catIdDelInput === targetCatId ? catDocAdelantado : null;
+				if (targetCatId && !catDoc) {
 					try {
 						catDoc = await db.getDocument('urbanpoint', 'categories', targetCatId);
 					} catch (e) {}
