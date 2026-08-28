@@ -46,6 +46,11 @@ export default function ImportCsvModal({}: Props) {
   const [isImporting, setIsImporting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successCount, setSuccessCount] = useState(0);
+  // Filas que no entraron, con su numero de linea del CSV. Antes la importacion
+  // podia cortarse a la mitad y el panel mostraba exito igual.
+  const [erroresFilas, setErroresFilas] = useState<Array<{ fila: number; nombre: string; motivo: string }>>([]);
+  const [totalIntentado, setTotalIntentado] = useState(0);
+  const [progreso, setProgreso] = useState({ hechos: 0, total: 0 });
 
   useEffect(() => {
     const handleOpen = () => {
@@ -160,19 +165,55 @@ export default function ImportCsvModal({}: Props) {
       orden: mapping.orden && row[mapping.orden] ? parseNum(row[mapping.orden]) : undefined
     })).filter(item => item.nombre.trim().length > 0);
 
+    // Se manda por tandas, no todo de una.
+    //
+    // El servidor escribe en paralelo, pero mil filas siguen siendo varios
+    // minutos dentro de UNA request, y cualquier proxy la corta a los 30 o 60
+    // segundos. Con tandas, cada request dura pocos segundos: si algo se corta,
+    // se pierde una tanda y no el resto del catálogo, y mientras tanto se puede
+    // mostrar el avance.
+    const POR_TANDA = 150;
+    let acumuladas = 0;
+    const erroresAcumulados: Array<{ fila: number; nombre: string; motivo: string }> = [];
+    setProgreso({ hechos: 0, total: itemsToImport.length });
+
     try {
-      const { data, error } = await actions.importProductsBulk({ items: itemsToImport });
-      if (error || !data?.success) {
-        setErrorMsg(error?.message || data?.error || 'Error durante la importación');
-        setIsImporting(false);
-        return;
+      for (let i = 0; i < itemsToImport.length; i += POR_TANDA) {
+        const tanda = itemsToImport.slice(i, i + POR_TANDA);
+        const { data, error } = await actions.importProductsBulk({ items: tanda });
+
+        if (error || !data?.success) {
+          // Lo ya importado no se descarta: se informa hasta dónde llegó.
+          setSuccessCount(acumuladas);
+          setTotalIntentado(itemsToImport.length);
+          setErroresFilas([
+            ...erroresAcumulados,
+            { fila: i + 2, nombre: '—', motivo: `La importación se cortó acá: ${error?.message || data?.error || 'error del servidor'}. Las filas siguientes no se intentaron.` }
+          ]);
+          setIsImporting(false);
+          return;
+        }
+
+        acumuladas += data.count || 0;
+        // Las filas del servidor vienen numeradas dentro de su tanda: se
+        // corrigen al número real de línea del CSV.
+        for (const e of (data.errores || [])) {
+          erroresAcumulados.push({ ...e, fila: e.fila + i });
+        }
+        setProgreso({ hechos: Math.min(i + POR_TANDA, itemsToImport.length), total: itemsToImport.length });
       }
 
-      setSuccessCount(data.count || itemsToImport.length);
+      setSuccessCount(acumuladas);
+      setTotalIntentado(itemsToImport.length);
+      setErroresFilas(erroresAcumulados);
       setIsImporting(false);
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
+      const data = { errores: erroresAcumulados };
+
+      // Si algo fallo, no se recarga sola: el admin tiene que poder leer que
+      // filas quedaron afuera antes de que la pantalla se vaya.
+      if (!data.errores || data.errores.length === 0) {
+        setTimeout(() => { window.location.reload(); }, 1500);
+      }
     } catch (e: any) {
       setErrorMsg(e.message || 'Error de conexión');
       setIsImporting(false);
@@ -508,15 +549,69 @@ export default function ImportCsvModal({}: Props) {
                 <>
                   <div className="w-12 h-12 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin mx-auto"></div>
                   <h3 className="font-extrabold text-slate-900 text-lg">Importando productos...</h3>
-                  <p className="text-xs text-slate-400">Insertando registros en Appwrite Database</p>
+                  <p className="text-xs text-slate-400">
+                    {progreso.total > 0
+                      ? `Importando ${progreso.hechos} de ${progreso.total} productos...`
+                      : 'Insertando registros en la base'}
+                  </p>
                 </>
               ) : (
                 <>
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  </div>
-                  <h3 className="font-extrabold text-slate-900 text-xl">¡Importación completada!</h3>
-                  <p className="text-sm text-slate-500">Se importaron {successCount} productos con éxito.</p>
+                  {/* El resultado dice cuántas filas entraron sobre cuántas se
+                      intentaron, y lista las que fallaron con su número de línea.
+                      Antes sólo mostraba "importados N": una importación cortada
+                      por la mitad se veía igual que una completa. */}
+                  {erroresFilas.length === 0 ? (
+                    <>
+                      <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      </div>
+                      <h3 className="font-extrabold text-slate-900 text-xl">¡Importación completada!</h3>
+                      <p className="text-sm text-slate-500">
+                        Entraron los {successCount} productos del archivo.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      </div>
+                      <h3 className="font-extrabold text-slate-900 text-xl">Importación incompleta</h3>
+                      <p className="text-sm text-slate-600">
+                        Entraron <strong className="text-emerald-700">{successCount}</strong> de {totalIntentado} productos.
+                        <strong className="text-amber-700"> {erroresFilas.length}</strong> quedaron afuera.
+                      </p>
+
+                      <div className="text-left bg-amber-50 border border-amber-200 rounded-xl p-3 max-h-52 overflow-y-auto">
+                        <p className="text-[11px] font-extrabold text-amber-900 uppercase tracking-wider mb-2">Filas que fallaron</p>
+                        <ul className="space-y-1.5">
+                          {erroresFilas.slice(0, 50).map((e, i) => (
+                            <li key={i} className="text-[11px] text-slate-700 leading-snug">
+                              <span className="font-bold">Línea {e.fila}</span>
+                              <span className="text-slate-500"> — {e.nombre}</span>
+                              <span className="block text-slate-500">{e.motivo}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        {erroresFilas.length > 50 && (
+                          <p className="text-[11px] text-slate-500 font-medium mt-2">y {erroresFilas.length - 50} más.</p>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        Los que entraron ya están cargados. Corregí esas filas en el CSV y
+                        subí <strong>sólo esas</strong>: volver a subir el archivo entero
+                        duplicaría todo lo que ya entró.
+                      </p>
+
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="px-5 py-2.5 bg-[#2D5A27] hover:bg-[#23471F] text-white rounded-xl text-xs font-bold transition-colors"
+                      >
+                        Entendido, ver el catálogo
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </div>
