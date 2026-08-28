@@ -25,6 +25,8 @@ export default function ImportCsvModal({}: Props) {
     marca: string;
     portada_url: string;
     descripcion: string;
+    grupo: string;
+    orden: string;
   }>({
     nombre: '',
     sku: '',
@@ -38,7 +40,9 @@ export default function ImportCsvModal({}: Props) {
     categoria: '',
     marca: '',
     portada_url: '',
-    descripcion: ''
+    descripcion: '',
+    grupo: '',
+    orden: ''
   });
   const [isImporting, setIsImporting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -98,7 +102,13 @@ export default function ImportCsvModal({}: Props) {
         categoria: rawHeaders.find(h => /^categoria$|^categoria_nombre$|^category$|^rubro$/i.test(normStr(h))) || rawHeaders.find(h => /categoria|category|rubro/i.test(normStr(h))) || '',
         marca: rawHeaders.find(h => /^marca$|^brand$/i.test(normStr(h))) || '',
         portada_url: rawHeaders.find(h => /^portada_url$|^imagen$|^imagenes$|^fotos$|^portada$/i.test(normStr(h))) || '',
-        descripcion: rawHeaders.find(h => /^descripcion$|^desc$/i.test(normStr(h))) || ''
+        descripcion: rawHeaders.find(h => /^descripcion$|^desc$/i.test(normStr(h))) || '',
+        // Agrupa las variantes bajo un mismo producto en la vitrina. Opcional:
+        // sin esta columna el grupo se deduce del nombre, cortando lo que va
+        // después del último " - ".
+        grupo: rawHeaders.find(h => /^grupo$|^familia$|^coleccion$|^serie$/i.test(normStr(h))) || '',
+        // Prioridad de aparición. Mayor primero.
+        orden: rawHeaders.find(h => /^orden$|^prioridad$|^posicion$/i.test(normStr(h))) || ''
       };
       setMapping(newMapping);
       setParsedRows(dataRows);
@@ -146,7 +156,9 @@ export default function ImportCsvModal({}: Props) {
       categoria_nombre: mapping.categoria && row[mapping.categoria] ? row[mapping.categoria] : undefined,
       marca: mapping.marca && row[mapping.marca] ? row[mapping.marca] : undefined,
       portada_url: mapping.portada_url && row[mapping.portada_url] ? row[mapping.portada_url] : undefined,
-      descripcion: mapping.descripcion && row[mapping.descripcion] ? row[mapping.descripcion] : undefined
+      descripcion: mapping.descripcion && row[mapping.descripcion] ? row[mapping.descripcion] : undefined,
+      grupo: mapping.grupo && row[mapping.grupo] ? row[mapping.grupo] : undefined,
+      orden: mapping.orden && row[mapping.orden] ? parseNum(row[mapping.orden]) : undefined
     })).filter(item => item.nombre.trim().length > 0);
 
     try {
@@ -404,6 +416,30 @@ export default function ImportCsvModal({}: Props) {
                     <option value="">(Ninguna)</option>
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Grupo de variantes</label>
+                  <select 
+                    value={mapping.grupo} 
+                    onChange={e => setMapping({ ...mapping, grupo: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Se deduce del nombre)</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                  <p className="text-[10px] text-slate-400 font-medium mt-1">Junta las variantes bajo una sola ficha. Si no la indicás, se deduce cortando lo que va después del último " - " del nombre.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Orden / prioridad</label>
+                  <select 
+                    value={mapping.orden} 
+                    onChange={e => setMapping({ ...mapping, orden: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white"
+                  >
+                    <option value="">(Ninguna)</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                  <p className="text-[10px] text-slate-400 font-medium mt-1">Número: mayor aparece antes en la tienda. Sin esta columna manda la fecha de alta.</p>
                 </div>
               </div>
               <div className="pt-4 flex justify-between">

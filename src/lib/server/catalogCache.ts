@@ -1,6 +1,7 @@
 import { Query } from 'node-appwrite';
 import { createAdminClient } from './appwrite';
 import { precioDeVentaCentavos } from '../pricing';
+import { compararPorPrioridad } from '../variantes';
 
 const globalObj = global as any;
 
@@ -195,7 +196,13 @@ async function cargarCatalogoPublico() {
   // carrito y comprar a cero. El botón sólo se deshabilitaba por falta de
   // stock. Se excluyen acá, junto con los borradores, y se deja registro para
   // que no sea una desaparición silenciosa.
-  const activos = productos.filter((p: any) => p.estado === 'activo' || !p.estado);
+  // El orden de la consulta es por fecha para que la paginación por offset sea
+  // estable; la prioridad se aplica acá, en memoria, sobre el set completo. Así
+  // no hace falta un índice nuevo en Appwrite y `orden` puede cambiar sin tocar
+  // la forma en que se pagina.
+  const activos = productos
+    .filter((p: any) => p.estado === 'activo' || !p.estado)
+    .sort(compararPorPrioridad);
   const vendibles = activos.filter((p: any) => precioDeVentaCentavos(p) > 0);
   const sinPrecio = activos.length - vendibles.length;
   if (sinPrecio > 0) {

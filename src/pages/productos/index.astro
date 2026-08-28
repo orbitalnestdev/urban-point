@@ -7,6 +7,7 @@ import { getCachedCatalog, getOptimizedImageUrl } from '../../lib/server/catalog
 
 import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
 import { toSafeJson } from '../../lib/safeJson';
+import { agruparVariantes } from '../../lib/variantes';
 
 let products: any[] = [];
 let categories: any[] = [];
@@ -72,24 +73,48 @@ const POR_PAGINA_DEFECTO = 48;
  */
 const CATEGORIAS_A_LA_VISTA = 8;
 
-const catalogoCompacto = products.map((prod: any) => {
-	const ventaCentavos = precioDeVentaCentavos(prod);
-	const listaCentavos = precioListaCentavos(prod);
+/**
+ * Una entrada por GRUPO, no por producto.
+ *
+ * El catálogo trae cada variante como un producto separado: 6.185 fichas
+ * activas que agrupadas quedan en 1.672. Eran decenas de tarjetas casi
+ * idénticas seguidas —133 fascículos del Titanic, 138 minerales— y con el
+ * buscador servía de poco.
+ *
+ * No se fusiona nada en la base: cada variante sigue siendo su documento, con
+ * su stock y su historial. Acá sólo se elige una para representar al grupo y se
+ * anota cuántas hay, para ofrecerlas dentro de la ficha.
+ */
+const grupos = agruparVariantes(products);
+
+const catalogoCompacto = grupos.map((grupo) => {
+	const principal: any = grupo.principal;
+	const precios = grupo.variantes.map((v: any) => precioDeVentaCentavos(v)).filter((n) => n > 0);
+	const minimo = precios.length ? Math.min(...precios) : precioDeVentaCentavos(principal);
+	const maximo = precios.length ? Math.max(...precios) : minimo;
+	const listaCentavos = precioListaCentavos(principal);
+	// Un grupo tiene stock si CUALQUIERA de sus variantes lo tiene: bloquear el
+	// grupo entero porque la variante que quedó de portada está agotada
+	// escondería productos que sí se pueden comprar.
+	const stockTotal = grupo.variantes.reduce((suma: number, v: any) => suma + (Number(v.stock) || 0), 0);
+
 	return {
-		i: prod.$id,
-		s: prod.slug,
-		n: prod.nombre,
-		m: prod.marca || '',
-		p: ventaCentavos / 100,
+		i: principal.$id,
+		s: principal.slug,
+		n: grupo.base,
+		m: principal.marca || '',
+		p: minimo / 100,
+		x: maximo / 100,
 		l: listaCentavos === null ? null : listaCentavos / 100,
-		k: typeof prod.stock === 'number' ? prod.stock : null,
-		c: (typeof prod.categoria_id === 'object' ? prod.categoria_id?.$id : prod.categoria_id) || 'none',
-		u: getOptimizedImageUrl(prod.portada_url || '', 400, 400, 80),
-		q: prod.sku || prod.$id
+		k: stockTotal,
+		c: (typeof principal.categoria_id === 'object' ? principal.categoria_id?.$id : principal.categoria_id) || 'none',
+		u: getOptimizedImageUrl(principal.portada_url || '', 400, 400, 80),
+		q: principal.sku || principal.$id,
+		v: grupo.variantes.length
 	};
 });
 
-const productosIniciales = products.slice(0, POR_PAGINA_DEFECTO);
+const productosIniciales = grupos.slice(0, POR_PAGINA_DEFECTO);
 
 // Padres con productos, de mayor a menor. Las destacadas van como pills; todas
 // entran al panel.
@@ -158,7 +183,7 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 						</button>
 
 						<div class="text-sm font-semibold text-slate-500 shrink-0">
-							<span id="prod-count" class="text-slate-900 font-black">{products.length}</span> productos
+							<span id="prod-count" class="text-slate-900 font-black">{grupos.length}</span> productos
 						</div>
 
 						<select id="sort-select" class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#2D5A27] cursor-pointer">
@@ -276,8 +301,12 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 					     las tarjetas quedaban en 186px a 1440 y 213px a 1920, que es lo que
 					     se veía amontonado. -->
 					<div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-6" id="products-grid">
-					{productosIniciales.map((prod) => {
-						const precioMinorista = precioDeVentaCentavos(prod) / 100;
+					{productosIniciales.map((grupo) => {
+						const prod: any = grupo.principal;
+						const preciosGrupo = grupo.variantes.map((v: any) => precioDeVentaCentavos(v)).filter((n) => n > 0);
+						const precioMinorista = (preciosGrupo.length ? Math.min(...preciosGrupo) : precioDeVentaCentavos(prod)) / 100;
+						const hayVarias = grupo.variantes.length > 1;
+						const desdeDistinto = hayVarias && Math.max(...preciosGrupo) > Math.min(...preciosGrupo);
 						const listaCentavos = precioListaCentavos(prod);
 						const precioLista = listaCentavos === null ? null : listaCentavos / 100;
 						const catId = typeof prod.categoria_id === 'object' ? prod.categoria_id?.$id : prod.categoria_id;
@@ -285,7 +314,7 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 						return (
 							<div 
 								class="product-card group bg-white rounded-3xl border border-slate-200/70 p-5 shadow-sm hover:shadow-2xl hover:border-[#2D5A27]/40 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between relative overflow-hidden"
-								data-name={prod.nombre.toLowerCase()}
+								data-name={grupo.base.toLowerCase()}
 								data-brand={(prod.marca || '').toLowerCase()}
 								data-price={precioMinorista}
 								data-category={catId || 'none'}
@@ -311,6 +340,11 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 											<span class="px-3 py-1 bg-[#2D5A27] text-white text-[10px] font-extrabold uppercase tracking-wider rounded-full shadow-md text-center leading-tight">
 												3 sin interés
 											</span>
+											{hayVarias && (
+												<span class="px-3 py-1 bg-slate-900/85 text-white text-[10px] font-extrabold uppercase tracking-wider rounded-full shadow-md">
+													{grupo.variantes.length} variantes
+												</span>
+											)}
 										</div>
 									</a>
 
@@ -320,13 +354,16 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 											{prod.marca || 'UrbanPoint'}
 										</span>
 										<a href={`/productos/${prod.slug}`} class="font-bold text-slate-900 text-sm line-clamp-2 hover:text-[#2D5A27] transition-colors leading-snug">
-											{prod.nombre}
+											{grupo.base}
 										</a>
 									</div>
 
 									<!-- Main Pricing & Payment Benefits -->
 									<div class="mb-3">
 										<div class="flex items-baseline gap-2 mb-1">
+											{desdeDistinto && (
+												<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider self-end mb-0.5">desde</span>
+											)}
 											<span class="text-2xl font-black text-slate-900 tracking-tight leading-none">
 												{formateador.format(precioMinorista)}
 											</span>
@@ -377,7 +414,7 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 
 			<div class="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs text-slate-500 font-semibold">
 				<span>
-					Mostrando <span id="rango-desde">1</span>–<span id="rango-hasta">{Math.min(POR_PAGINA_DEFECTO, products.length)}</span> de <span id="rango-total">{products.length}</span>
+					Mostrando <span id="rango-desde">1</span>–<span id="rango-hasta">{Math.min(POR_PAGINA_DEFECTO, grupos.length)}</span> de <span id="rango-total">{grupos.length}</span>
 				</span>
 				<label class="flex items-center gap-2">
 					<span>Por página:</span>
@@ -404,8 +441,9 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 
 		type Item = {
 			i: string; s: string; n: string; m: string;
-			p: number; l: number | null; k: number | null;
-			c: string; u: string; q: string;
+			// p = precio minimo del grupo, x = maximo, v = cuantas variantes tiene
+			p: number; x: number; l: number | null; k: number | null;
+			c: string; u: string; q: string; v: number;
 		};
 
 		document.addEventListener('DOMContentLoaded', () => {
@@ -471,9 +509,17 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 			const SVG_SIN_FOTO = '<div class="w-full h-full flex items-center justify-center text-slate-300"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>';
 			function tarjeta(it: Item): string {
 				const sinStock = typeof it.k === 'number' && it.k <= 0;
+				const hayVarias = (it.v || 1) > 1;
+				const desdeDistinto = hayVarias && Number(it.x) > Number(it.p);
 				const imagen = it.u
 					? `<img src="${esc(it.u)}" alt="${esc(it.n)}" loading="lazy" decoding="async" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />`
 					: SVG_SIN_FOTO;
+				const badgeVariantes = hayVarias
+					? `<span class="px-3 py-1 bg-slate-900/85 text-white text-[10px] font-extrabold uppercase tracking-wider rounded-full shadow-md">${it.v} variantes</span>`
+					: '';
+				const desde = desdeDistinto
+					? '<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider self-end mb-0.5">desde</span>'
+					: '';
 				const tachado = it.l === null ? '' :
 					`<span class="text-xs text-slate-400 line-through font-medium">${moneda.format(it.l)}</span>`;
 
@@ -483,6 +529,7 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 			${imagen}
 			<div class="absolute top-3 left-3 flex flex-col items-start gap-1 z-10 pointer-events-none">
 				<span class="px-3 py-1 bg-[#2D5A27] text-white text-[10px] font-extrabold uppercase tracking-wider rounded-full shadow-md text-center leading-tight">3 sin interés</span>
+				${badgeVariantes}
 			</div>
 		</a>
 		<div class="mb-3">
@@ -491,7 +538,7 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 		</div>
 		<div class="mb-3">
 			<div class="flex items-baseline gap-2 mb-1">
-				<span class="text-2xl font-black text-slate-900 tracking-tight leading-none">${moneda.format(it.p)}</span>
+				${desde}<span class="text-2xl font-black text-slate-900 tracking-tight leading-none">${moneda.format(it.p)}</span>
 				${tachado}
 			</div>
 			<p class="text-xs font-bold text-[#2D5A27] flex items-center gap-1 mt-1">

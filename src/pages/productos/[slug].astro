@@ -6,6 +6,7 @@ import Footer from '../../components/Footer.astro';
 import AddToCartBtn from '../../components/shop/AddToCartBtn';
 import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
 import { getCachedCatalog, getOptimizedImageUrl } from '../../lib/server/catalogCache';
+import { agruparVariantes, grupoDeProducto, etiquetaDeVariante } from '../../lib/variantes';
 import { sanitizeRichHtml } from '../../lib/sanitizeHtml';
 
 const { slug } = Astro.params;
@@ -14,6 +15,8 @@ let product: any = null;
 let category: any = null;
 let relatedProducts: any[] = [];
 let galleryImages: string[] = [];
+let hermanas: any[] = [];
+let nombreGrupo = '';
 let barcode = '';
 
 try {
@@ -64,6 +67,23 @@ try {
 			}
 		} catch (e) {}
 	}
+
+	// Las demás variantes del mismo grupo. La vitrina muestra una sola tarjeta
+	// por grupo, así que la ficha es donde el comprador ve el resto: sin esto,
+	// las otras 132 entregas del Titanic quedarían inalcanzables.
+	const claveGrupo = grupoDeProducto(product).toLowerCase();
+	hermanas = catalogo
+		.filter((p: any) => grupoDeProducto(p).toLowerCase() === claveGrupo)
+		.map((p: any) => ({
+			$id: p.$id,
+			slug: p.slug,
+			nombre: p.nombre,
+			etiqueta: etiquetaDeVariante(p),
+			stock: p.stock,
+			precio: precioDeVentaCentavos(p) / 100,
+			esActual: p.$id === product.$id
+		}));
+	nombreGrupo = grupoDeProducto(product);
 
 	const catId = product.categoria_id
 		? (typeof product.categoria_id === 'string' ? product.categoria_id : product.categoria_id.$id)
@@ -199,9 +219,46 @@ const descripcionSegura = product.descripcion ? sanitizeRichHtml(product.descrip
 							</div>
 
 							<!-- Product Title -->
-							<h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 leading-tight mb-4">
-								{product.nombre}
+							<h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 leading-tight mb-1">
+								{hermanas.length > 1 ? nombreGrupo : product.nombre}
 							</h1>
+							{hermanas.length > 1 && (
+								<p class="text-sm font-bold text-[#2D5A27] mb-4">
+									{etiquetaDeVariante(product)}
+								</p>
+							)}
+							{hermanas.length <= 1 && <div class="mb-4"></div>}
+
+							{hermanas.length > 1 && (
+								<div class="mb-5">
+									<div class="flex items-baseline justify-between mb-2">
+										<span class="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+											Elegí tu opción
+										</span>
+										<span class="text-xs font-bold text-slate-400">
+											{hermanas.length} disponibles
+										</span>
+									</div>
+									<div class="flex flex-wrap gap-2 max-h-44 overflow-y-auto pr-1">
+										{hermanas.map((v) => (
+											<a
+												href={`/productos/${v.slug}`}
+												aria-current={v.esActual ? 'page' : undefined}
+												title={v.nombre}
+												class={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all max-w-full truncate ${
+													v.esActual
+														? 'bg-[#2D5A27] text-white border-[#2D5A27] shadow-sm cursor-default'
+														: (typeof v.stock === 'number' && v.stock <= 0)
+															? 'bg-slate-50 text-slate-300 border-slate-200 line-through'
+															: 'bg-white text-slate-700 border-slate-200 hover:border-[#2D5A27] hover:text-[#2D5A27]'
+												}`}
+											>
+												{v.etiqueta}
+											</a>
+										))}
+									</div>
+								</div>
+							)}
 
 							<!-- Price & Payment Benefits Box -->
 							<div class="p-5 bg-slate-50 rounded-2xl border border-slate-200/80 mb-5 space-y-3">
