@@ -1917,6 +1917,11 @@ export const server = {
 					}
 				} catch (e) {}
 
+				// Creaciones de categoría en curso. Sin esto, dos filas del mismo lote
+				// que nombran una categoría nueva la crean dos veces: al ir en paralelo
+				// ninguna ve todavía lo que la otra escribió en catMap.
+				const creandoCategoria = new Map<string, Promise<string | null>>();
+
 				const resolveOrCreateCategory = async (catIdOrName?: string | null): Promise<string | null> => {
 					if (!catIdOrName || !catIdOrName.trim()) return null;
 					const raw = catIdOrName.trim();
@@ -1926,7 +1931,12 @@ export const server = {
 					const lower = raw.toLowerCase();
 					if (catMap[lower]) return catMap[lower];
 
+					// Si otra fila del mismo lote ya la está creando, se espera a esa.
+					const enVuelo = creandoCategoria.get(norm);
+					if (enVuelo) return enVuelo;
+
 					// Autocreación de categoría inexistente si viene informada en el CSV
+					const promesa = (async () => {
 					try {
 						const catSlug = norm.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || `cat-${Date.now()}`;
 						const created = await escribirDocumentoTolerante('categories', {
@@ -1944,10 +1954,26 @@ export const server = {
 						console.error('Error autocreando categoría en importación:', errCat);
 					}
 					return null;
+					})();
+
+					creandoCategoria.set(norm, promesa);
+					return promesa;
 				};
 
+				/**
+				 * Se escribe en lotes paralelos, no de a un producto por vez.
+				 *
+				 * Medido contra este backend: en serie tardaba ~1,1 s por producto, o
+				 * sea 19 minutos para mil filas. Cualquier proxy corta la request mucho
+				 * antes, y el importador no avisaba: entraba una parte del catálogo y
+				 * el resto se perdía en silencio. Era el "se suben algunos productos de
+				 * manera aleatoria" que se venía reportando.
+				 */
+				const LOTE = 12;
 				let count = 0;
-				for (const item of input.items) {
+				const errores: Array<{ fila: number; nombre: string; motivo: string }> = [];
+
+				const importarUno = async (item: any) => {
 					const slug = item.nombre
 						.toLowerCase()
 						.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -1990,10 +2016,29 @@ export const server = {
 
 					await escribirDocumentoTolerante('products', payload);
 					count++;
+				};
+
+				for (let i = 0; i < input.items.length; i += LOTE) {
+					const lote = input.items.slice(i, i + LOTE);
+					await Promise.all(lote.map(async (item, j) => {
+						try {
+							await importarUno(item);
+						} catch (e: any) {
+							// Una fila mala no puede cortar la importación entera: antes la
+							// primera excepción abortaba todo lo que venía después.
+							errores.push({
+								fila: i + j + 2, // +2: la fila 1 del CSV son los encabezados
+								nombre: item.nombre,
+								motivo: String(e?.message || e).slice(0, 200)
+							});
+						}
+					}));
 				}
 
 				invalidateCatalogCache();
-				return { success: true, count };
+				// Se informa qué entró y qué no. Antes sólo volvía `count`, así que una
+				// importación cortada por la mitad se veía igual que una completa.
+				return { success: true, count, total: input.items.length, errores };
 			} catch (error: any) {
 				return { success: false, error: error.message };
 			}
