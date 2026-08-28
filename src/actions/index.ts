@@ -2004,6 +2004,32 @@ export const server = {
 					}
 				}
 
+				/**
+				 * Filas que repiten un SKU ya usado por otra fila del mismo envío.
+				 *
+				 * El SKU es la identidad del producto: dos variantes del mismo artículo
+				 * son productos distintos y necesitan SKU distinto. Si se repite no hay
+				 * forma de saber cuál gana, y como el lote se escribe en paralelo
+				 * ninguna de las dos filas ve a la otra: las dos se crean y el
+				 * duplicado vuelve a entrar por la puerta de atrás, que es justo lo que
+				 * el cotejo por SKU vino a evitar.
+				 *
+				 * Se conserva la primera y se rechaza la repetida, informando la fila.
+				 * El modal además valida el archivo entero antes de mandarlo, porque
+				 * acá sólo se ve la tanda en curso.
+				 */
+				const skuYaVisto = new Set<string>();
+				const filaRechazada = new Map<number, string>();
+				input.items.forEach((item, idx) => {
+					const sku = (item.sku || '').trim();
+					if (!sku) return;
+					if (skuYaVisto.has(sku)) {
+						filaRechazada.set(idx, `SKU repetido dentro del mismo archivo: "${sku}". Cada producto, y cada variante, necesita su propio SKU.`);
+					} else {
+						skuYaVisto.add(sku);
+					}
+				});
+
 				let creados = 0;
 				let actualizados = 0;
 				const errores: Array<{ fila: number; nombre: string; motivo: string }> = [];
@@ -2065,6 +2091,11 @@ export const server = {
 				for (let i = 0; i < input.items.length; i += LOTE) {
 					const lote = input.items.slice(i, i + LOTE);
 					await Promise.all(lote.map(async (item, j) => {
+						const motivoRechazo = filaRechazada.get(i + j);
+						if (motivoRechazo) {
+							errores.push({ fila: i + j + 2, nombre: item.nombre, motivo: motivoRechazo });
+							return;
+						}
 						try {
 							await importarUno(item);
 						} catch (e: any) {

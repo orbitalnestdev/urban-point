@@ -139,6 +139,42 @@ export default function ImportCsvModal({}: Props) {
    * frenar: una vez escrito en la base, deshacer un agrupado mal hecho es
    * revisar producto por producto.
    */
+  /**
+   * SKUs que aparecen en más de una fila del archivo.
+   *
+   * El SKU es la identidad del producto: es lo que decide si una fila crea un
+   * producto nuevo o actualiza el que ya está. Dos filas con el mismo SKU son
+   * ambiguas —no hay forma de saber cuál gana— y como el servidor escribe las
+   * filas en paralelo, ninguna ve a la otra: entran las dos y queda el
+   * duplicado que el cotejo por SKU vino justo a evitar.
+   *
+   * Se valida acá, sobre el archivo entero, porque el envío va por tandas de
+   * 150 y el servidor sólo ve la tanda que le toca. Y se valida ANTES de
+   * mandar nada: una vez escrito, deshacerlo es borrar producto por producto.
+   *
+   * Ojo con las variantes: son productos distintos, así que cada talle o
+   * color necesita su propio SKU. Compartir el nombre está bien; compartir el
+   * SKU no.
+   */
+  const skusRepetidos = () => {
+    if (!mapping.sku) return [];
+    const porSku = new Map<string, number[]>();
+    parsedRows.forEach((row, i) => {
+      const sku = (row[mapping.sku!] || '').trim();
+      if (!sku) return;
+      // +2: la fila 1 del CSV son los encabezados
+      porSku.set(sku, [...(porSku.get(sku) || []), i + 2]);
+    });
+    return [...porSku.entries()]
+      .filter(([, filas]) => filas.length > 1)
+      .map(([sku, filas]) => ({ sku, filas }));
+  };
+
+  const filasSinSku = () =>
+    mapping.sku
+      ? parsedRows.filter(row => !(row[mapping.sku!] || '').trim()).length
+      : parsedRows.length;
+
   const resumenAgrupado = () => {
     if (!mapping.nombre || !parsedRows.length) return null;
     const grupos = new Map<string, string[]>();
@@ -540,8 +576,60 @@ export default function ImportCsvModal({}: Props) {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <p className="text-sm font-bold text-slate-900">Vista previa ({parsedRows.length} registros)</p>
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">Listo para importar</span>
+                {skusRepetidos().length > 0 ? (
+                  <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full">Hay que corregir el archivo</span>
+                ) : (
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">Listo para importar</span>
+                )}
               </div>
+
+              {(() => {
+                const repes = skusRepetidos();
+                if (!repes.length) return null;
+                const total = repes.reduce((n, r) => n + r.filas.length, 0);
+                return (
+                  <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 space-y-2">
+                    <p className="text-sm font-extrabold text-red-800">
+                      {repes.length === 1 ? 'Hay un SKU repetido' : `Hay ${repes.length} SKUs repetidos`} en el archivo
+                    </p>
+                    <p className="text-[11px] text-red-700 leading-relaxed">
+                      El SKU identifica a cada producto. {total} filas comparten SKU con otra, así que
+                      no se puede saber cuál tiene que quedar. <strong>Las variantes también necesitan
+                      un SKU propio cada una</strong>: pueden compartir el nombre, no el código.
+                    </p>
+                    <ul className="text-[11px] text-red-800 space-y-0.5 max-h-40 overflow-y-auto">
+                      {repes.slice(0, 20).map((r, i) => (
+                        <li key={i}>
+                          · <span className="font-mono font-bold">{r.sku}</span>
+                          <span className="text-red-600"> — líneas {r.filas.join(', ')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {repes.length > 20 && (
+                      <p className="text-[11px] text-red-600 font-medium">y {repes.length - 20} más.</p>
+                    )}
+                    <p className="text-[11px] text-red-700 border-t border-red-200 pt-2">
+                      Corregí esas líneas en el archivo y volvé a cargarlo. No se importó nada todavía.
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                const sinSku = filasSinSku();
+                if (!sinSku || skusRepetidos().length > 0) return null;
+                return (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-1">
+                    <p className="text-xs font-extrabold text-amber-900">
+                      {sinSku} {sinSku === 1 ? 'fila no tiene SKU' : 'filas no tienen SKU'}
+                    </p>
+                    <p className="text-[11px] text-amber-800 leading-relaxed">
+                      Se van a crear igual, pero sin SKU no hay con qué reconocerlas después: si volvés
+                      a subir el archivo, se crean de nuevo en vez de actualizarse.
+                    </p>
+                  </div>
+                );
+              })()}
 
               {(() => {
                 const r = resumenAgrupado();
@@ -596,7 +684,15 @@ export default function ImportCsvModal({}: Props) {
               </div>
               <div className="pt-4 flex justify-between">
                 <button onClick={() => setStep(2)} className="px-4 py-2 font-bold text-xs text-slate-500">Volver</button>
-                <button onClick={handleExecuteImport} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-lg">Confirmar e Importar Todo</button>
+                {/* Con SKUs repetidos el botón no habilita: es más barato volver
+                    atrás que deshacer duplicados ya escritos en la base. */}
+                <button
+                  onClick={handleExecuteImport}
+                  disabled={skusRepetidos().length > 0}
+                  className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:shadow-none text-white font-bold text-sm rounded-xl shadow-lg transition-colors"
+                >
+                  {skusRepetidos().length > 0 ? 'Corregí los SKU repetidos' : 'Confirmar e Importar Todo'}
+                </button>
               </div>
             </div>
           )}
