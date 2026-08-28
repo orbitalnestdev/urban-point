@@ -1970,7 +1970,42 @@ export const server = {
 				 * manera aleatoria" que se venía reportando.
 				 */
 				const LOTE = 12;
-				let count = 0;
+
+				/**
+				 * Qué SKUs del archivo ya están en el catálogo.
+				 *
+				 * Sin esto el importador siempre creaba: volver a subir el mismo CSV
+				 * —lo que se hace naturalmente cuando una importación se corta a la
+				 * mitad— duplicaba todo lo que ya había entrado. Así se llegó a 1.715
+				 * productos repetidos, algunos hasta 16 veces.
+				 *
+				 * Se consulta sólo por los SKUs del archivo, en tandas, en vez de
+				 * traer el catálogo entero: son 6.495 productos y no hacen falta.
+				 */
+				const skusDelArchivo = [...new Set(
+					input.items.map(i => (i.sku || '').trim()).filter(Boolean)
+				)];
+				const existentePorSku = new Map<string, string>();
+
+				for (let i = 0; i < skusDelArchivo.length; i += 100) {
+					const tanda = skusDelArchivo.slice(i, i + 100);
+					try {
+						const res = await db.listDocuments('urbanpoint', 'products', [
+							Query.equal('sku', tanda),
+							Query.limit(100)
+						]);
+						for (const doc of res.documents) {
+							const clave = String((doc as any).sku || '').trim();
+							// Si hay más de uno con el mismo SKU, se actualiza el primero.
+							if (clave && !existentePorSku.has(clave)) existentePorSku.set(clave, doc.$id);
+						}
+					} catch (e) {
+						console.error('No se pudieron consultar SKUs existentes:', e);
+					}
+				}
+
+				let creados = 0;
+				let actualizados = 0;
 				const errores: Array<{ fila: number; nombre: string; motivo: string }> = [];
 
 				const importarUno = async (item: any) => {
@@ -2014,8 +2049,17 @@ export const server = {
 						}
 					}
 
-					await escribirDocumentoTolerante('products', payload);
-					count++;
+					const yaExiste = existentePorSku.get(sku);
+					if (yaExiste) {
+						// El slug se conserva: es la URL pública del producto y cambiarlo
+						// rompería los enlaces que ya estén dando vueltas.
+						delete payload.slug;
+						await escribirDocumentoTolerante('products', payload, yaExiste);
+						actualizados++;
+					} else {
+						await escribirDocumentoTolerante('products', payload);
+						creados++;
+					}
 				};
 
 				for (let i = 0; i < input.items.length; i += LOTE) {
@@ -2038,7 +2082,14 @@ export const server = {
 				invalidateCatalogCache();
 				// Se informa qué entró y qué no. Antes sólo volvía `count`, así que una
 				// importación cortada por la mitad se veía igual que una completa.
-				return { success: true, count, total: input.items.length, errores };
+				return {
+					success: true,
+					count: creados + actualizados,
+					creados,
+					actualizados,
+					total: input.items.length,
+					errores
+				};
 			} catch (error: any) {
 				return { success: false, error: error.message };
 			}

@@ -51,6 +51,7 @@ export default function ImportCsvModal({}: Props) {
   const [erroresFilas, setErroresFilas] = useState<Array<{ fila: number; nombre: string; motivo: string }>>([]);
   const [totalIntentado, setTotalIntentado] = useState(0);
   const [progreso, setProgreso] = useState({ hechos: 0, total: 0 });
+  const [resumen, setResumen] = useState({ creados: 0, actualizados: 0 });
 
   useEffect(() => {
     const handleOpen = () => {
@@ -129,6 +130,36 @@ export default function ImportCsvModal({}: Props) {
     setStep(3); // Avanzar a Vista Previa
   };
 
+  /**
+   * Qué grupos van a salir de este archivo, con la misma regla que usa la
+   * tienda: manda la columna Grupo y si no está se corta el último tramo
+   * después de " - ".
+   *
+   * Se muestra ANTES de importar porque es el único momento en que se puede
+   * frenar: una vez escrito en la base, deshacer un agrupado mal hecho es
+   * revisar producto por producto.
+   */
+  const resumenAgrupado = () => {
+    if (!mapping.nombre || !parsedRows.length) return null;
+    const grupos = new Map<string, string[]>();
+    for (const row of parsedRows) {
+      const nombre = (row[mapping.nombre] || '').trim();
+      if (!nombre) continue;
+      const explicito = mapping.grupo ? (row[mapping.grupo] || '').trim() : '';
+      const partes = nombre.split(/s+[-–—]s+/);
+      const base = explicito || (partes.length > 1 ? partes.slice(0, -1).join(' - ').trim() : nombre);
+      const clave = base.toLowerCase();
+      grupos.set(clave, [...(grupos.get(clave) || []), base]);
+    }
+    const conVarias = [...grupos.values()].filter(v => v.length > 1);
+    return {
+      filas: parsedRows.length,
+      fichas: grupos.size,
+      conVariantes: conVarias.length,
+      ejemplos: [...grupos.entries()].filter(([, v]) => v.length > 1).slice(0, 4).map(([, v]) => ({ nombre: v[0], cantidad: v.length }))
+    };
+  };
+
   const parseMoney = (val?: string): number => {
     if (!val || val.trim().length === 0) return 0;
     const clean = val.replace(/\$/g, '').replace(/\./g, '').replace(/,/g, '.').trim();
@@ -195,6 +226,10 @@ export default function ImportCsvModal({}: Props) {
         }
 
         acumuladas += data.count || 0;
+        setResumen(prev => ({
+          creados: prev.creados + (data.creados || 0),
+          actualizados: prev.actualizados + (data.actualizados || 0)
+        }));
         // Las filas del servidor vienen numeradas dentro de su tanda: se
         // corrigen al número real de línea del CSV.
         for (const e of (data.errores || [])) {
@@ -507,6 +542,30 @@ export default function ImportCsvModal({}: Props) {
                 <p className="text-sm font-bold text-slate-900">Vista previa ({parsedRows.length} registros)</p>
                 <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">Listo para importar</span>
               </div>
+
+              {(() => {
+                const r = resumenAgrupado();
+                if (!r) return null;
+                return (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-left space-y-2">
+                    <p className="text-xs font-extrabold text-slate-700">
+                      {r.filas} filas <span className="text-slate-400">→</span> <span className="text-[#2D5A27]">{r.fichas} fichas</span> en la tienda
+                    </p>
+                    {r.conVariantes > 0 ? (
+                      <>
+                        <p className="text-[11px] text-slate-600">{r.conVariantes} de esas fichas agrupan varias variantes:</p>
+                        <ul className="text-[11px] text-slate-600 space-y-0.5">
+                          {r.ejemplos.map((e, i) => (<li key={i}>· <strong>{e.nombre}</strong> — {e.cantidad} variantes</li>))}
+                        </ul>
+                        <p className="text-[11px] text-slate-500 border-t border-slate-200 pt-2">Si esperabas fichas separadas, volvé atrás y revisá la columna <strong>Grupo</strong>.</p>
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-slate-500">Ninguna fila se agrupa: cada una va a ser una ficha propia.</p>
+                    )}
+                    <p className="text-[11px] text-slate-500 border-t border-slate-200 pt-2">Las filas cuyo <strong>SKU ya exista</strong> se actualizan en lugar de duplicarse.</p>
+                  </div>
+                );
+              })()}
               <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-2xl">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 sticky top-0">
@@ -568,7 +627,9 @@ export default function ImportCsvModal({}: Props) {
                       </div>
                       <h3 className="font-extrabold text-slate-900 text-xl">¡Importación completada!</h3>
                       <p className="text-sm text-slate-500">
-                        Entraron los {successCount} productos del archivo.
+                        {resumen.actualizados > 0
+                          ? `${resumen.creados} productos nuevos y ${resumen.actualizados} actualizados por SKU.`
+                          : `Entraron los ${successCount} productos del archivo.`}
                       </p>
                     </>
                   ) : (
@@ -599,9 +660,9 @@ export default function ImportCsvModal({}: Props) {
                       </div>
 
                       <p className="text-[11px] text-slate-500 leading-relaxed">
-                        Los que entraron ya están cargados. Corregí esas filas en el CSV y
-                        subí <strong>sólo esas</strong>: volver a subir el archivo entero
-                        duplicaría todo lo que ya entró.
+                        Los que entraron ya están cargados. Podés corregir esas filas y volver a
+                        subir el archivo completo: las que ya entraron se actualizan por SKU, no
+                        se duplican.
                       </p>
 
                       <button
