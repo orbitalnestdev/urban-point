@@ -289,9 +289,15 @@ const gastoPromedioCentavos = totalClientesCount > 0 ? Math.round(totalGastadoGe
 									{dateStr}
 								</td>
 								<td class="p-4 text-center space-x-1" onclick="event.stopPropagation()">
-									<a href={`/api/admin/impersonate?profile_id=${c.$id}`} title="Ingresar a la app impersonando a este usuario" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px] rounded-xl transition-colors border border-amber-200 inline-block">
-										👁️ Probar
-									</a>
+									{c.role !== 'admin' && (
+										<form action="/api/admin/impersonate" method="POST" class="inline">
+											<input type="hidden" name="profile_id" value={c.$id} />
+											<button type="submit" title="Ingresar a la app impersonando a este usuario" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px] rounded-xl transition-colors border border-amber-200 inline-flex items-center gap-1 cursor-pointer">
+												<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+												Probar
+											</button>
+										</form>
+									)}
 									<a href={`/admin/clientes/${c.$id}`} class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-xl transition-colors inline-block">
 										Ver Ficha
 									</a>

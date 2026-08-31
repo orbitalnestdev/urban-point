@@ -8,7 +8,13 @@ export default defineConfig({
   output: 'server',
 
   security: {
-    checkOrigin: false
+    // Valida el header Origin en las peticiones que mutan estado con
+    // content-type de formulario. Estaba apagado; no apagarlo de nuevo para
+    // destrabar un POST que falla: si falla es porque viene de otro origen.
+    //
+    // No afecta al webhook de Mercado Pago, que llega como application/json
+    // (Astro sólo bloquea los content-type de formulario cross-origin).
+    checkOrigin: true
   },
 
   server: {
