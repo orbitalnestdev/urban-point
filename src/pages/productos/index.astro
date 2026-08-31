@@ -7,7 +7,7 @@ import { getCachedCatalog, getOptimizedImageUrl } from '../../lib/server/catalog
 
 import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
 import { toSafeJson } from '../../lib/safeJson';
-import { agruparVariantes } from '../../lib/variantes';
+import { getVistaCatalogo } from '../../lib/server/catalogView';
 
 let products: any[] = [];
 let categories: any[] = [];
@@ -16,32 +16,16 @@ let pickupPoints: any[] = [];
 // backend se renderizaba como una tienda vacía y el cliente no se enteraba.
 let catalogoDegradado = false;
 
+// La vista derivada (conteos, agrupado y catálogo compacto) se calcula una vez
+// por refresco del caché, no una vez por visita. Ver lib/server/catalogView.ts.
+let vista = getVistaCatalogo(null);
+
 try {
 	const cache = await getCachedCatalog();
+	vista = getVistaCatalogo(cache);
+
 	products = cache.products;
-	
-	// Calculate product counts for each category to improve UX
-	const categoriesWithCounts = cache.categories.map((cat: any) => {
-		const isParent = !cat.parent_id;
-		// Count products exactly in this category
-		const exactProducts = products.filter((p: any) => (p.categoria_id?.$id || p.categoria_id) === cat.$id).length;
-		
-		let totalProducts = exactProducts;
-		
-		// If it's a parent, add the products from all its subcategories
-		if (isParent) {
-			const childrenIds = cache.categories
-				.filter((c: any) => (typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id) === cat.$id)
-				.map((c: any) => c.$id);
-			
-			const childrenProducts = products.filter((p: any) => childrenIds.includes(p.categoria_id?.$id || p.categoria_id)).length;
-			totalProducts += childrenProducts;
-		}
-		
-		return { ...cat, productCount: totalProducts };
-	});
-	
-	categories = categoriesWithCounts;
+	categories = vista.categorias;
 	pickupPoints = cache.pickupPoints;
 	catalogoDegradado = Boolean(cache.degradado);
 } catch (e: any) {
@@ -84,50 +68,21 @@ const CATEGORIAS_A_LA_VISTA = 8;
  * No se fusiona nada en la base: cada variante sigue siendo su documento, con
  * su stock y su historial. Acá sólo se elige una para representar al grupo y se
  * anota cuántas hay, para ofrecerlas dentro de la ficha.
+ *
+ * El agrupado y el compactado viven en la vista derivada, que se calcula una
+ * vez por refresco del caché: recalcularlos por request costaba ~36 ms de CPU
+ * bloqueando el event loop, para producir siempre el mismo resultado.
  */
-const grupos = agruparVariantes(products);
-
-const catalogoCompacto = grupos.map((grupo) => {
-	const principal: any = grupo.principal;
-	const precios = grupo.variantes.map((v: any) => precioDeVentaCentavos(v)).filter((n) => n > 0);
-	const minimo = precios.length ? Math.min(...precios) : precioDeVentaCentavos(principal);
-	const maximo = precios.length ? Math.max(...precios) : minimo;
-	const listaCentavos = precioListaCentavos(principal);
-	// Un grupo tiene stock si CUALQUIERA de sus variantes lo tiene: bloquear el
-	// grupo entero porque la variante que quedó de portada está agotada
-	// escondería productos que sí se pueden comprar.
-	const stockTotal = grupo.variantes.reduce((suma: number, v: any) => suma + (Number(v.stock) || 0), 0);
-
-	return {
-		i: principal.$id,
-		s: principal.slug,
-		n: grupo.base,
-		m: principal.marca || '',
-		p: minimo / 100,
-		x: maximo / 100,
-		l: listaCentavos === null ? null : listaCentavos / 100,
-		k: stockTotal,
-		c: (typeof principal.categoria_id === 'object' ? principal.categoria_id?.$id : principal.categoria_id) || 'none',
-		u: getOptimizedImageUrl(principal.portada_url || '', 400, 400, 80),
-		q: principal.sku || principal.$id,
-		v: grupo.variantes.length
-	};
-});
+const grupos = vista.grupos;
+const catalogoCompacto = vista.compacto;
 
 const productosIniciales = grupos.slice(0, POR_PAGINA_DEFECTO);
 
 // Padres con productos, de mayor a menor. Las destacadas van como pills; todas
 // entran al panel.
-const categoriasPadre = categories
-	.filter((c: any) => !c.parent_id && c.productCount > 0)
-	.sort((a: any, b: any) => (b.productCount || 0) - (a.productCount || 0));
+const categoriasPadre = vista.categoriasPadre;
 
-const idsDeFamilia = (parent: any) => {
-	const hijas = categories.filter(
-		(c: any) => (typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id) === parent.$id
-	);
-	return [parent.$id, ...hijas.map((c: any) => c.$id)].join(',');
-};
+const idsDeFamilia = (parent: any) => vista.familiaPorPadre.get(parent.$id) || parent.$id;
 
 const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 ---
