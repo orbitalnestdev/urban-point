@@ -1,7 +1,24 @@
 import { Client, Account, Query } from 'node-appwrite';
 import { createAdminClient } from './appwrite';
 
-export type UserRole = 'admin' | 'gestion' | 'canillita' | 'cliente';
+/**
+ * `distribuidor` faltaba, y no era una omisión inocente: el rol se puede
+ * asignar desde /admin/clientes (updateProfileRole lo acepta), el catálogo
+ * tiene precio y márgenes propios para ese nivel, y el checkout se lo cobra.
+ * Pero como no existía acá, getClientProfile lo trataba como "no es cliente" y
+ * devolvía null: el distribuidor quedaba afuera de /mi-cuenta y su pedido se
+ * guardaba SIN customer_id. Compraba a precio mayorista y la orden quedaba
+ * huérfana.
+ */
+export type UserRole = 'admin' | 'gestion' | 'canillita' | 'cliente' | 'distribuidor';
+
+/** Roles que compran en la tienda. Cada uno con su nivel de precio. */
+export const ROLES_COMPRADORES: readonly UserRole[] = ['cliente', 'distribuidor'];
+
+/** ¿Este rol es un comprador (tiene carrito, pedidos y ficha en /mi-cuenta)? */
+export function esComprador(rol?: string | null): boolean {
+    return ROLES_COMPRADORES.includes(rol as UserRole);
+}
 
 export interface SessionUser {
     id: string;
@@ -47,11 +64,17 @@ export const NIVEL_ROL: Record<string, number> = {
     admin: 3,
     gestion: 2,
     canillita: 1,
-    cliente: 0
+    cliente: 0,
+    distribuidor: 0
 };
 
 /** Roles que se pueden impersonar con un perfil sintético (sin tocar la base). */
-export const ROLES_IMPERSONABLES: readonly string[] = ['gestion', 'canillita', 'cliente'];
+export const ROLES_IMPERSONABLES: readonly string[] = [
+    'gestion',
+    'canillita',
+    'cliente',
+    'distribuidor'
+];
 
 /**
  * ¿`rolActor` puede impersonar a `rolDestino`?
@@ -82,14 +105,17 @@ export const getClientProfile = async (ctxOrCookies: any) => {
 
     const sessionUser = locals?.user as SessionUser | undefined;
     if (sessionUser) {
-        if (sessionUser.role !== 'cliente') return null;
+        // Cliente y distribuidor son los dos roles que compran. Acá se
+        // comparaba contra 'cliente' a secas, y el distribuidor caía como si
+        // no tuviera sesión.
+        if (!esComprador(sessionUser.role)) return null;
 
         // Usuario sintético del switch de desarrollo: no existe en la base.
         if (import.meta.env.DEV && sessionUser.profileId.startsWith('dev-profile-')) {
             return {
                 $id: sessionUser.profileId,
                 user_id: sessionUser.id,
-                role: 'cliente',
+                role: sessionUser.role,
                 nombre: sessionUser.name,
                 email: sessionUser.email
             };
@@ -129,7 +155,7 @@ export const getClientProfile = async (ctxOrCookies: any) => {
             Query.equal('user_id', user.$id)
         ]);
 
-        if (profiles.documents.length === 0 || profiles.documents[0].role !== 'cliente') {
+        if (profiles.documents.length === 0 || !esComprador(profiles.documents[0].role)) {
             return null;
         }
 

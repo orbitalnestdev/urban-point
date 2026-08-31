@@ -4,13 +4,17 @@ import Layout from '../../layouts/Layout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import AddToCartBtn from '../../components/shop/AddToCartBtn';
-import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
+
 import { getCachedCatalog, getOptimizedImageUrl } from '../../lib/server/catalogCache';
 import { grupoDeProducto, etiquetaDeVariante } from '../../lib/variantes';
-import { getVistaCatalogo, variantesDelGrupo } from '../../lib/server/catalogView';
+import { getVistaCatalogo, variantesDelGrupo, precioParaTier } from '../../lib/server/catalogView';
+import { tierDeRol } from '../../lib/pricingEngine';
 import { sanitizeRichHtml } from '../../lib/sanitizeHtml';
 
 const { slug } = Astro.params;
+
+// Nivel de precio de quien mira: tiene que ver lo que se le va a cobrar.
+const tier = tierDeRol(Astro.locals.user?.role);
 
 let product: any = null;
 let category: any = null;
@@ -34,7 +38,7 @@ try {
 	const cache = await getCachedCatalog();
 	const catalogo: any[] = cache.products || [];
 	// Índices calculados una vez por refresco del caché, no por visita.
-	const vista = getVistaCatalogo(cache);
+	const vista = getVistaCatalogo(cache, Astro.locals.user?.role);
 
 	product = (slug ? vista.porSlug.get(slug) : null) || null;
 
@@ -88,7 +92,7 @@ try {
 			nombre: p.nombre,
 			etiqueta: etiquetaDeVariante(p),
 			stock: p.stock,
-			precio: precioDeVentaCentavos(p) / 100,
+			precio: precioParaTier(p, tier).venta / 100,
 			esActual: p.$id === product.$id
 		}));
 	nombreGrupo = grupoDeProducto(product);
@@ -126,8 +130,8 @@ try {
 }
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
-const precioMinorista = precioDeVentaCentavos(product) / 100;
-const listaCentavos = precioListaCentavos(product);
+const { venta: ventaCentavos, lista: listaCentavos } = precioParaTier(product, tier);
+const precioMinorista = ventaCentavos / 100;
 const precioLista = listaCentavos === null ? null : listaCentavos / 100;
 const cuotaMonto = Math.round(precioMinorista / 3);
 
@@ -365,8 +369,8 @@ const descripcionSegura = product.descripcion ? sanitizeRichHtml(product.descrip
 					</h2>
 					<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
 						{relatedProducts.map((rel) => {
-							const relPrecio = precioDeVentaCentavos(rel) / 100;
-							const relListaCentavos = precioListaCentavos(rel);
+							const relPrecio = precioParaTier(rel, tier).venta / 100;
+							const relListaCentavos = precioParaTier(rel, tier).lista;
 							const relPrecioLista = relListaCentavos === null ? null : relListaCentavos / 100;
 							
 							return (

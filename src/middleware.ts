@@ -51,7 +51,7 @@ async function resolveDevMockSession(sessionSecret: string): Promise<{ user: any
 	} else if (sessionSecret.startsWith('dev_mock_session:')) {
 		const parts = sessionSecret.split(':');
 		if (parts[1] === 'profile' && parts[2]) profileId = parts[2];
-		else if (['admin', 'gestion', 'canillita', 'cliente'].includes(parts[1])) role = parts[1];
+		else if (['admin', 'gestion', 'canillita', 'cliente', 'distribuidor'].includes(parts[1])) role = parts[1];
 	}
 
 	if (profileId) {

@@ -16,9 +16,10 @@ const { title, activeTab = 'dashboard' } = Astro.props;
 const profile = await getClientProfile(Astro);
 
 if (!profile) {
-	// getClientProfile devuelve null para todo rol que no sea 'cliente', así
-	// que acá también caen admin, gestión y canillita. Borrar la cookie los
-	// deslogueaba: entrar a "Mi cuenta" desde el panel cerraba la sesión.
+	// getClientProfile devuelve null para todo rol que no compre (cliente y
+	// distribuidor), así que acá caen admin, gestión y canillita. Borrar la
+	// cookie los deslogueaba: entrar a "Mi cuenta" desde el panel cerraba la
+	// sesión.
 	const usuario = Astro.locals.user;
 
 	if (usuario) {

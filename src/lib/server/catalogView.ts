@@ -21,8 +21,34 @@
  */
 
 import { precioDeVentaCentavos, precioListaCentavos } from '../pricing';
+import { resolveProductPriceForUser, tierDeRol, type PricingLevel } from '../pricingEngine';
 import { agruparVariantes, claveDeGrupo, type GrupoDeVariantes } from '../variantes';
 import { getOptimizedImageUrl } from './catalogCache';
+
+/**
+ * Precio que este comprador ve, y lista tachada si corresponde.
+ *
+ * Para `publico` es exactamente lo de siempre (precioDeVentaCentavos, con su
+ * promoción). Para canillita y distribuidor se muestra SU precio, y el público
+ * queda tachado al lado cuando es mayor: el descuento del nivel tiene que ser
+ * visible, si no el comprador no tiene forma de saber que lo tiene.
+ */
+export function precioParaTier(producto: any, tier: PricingLevel): { venta: number; lista: number | null } {
+	if (tier === 'publico') {
+		return { venta: precioDeVentaCentavos(producto), lista: precioListaCentavos(producto) };
+	}
+
+	const { unitPriceCentavos, appliedLevel } = resolveProductPriceForUser(producto, tier);
+
+	// Sin precio cargado para su nivel, cae a público: ahí la lista tachada es
+	// la promoción normal, no un descuento inventado.
+	if (appliedLevel === 'publico') {
+		return { venta: unitPriceCentavos, lista: precioListaCentavos(producto) };
+	}
+
+	const publico = precioDeVentaCentavos(producto);
+	return { venta: unitPriceCentavos, lista: publico > unitPriceCentavos ? publico : null };
+}
 
 /** Id de la categoría, venga como string o como documento expandido. */
 const idCategoria = (p: any): string =>
@@ -87,7 +113,7 @@ export interface VistaCatalogo {
 	porCategoria: Map<string, any[]>;
 }
 
-function construirVista(cache: any): VistaCatalogo {
+function construirVista(cache: any, tier: PricingLevel): VistaCatalogo {
 	const products: any[] = cache?.products || [];
 	const categoriasCrudas: any[] = cache?.categories || [];
 
@@ -124,7 +150,7 @@ function construirVista(cache: any): VistaCatalogo {
 		let maximo = 0;
 		let stockTotal = 0;
 		for (const v of grupo.variantes) {
-			const precio = precioDeVentaCentavos(v);
+			const precio = precioParaTier(v, tier).venta;
 			if (precio > 0) {
 				if (precio < minimo) minimo = precio;
 				if (precio > maximo) maximo = precio;
@@ -132,11 +158,11 @@ function construirVista(cache: any): VistaCatalogo {
 			stockTotal += Number(v.stock) || 0;
 		}
 		if (minimo === Infinity) {
-			minimo = precioDeVentaCentavos(principal);
+			minimo = precioParaTier(principal, tier).venta;
 			maximo = minimo;
 		}
 
-		const listaCentavos = precioListaCentavos(principal);
+		const listaCentavos = precioParaTier(principal, tier).lista;
 
 		return {
 			i: principal.$id,
@@ -182,23 +208,40 @@ function construirVista(cache: any): VistaCatalogo {
 	};
 }
 
-/** Memo por identidad del objeto de caché: refresco nuevo, vista nueva. */
-const vistas = new WeakMap<object, VistaCatalogo>();
+/**
+ * Memo por identidad del objeto de caché y por nivel de precio.
+ *
+ * Son tres niveles, no uno por usuario: público, canillita y distribuidor. La
+ * vista de cada uno se construye a lo sumo una vez por refresco del caché, así
+ * que mostrar el precio correcto a cada comprador cuesta dos vistas más, no un
+ * recálculo por visita.
+ */
+const vistas = new WeakMap<object, Map<PricingLevel, VistaCatalogo>>();
 
 /**
- * Vista derivada del catálogo recibido. Se calcula una vez por refresco del
- * caché y se reusa en todas las requests que sirvan esos mismos datos.
+ * Vista derivada del catálogo para el nivel de precio indicado.
+ *
+ * @param rolOTier Rol del usuario (`Astro.locals.user?.role`) o el nivel
+ *                 directamente. Sin argumento, precio público.
  */
-export function getVistaCatalogo(cache: any): VistaCatalogo {
+export function getVistaCatalogo(cache: any, rolOTier?: string | null): VistaCatalogo {
+	const tier = tierDeRol(rolOTier);
+
 	if (!cache || typeof cache !== 'object') {
-		return construirVista({ products: [], categories: [] });
+		return construirVista({ products: [], categories: [] }, tier);
 	}
 
-	const existente = vistas.get(cache);
+	let porTier = vistas.get(cache);
+	if (!porTier) {
+		porTier = new Map<PricingLevel, VistaCatalogo>();
+		vistas.set(cache, porTier);
+	}
+
+	const existente = porTier.get(tier);
 	if (existente) return existente;
 
-	const vista = construirVista(cache);
-	vistas.set(cache, vista);
+	const vista = construirVista(cache, tier);
+	porTier.set(tier, vista);
 	return vista;
 }
 

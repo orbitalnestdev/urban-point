@@ -38,8 +38,8 @@ import { env, getPublicSiteUrl } from '../lib/server/env';
 import { saveSiteSetting, getSiteSettings } from '../lib/server/settings';
 import { 
 	recalculateProductPrices, 
-	resolveProductPriceForUser, 
-	sanitizeProductForUser 
+	resolveProductPriceForUser,
+	tierDeRol
 } from '../lib/pricingEngine';
 import { obtenerTokenPlataformaValido } from '../lib/server/mercadopagoOAuth';
 
@@ -861,7 +861,10 @@ export const server = {
 					ctx.cookies.get(NODE_COOKIE_NAME)?.value
 				);
 
-				const effectiveTier = userRole === 'distribuidor' ? 'distribuidor' : (userRole === 'canillita' ? 'canillita' : 'publico');
+				// Mismo helper que usa la vitrina para decidir qué precio mostrar:
+				// con el ternario suelto acá y otro criterio allá, la tienda podía
+				// exhibir un nivel y la orden registrar otro.
+				const effectiveTier = tierDeRol(userRole);
 
 				// Create the Order in Appwrite
 				const orderPayload: any = {

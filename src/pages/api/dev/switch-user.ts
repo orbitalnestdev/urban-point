@@ -50,7 +50,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         return redirect(redirectTo || '/');
     }
 
-    if (['admin', 'gestion', 'canillita', 'cliente'].includes(role)) {
+    if (['admin', 'gestion', 'canillita', 'cliente', 'distribuidor'].includes(role)) {
         cookies.set('up_session', `dev_mock_session:${role}`, cookieOpts);
         return redirect(redirectTo || HOME_BY_ROLE[role]);
     }

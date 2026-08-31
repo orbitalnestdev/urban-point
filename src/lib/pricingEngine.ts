@@ -199,6 +199,21 @@ export function recalculateProductPrices(
  * - Canillita logueado y aprobado: precio_canillita.
  * - Distribuidor logueado y aprobado: precio_distribuidor.
  */
+/**
+ * Nivel de precio que le corresponde a un rol.
+ *
+ * Fuente única para la vitrina y el checkout. El checkout calculaba su propio
+ * `effectiveTier` con un ternario suelto y la vitrina directamente no miraba el
+ * rol: un distribuidor navegaba viendo precio público y recién al pagar se
+ * enteraba del descuento.
+ */
+export function tierDeRol(rol?: string | null): PricingLevel {
+	const r = (rol || '').toLowerCase();
+	if (r === 'distribuidor') return 'distribuidor';
+	if (r === 'canillita') return 'canillita';
+	return 'publico';
+}
+
 export function resolveProductPriceForUser(
 	product: any,
 	userRole?: string | null

@@ -7,7 +7,8 @@ import { getCachedCatalog, getOptimizedImageUrl } from '../../lib/server/catalog
 
 import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
 import { toSafeJson } from '../../lib/safeJson';
-import { getVistaCatalogo } from '../../lib/server/catalogView';
+import { getVistaCatalogo, precioParaTier } from '../../lib/server/catalogView';
+import { tierDeRol } from '../../lib/pricingEngine';
 
 let products: any[] = [];
 let categories: any[] = [];
@@ -18,11 +19,11 @@ let catalogoDegradado = false;
 
 // La vista derivada (conteos, agrupado y catálogo compacto) se calcula una vez
 // por refresco del caché, no una vez por visita. Ver lib/server/catalogView.ts.
-let vista = getVistaCatalogo(null);
+let vista = getVistaCatalogo(null, Astro.locals.user?.role);
 
 try {
 	const cache = await getCachedCatalog();
-	vista = getVistaCatalogo(cache);
+	vista = getVistaCatalogo(cache, Astro.locals.user?.role);
 
 	products = cache.products;
 	categories = vista.categorias;
@@ -32,6 +33,10 @@ try {
 	console.error('Error al cargar el catálogo:', e);
 	catalogoDegradado = true;
 }
+
+// Nivel de precio del visitante. Un distribuidor tiene que VER el precio que
+// se le va a cobrar: antes navegaba con precio público y se enteraba al pagar.
+const tier = tierDeRol(Astro.locals.user?.role);
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 
@@ -258,11 +263,13 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 					<div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-6" id="products-grid">
 					{productosIniciales.map((grupo) => {
 						const prod: any = grupo.principal;
-						const preciosGrupo = grupo.variantes.map((v: any) => precioDeVentaCentavos(v)).filter((n) => n > 0);
-						const precioMinorista = (preciosGrupo.length ? Math.min(...preciosGrupo) : precioDeVentaCentavos(prod)) / 100;
+						// Mismo precio que la entrada compacta y que el checkout:
+						// precioParaTier es la única fuente para los tres niveles.
+						const preciosGrupo = grupo.variantes.map((v: any) => precioParaTier(v, tier).venta).filter((n) => n > 0);
+						const precioMinorista = (preciosGrupo.length ? Math.min(...preciosGrupo) : precioParaTier(prod, tier).venta) / 100;
 						const hayVarias = grupo.variantes.length > 1;
 						const desdeDistinto = hayVarias && Math.max(...preciosGrupo) > Math.min(...preciosGrupo);
-						const listaCentavos = precioListaCentavos(prod);
+						const listaCentavos = precioParaTier(prod, tier).lista;
 						const precioLista = listaCentavos === null ? null : listaCentavos / 100;
 						const catId = typeof prod.categoria_id === 'object' ? prod.categoria_id?.$id : prod.categoria_id;
 

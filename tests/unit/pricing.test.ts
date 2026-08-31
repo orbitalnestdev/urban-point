@@ -58,8 +58,12 @@ describe('C-03 — el checkout debe cobrar el precio promocional que se muestra'
 		];
 		for (const vista of vistas) {
 			const src = leer(vista);
+			// precioParaTier envuelve a precioDeVentaCentavos y a
+			// resolveProductPriceForUser para servir el precio del nivel de
+			// quien mira. Cualquiera de las dos vías vale: lo que no vale es
+			// que la página calcule el precio por su cuenta.
 			expect(
-				src.includes('precioDeVentaCentavos'),
+				src.includes('precioDeVentaCentavos') || src.includes('precioParaTier'),
 				`${vista} no usa el módulo de precios compartido`
 			).toBe(true);
 			// El precio de lista tachado era precio * 1.25, inventado en el front.
