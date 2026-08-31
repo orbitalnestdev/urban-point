@@ -10,6 +10,43 @@ const db = new Proxy({} as Databases, {
 	}
 });
 
+/**
+ * Descuenta unidades del stock de un producto de forma atómica.
+ *
+ * Antes era `getDocument` + `updateDocument` con el nuevo valor calculado en
+ * memoria. Entre la lectura y la escritura cabe otra orden: dos compras
+ * simultáneas de la última unidad leían el mismo stock, escribían el mismo
+ * resultado y se vendían las dos.
+ *
+ * `decrementDocumentAttribute` resuelve el decremento del lado de Appwrite, en
+ * una sola operación, y con `min: 0` falla en vez de dejar stock negativo. Ese
+ * error es justamente la señal de sobreventa: se propaga para que quien llama
+ * decida (hoy, dejar registro y seguir con el resto de los ítems).
+ */
+export async function descontarStock(productId: string, cantidad: number) {
+	if (!(cantidad > 0)) return;
+	await db.decrementDocumentAttribute(
+		'urbanpoint',
+		'products',
+		productId,
+		'stock',
+		cantidad,
+		0
+	);
+}
+
+/** Devuelve unidades al stock. Contraparte de descontarStock. */
+export async function restaurarStock(productId: string, cantidad: number) {
+	if (!(cantidad > 0)) return;
+	await db.incrementDocumentAttribute(
+		'urbanpoint',
+		'products',
+		productId,
+		'stock',
+		cantidad
+	);
+}
+
 // Función pura extraída para usar en el webhook y en el simulador
 export async function evaluateCommissionRule(dbInstance: Databases, canillitaId: string | null, categoryId: string | null) {
 	const rulesToEvaluate = [
@@ -77,17 +114,30 @@ export async function resolverComisiones(orderId: string) {
 		// estaba después del corte por tier: los pedidos canillita/distribuidor
 		// se pagaban y entregaban sin tocar inventario (y al cancelarse, el
 		// stock se "restauraba" inflándolo con unidades nunca descontadas).
+		const sobreventas: string[] = [];
 		for (const item of itemsRes.documents) {
 			const productId = typeof item.product_id === 'string' ? item.product_id : item.product_id?.$id;
 			if (!productId) continue;
 			try {
-				const product = await db.getDocument('urbanpoint', 'products', productId);
-				await escribirDocumentoTolerante('products', {
-					stock: Math.max(0, (product.stock || 0) - item.cantidad)
-				}, productId);
+				await descontarStock(productId, item.cantidad);
 			} catch (e) {
-				console.error(`No se pudo descontar stock del producto ${productId} (orden ${orderId}):`, e);
+				// Con `min: 0`, Appwrite rechaza el decremento que dejaría el
+				// stock en negativo. Es la señal de sobreventa: el pago entró
+				// pero no hay unidades. No se aborta el resto de los ítems —
+				// el pedido ya está cobrado— pero queda anotado en la orden
+				// para que operaciones lo vea y resuelva.
+				sobreventas.push(`${item.nombre_snapshot || productId} x${item.cantidad}`);
+				console.error(
+					`SOBREVENTA: no hay stock para descontar ${item.cantidad} de ${productId} (orden ${orderId}).`,
+					e
+				);
 			}
+		}
+
+		if (sobreventas.length > 0) {
+			await escribirDocumentoTolerante('orders', {
+				alerta_stock: `Sin stock al acreditarse el pago: ${sobreventas.join('; ')}`
+			}, orderId).catch(() => {});
 		}
 
 		// Marca de idempotencia para pedidos que no generan asientos (tiers sin
@@ -467,10 +517,7 @@ export async function restaurarStockDeOrden(orderId: string) {
 		const productId = typeof item.product_id === 'string' ? item.product_id : item.product_id?.$id;
 		if (!productId) continue;
 		try {
-			const product = await db.getDocument('urbanpoint', 'products', productId);
-			await escribirDocumentoTolerante('products', {
-				stock: (product.stock || 0) + item.cantidad
-			}, productId);
+			await restaurarStock(productId, item.cantidad);
 		} catch (e) {
 			console.warn(`No se pudo restaurar el stock del producto ${productId}:`, e);
 		}
