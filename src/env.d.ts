@@ -12,8 +12,11 @@ declare namespace App {
       role: string;
       profileId: string;
     };
-    profile?: any;
     isImpersonating?: boolean;
     impersonatorAdminName?: string;
+    /** Rol real de quien impersona, mientras isImpersonating es true. */
+    impersonatorRole?: string;
+    /** Memoiza el profile del cliente por request (ver getClientProfile). */
+    __clientProfilePromise?: Promise<any> | null;
   }
 }

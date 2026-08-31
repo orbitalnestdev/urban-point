@@ -31,6 +31,42 @@ export function requireRole(ctx: { locals: App.Locals }, ...roles: UserRole[]): 
 }
 
 /**
+ * Jerarquía de privilegio de los roles, para la impersonación.
+ *
+ * Sólo el administrador puede impersonar, y sólo perfiles de rol
+ * estrictamente inferior al suyo.
+ *
+ * Sin esta regla la impersonación era una escalada de privilegios directa: el
+ * endpoint aceptaba también al rol `gestion` y el middleware adoptaba el perfil
+ * destino sin mirar su rol. Un usuario `gestion` —cuya única restricción es el
+ * 403 sobre /admin/configuracion y /admin/equipo— entraba a
+ * /admin/clientes?role=admin, copiaba el $id de un administrador y pasaba a
+ * tener rol admin en el middleware y en todas las actions.
+ */
+export const NIVEL_ROL: Record<string, number> = {
+    admin: 3,
+    gestion: 2,
+    canillita: 1,
+    cliente: 0
+};
+
+/** Roles que se pueden impersonar con un perfil sintético (sin tocar la base). */
+export const ROLES_IMPERSONABLES: readonly string[] = ['gestion', 'canillita', 'cliente'];
+
+/**
+ * ¿`rolActor` puede impersonar a `rolDestino`?
+ *
+ * Exige que el actor sea admin y que el destino esté estrictamente por debajo.
+ * Un rol desconocido nunca habilita nada.
+ */
+export function puedeImpersonar(rolActor?: string | null, rolDestino?: string | null): boolean {
+    const actor = NIVEL_ROL[rolActor ?? ''];
+    const destino = NIVEL_ROL[rolDestino ?? ''];
+    if (actor === undefined || destino === undefined) return false;
+    return actor === NIVEL_ROL.admin && destino < actor;
+}
+
+/**
  * Devuelve el profile del cliente logueado, o null si no hay sesión de cliente.
  *
  * Acepta el contexto completo (Astro o ctx de una action, con locals+cookies)

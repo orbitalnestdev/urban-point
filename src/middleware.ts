@@ -1,6 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { Client, Account, Query } from 'node-appwrite';
 import { createAdminClient } from './lib/server/appwrite';
+import { puedeImpersonar, ROLES_IMPERSONABLES } from './lib/server/auth';
 import { REF_COOKIE_NAME, REF_COOKIE_MAX_AGE } from './lib/nodeSession';
 
 const DEFAULT_ENDPOINT = 'https://aw.orbitalnest.net/v1';
@@ -161,29 +162,40 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
 		
 		// Bloque Impersonación / Switch de Usuario
+		//
+		// Sólo el administrador impersona, y sólo perfiles de rol estrictamente
+		// inferior (ver puedeImpersonar). La condición anterior aceptaba el rol
+		// `gestion` —o la mera presencia de la cookie de respaldo— y adoptaba el
+		// perfil destino sin mirar su rol: un `gestion` copiaba el $id de un
+		// admin desde /admin/clientes?role=admin y se convertía en admin.
 		const impersonatedTarget = context.cookies.get('up_impersonated_profile')?.value;
-		const adminBackupSession = context.cookies.get('up_admin_session_backup')?.value;
 
-		if (impersonatedTarget && (profile.role === 'admin' || profile.role === 'gestion' || adminBackupSession)) {
+		if (impersonatedTarget && profile.role === 'admin') {
 			try {
 				const adminName = profile.nombre || 'Admin';
+				const adminRole = profile.role;
 				let targetProfile: any = null;
 
 				if (impersonatedTarget.startsWith('synthetic:')) {
-					const sRole = impersonatedTarget.replace('synthetic:', '');
-					targetProfile = {
-						$id: `synthetic-profile-${sRole}`,
-						user_id: `synthetic-user-${sRole}`,
-						role: sRole,
-						nombre: `Prueba ${sRole.charAt(0).toUpperCase()}${sRole.slice(1)}`,
-						email: `prueba-${sRole}@urbanpoint.test`
-					};
+					const sRole = impersonatedTarget.slice('synthetic:'.length);
+					// La cookie es httpOnly y sólo la escribe el endpoint, que ya
+					// valida el rol. Se revalida igual: es el único lugar donde
+					// un valor de cookie se convierte en un rol efectivo.
+					if (ROLES_IMPERSONABLES.includes(sRole)) {
+						targetProfile = {
+							$id: `synthetic-profile-${sRole}`,
+							user_id: `synthetic-user-${sRole}`,
+							role: sRole,
+							nombre: `Prueba ${sRole.charAt(0).toUpperCase()}${sRole.slice(1)}`,
+							email: `prueba-${sRole}@urbanpoint.test`
+						};
+					}
 				} else {
 					const { databases } = createAdminClient();
 					targetProfile = await databases.getDocument('urbanpoint', 'profiles', impersonatedTarget);
 				}
 
-				if (targetProfile) {
+				if (targetProfile && puedeImpersonar(adminRole, targetProfile.role)) {
 					profile = targetProfile;
 					user = {
 						$id: targetProfile.user_id || `imp-user-${targetProfile.$id}`,
@@ -191,6 +203,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
 					};
 					context.locals.isImpersonating = true;
 					context.locals.impersonatorAdminName = adminName;
+					// Rol real de quien impersona: /api/admin/impersonate lo usa
+					// para autorizar el cambio a otro usuario sin tener que
+					// salir primero, ya que locals.user ya es el destino.
+					context.locals.impersonatorRole = adminRole;
 				}
 			} catch (impErr) {
 				console.error("Error al aplicar impersonación:", impErr);
