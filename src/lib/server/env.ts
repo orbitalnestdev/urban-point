@@ -47,15 +47,50 @@ export const appwriteEndpoint = () =>
 export const appwriteProjectId = () =>
 	env('PUBLIC_APPWRITE_PROJECT_ID', 'NEXT_PUBLIC_APPWRITE_PROJECT_ID') || APPWRITE_PROJECT_ID_DEFAULT;
 
+/** Dominio de producción. Último recurso si no hay nada configurado. */
+export const SITE_URL_DEFAULT = 'https://urbanpoints.com.ar';
+
+const esLocal = (valor: string): boolean =>
+	valor.includes('localhost') || valor.includes('127.0.0.1');
+
 /**
- * Resuelve la URL pública base del sitio (para webhooks, back_urls y redirecciones OAuth MP).
- * Evita fallos cuando Node corre internamente en localhost detras de cPanel / Nginx / Passenger.
+ * Hosts aceptados cuando la URL base se deduce de la petición.
+ *
+ * Se arma con PUBLIC_SITE_URL / SITE_URL, la lista opcional
+ * PUBLIC_SITE_HOSTS (separada por comas) y el dominio de producción.
+ */
+function hostsPermitidos(): string[] {
+	const hosts: string[] = [];
+	const agregar = (valor: string) => {
+		const limpio = valor.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase();
+		if (limpio && !hosts.includes(limpio)) hosts.push(limpio);
+	};
+
+	agregar(env('PUBLIC_SITE_URL', 'SITE_URL'));
+	for (const extra of env('PUBLIC_SITE_HOSTS').split(',')) agregar(extra);
+	agregar(SITE_URL_DEFAULT);
+
+	return hosts;
+}
+
+/**
+ * Resuelve la URL pública base del sitio (para webhooks, back_urls y
+ * redirecciones OAuth de Mercado Pago). Sirve para cuando Node corre en
+ * localhost detrás de Nginx / Traefik / Passenger.
+ *
+ * `x-forwarded-host` lo manda el cliente, y si el proxy no lo reescribe llega
+ * tal cual: sin validarlo, un atacante podía fabricar una preferencia de pago
+ * cuyas back_urls y notification_url apuntaran a un dominio suyo. Ahora el host
+ * deducido de la petición tiene que estar en la lista de permitidos; si no,
+ * se usa la URL configurada.
  */
 export function getPublicSiteUrl(ctx?: any): string {
 	const envUrl = env('PUBLIC_SITE_URL', 'SITE_URL');
-	if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+	if (envUrl && !esLocal(envUrl)) {
 		return envUrl.replace(/\/+$/, '');
 	}
+
+	const permitidos = hostsPermitidos();
 
 	let req: Request | null = null;
 	if (ctx) {
@@ -65,19 +100,33 @@ export function getPublicSiteUrl(ctx?: any): string {
 
 	if (req) {
 		const forwardedHost = req.headers.get('x-forwarded-host');
-		const host = forwardedHost || req.headers.get('host');
+		const host = (forwardedHost || req.headers.get('host') || '').split(',')[0].trim();
 		const proto = req.headers.get('x-forwarded-proto') || 'https';
 
-		if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
-			return `${proto}://${host}`.replace(/\/+$/, '');
+		if (host && !esLocal(host)) {
+			if (permitidos.includes(host.toLowerCase())) {
+				return `${proto}://${host}`.replace(/\/+$/, '');
+			}
+			// Si el dominio real de producción no está en la lista, las URLs que
+			// se le mandan a Mercado Pago apuntan a otro lado. Se avisa fuerte:
+			// el síntoma sería un checkout que vuelve al dominio equivocado, y
+			// sin este log no habría por dónde empezar a buscar.
+			console.warn(
+				`Host "${host}" no está permitido para armar la URL base. ` +
+				`Definí PUBLIC_SITE_URL (o agregalo a PUBLIC_SITE_HOSTS). ` +
+				`Se usa ${SITE_URL_DEFAULT}.`
+			);
 		}
 	}
 
 	const urlObj = ctx?.url || (ctx instanceof URL ? ctx : null);
-	if (urlObj?.origin && !urlObj.origin.includes('localhost') && !urlObj.origin.includes('127.0.0.1')) {
-		return urlObj.origin.replace(/\/+$/, '');
+	if (urlObj?.origin && !esLocal(urlObj.origin)) {
+		const host = String(urlObj.host || '').toLowerCase();
+		if (permitidos.includes(host)) {
+			return String(urlObj.origin).replace(/\/+$/, '');
+		}
 	}
 
-	return 'https://urbanpoints.com.ar';
+	return SITE_URL_DEFAULT;
 }
 
