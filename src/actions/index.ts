@@ -4,6 +4,8 @@ import { randomBytes } from 'node:crypto';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { Client, Databases, ID, Users, Query, Account } from 'node-appwrite';
 import { getClientProfile, requireRole } from '../lib/server/auth';
+import { mensajeParaCliente } from '../lib/server/errors';
+import { crearLimitador } from '../lib/server/rateLimit';
 import {
 	normalizarEstadoPedido,
 	esTransicionValida,
@@ -159,6 +161,13 @@ async function generateUniqueReferralCode(nombre: string, apellido: string): Pro
 	return `CANI-${initial}${surname}-${Date.now().toString().slice(-4)}`;
 }
 
+/**
+ * Tope del alta pública de canillitas: 3 solicitudes por IP por hora.
+ * Holgado para un kiosquero que se equivoca y recarga, restrictivo para un
+ * script que itera emails.
+ */
+const limitadorAltaCanillita = crearLimitador(3, 60 * 60 * 1000);
+
 export const server = {
 	registerCanillita: defineAction({
 		accept: 'json',
@@ -180,6 +189,18 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
+				// Límite por IP. La dedup por email de más abajo frena el reenvío
+				// accidental, pero no un abuso: cambiando el email en cada intento
+				// se creaban documentos con DNI y CBU sin tope, y salía un mail a
+				// los administradores por cada uno.
+				const ip = ctx.clientAddress || '0.0.0.0';
+				if (!limitadorAltaCanillita.permitir(ip)) {
+					return {
+						success: false,
+						error: 'Recibimos varias solicitudes desde esta conexión. Probá de nuevo en una hora.'
+					};
+				}
+
 				// Dedup: una solicitud abierta por email alcanza. Sin este control,
 				// el endpoint público generaba documentos y mails a admins sin
 				// límite (spam trivial contra /_actions/registerCanillita).
@@ -244,7 +265,7 @@ export const server = {
 
 			} catch (error: any) {
 				console.error("Appwrite Error:", error);
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -350,7 +371,7 @@ export const server = {
 
 			} catch (error: any) {
 				console.error("Approve Error:", error);
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -371,7 +392,7 @@ export const server = {
 				});
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -414,7 +435,7 @@ export const server = {
 
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -455,7 +476,7 @@ export const server = {
 
 				return { success: true, code: newCode, id: newDoc.$id };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -478,7 +499,7 @@ export const server = {
 
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -520,7 +541,7 @@ export const server = {
 				const doc = await db.createDocument('urbanpoint', 'pickup_points', ID.unique(), payload);
 				return { success: true, id: doc.$id };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -557,7 +578,7 @@ export const server = {
 
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -585,7 +606,7 @@ export const server = {
 
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -617,7 +638,7 @@ export const server = {
 
 				return { success: true, payoutId: res.payoutId, idempotencySkipped: res.idempotencySkipped };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -697,7 +718,7 @@ export const server = {
 
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -1016,7 +1037,7 @@ export const server = {
 				};
 			} catch (error: any) {
 				console.error("Checkout Error:", error);
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -1040,7 +1061,7 @@ export const server = {
 
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -1052,17 +1073,10 @@ export const server = {
 			password: z.string().min(8)
 		}),
 		handler: async (input, ctx) => {
-			if (import.meta.env.DEV && input.email === 'azcurraely@gmail.com') {
-				ctx.cookies.set('up_session', 'dev_mock_admin_session', {
-					path: '/',
-					httpOnly: true,
-					secure: import.meta.env.PROD,
-					sameSite: 'lax',
-					maxAge: 60 * 60 * 24 * 30
-				});
-				return { success: true, role: 'admin' };
-			}
-			
+			// El atajo de desarrollo que entregaba sesión de admin a un email
+			// hardcodeado se quitó: era una llave maestra a un `import.meta.env.DEV`
+			// mal resuelto de distancia. Para saltar entre roles en local está
+			// /api/dev/switch-user, que responde 404 fuera de desarrollo.
 			try {
 				// Para loguearnos, creamos un cliente sin el API Key, que actúe como cliente web
 				const endpoint = process.env.PUBLIC_APPWRITE_ENDPOINT || 'https://aw.orbitalnest.net/v1';
@@ -1164,7 +1178,7 @@ export const server = {
 				return { success: true };
 			} catch (error: any) {
 				console.error("Activation Error:", error);
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -1209,7 +1223,7 @@ export const server = {
 
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -1264,7 +1278,7 @@ export const server = {
 
 				return { success: true, rule: matchedRule, productPrice: product.precio, amount, ruleLevel };
 			} catch(e: any) {
-				return { success: false, error: e.message };
+				return { success: false, error: mensajeParaCliente(e) };
 			}
 		}
 	}),
@@ -1342,7 +1356,7 @@ export const server = {
 					}
 				};
 			} catch(e: any) {
-				return { success: false, error: e.message };
+				return { success: false, error: mensajeParaCliente(e) };
 			}
 		}
 	}),
@@ -1372,7 +1386,7 @@ export const server = {
 
 				return { success: true, payoutId: res.payoutId, montoCentavos: res.montoCentavos };
 			} catch(e: any) {
-				return { success: false, error: e.message };
+				return { success: false, error: mensajeParaCliente(e) };
 			}
 		}
 	}),
@@ -1480,7 +1494,7 @@ export const server = {
 				return { success: true };
 
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -1565,7 +1579,7 @@ export const server = {
 
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -1604,7 +1618,7 @@ export const server = {
 
 				return { success: true, id: doc.$id };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -1767,7 +1781,7 @@ export const server = {
 
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -1802,7 +1816,7 @@ export const server = {
 				invalidateCatalogCache();
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -1820,7 +1834,7 @@ export const server = {
 				invalidateCatalogCache();
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -1858,7 +1872,7 @@ export const server = {
 				const doc = await escribirDocumentoTolerante('products', duplicatePayload);
 				return { success: true, id: doc.$id };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -2122,7 +2136,7 @@ export const server = {
 					errores
 				};
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -2309,7 +2323,7 @@ export const server = {
 				invalidateCatalogCache();
 				return { success: true, updated, created, totalProcessed: input.updates.length };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -2342,7 +2356,7 @@ export const server = {
 				});
 				return { success: true, id: doc.$id };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -2486,7 +2500,7 @@ export const server = {
 					return { success: true, id: created.$id };
 				}
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -2504,7 +2518,7 @@ export const server = {
 				await db.deleteDocument('urbanpoint', 'pickup_points', input.id);
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -2559,7 +2573,7 @@ export const server = {
 				invalidateCatalogCache();
 				return { success: true, id: categoryId };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -2587,7 +2601,7 @@ export const server = {
 				invalidateCatalogCache();
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -2640,7 +2654,7 @@ export const server = {
 				invalidateCatalogCache();
 				return { success: true, updatedCount };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -2659,7 +2673,7 @@ export const server = {
 				invalidateCatalogCache();
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
@@ -2672,15 +2686,37 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
-				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
-					throw new Error('Solo los administradores pueden cambiar roles de usuario');
+				requireRole(ctx, 'admin');
+
+				const objetivo = await db.getDocument('urbanpoint', 'profiles', input.profileId);
+
+				// No cambiarse el rol a uno mismo: un admin podía degradarse y
+				// quedar sin acceso a /admin/equipo para revertirlo.
+				if (objetivo.user_id && objetivo.user_id === ctx.locals.user!.id) {
+					throw new Error('No podés cambiar tu propio rol.');
 				}
+
+				// Protección del último administrador. Vivía sólo en el handler
+				// del formulario de /admin/equipo, así que llamar a esta action
+				// —como hace la ficha de cliente— la salteaba por completo y
+				// permitía degradar al único admin y dejar la tienda sin nadie
+				// que pudiera restituir roles.
+				if (objetivo.role === 'admin' && input.role !== 'admin') {
+					const admins = await db.listDocuments('urbanpoint', 'profiles', [
+						Query.equal('role', 'admin'),
+						Query.limit(2)
+					]);
+					if (admins.documents.length <= 1) {
+						throw new Error('No se puede degradar al único Administrador de la tienda.');
+					}
+				}
+
 				await db.updateDocument('urbanpoint', 'profiles', input.profileId, {
 					role: input.role
 				});
 				return { success: true };
 			} catch (error: any) {
-				return { success: false, error: error.message };
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	})
