@@ -94,8 +94,12 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     free_shipping_threshold_centavos: 2500000,
     pickup_has_cost: false,
 
-    mp_public_key: 'APP_USR-7890123456789-TEST',
-    mp_access_token: 'APP_USR-1234567890123-TEST',
+    // Vacíos a propósito. Antes traían dos cadenas con formato APP_USR-…, que
+    // al leer el archivo parecían credenciales reales y hacían indistinguible
+    // "sin configurar" de "mal configurado". El token que se usa de verdad sale
+    // de obtenerTokenPlataformaValido(), no de acá.
+    mp_public_key: '',
+    mp_access_token: '',
     mp_enabled: true,
     transferencia_enabled: true,
 
