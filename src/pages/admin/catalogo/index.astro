@@ -50,15 +50,22 @@ try {
 	console.error("Error loading products page:", e);
 }
 
-const numBorradores = products.filter(p => p.estado === 'borrador').length;
-const numSinStock = products.filter(p => p.stock === 0 && p.estado !== 'borrador').length;
-const numSinFoto = products.filter(p => !p.portada_url).length;
-const numSinCosto = products.filter(p => (!p.cost && !p.costo) || (p.cost <= 0 && p.costo <= 0)).length;
-const total = products.length;
-const activos = products.filter(p => p.estado === 'activo').length;
-const pausados = products.filter(p => p.estado === 'pausado').length;
+// Ocho recorridos del catálogo completo para ocho contadores, en una sola
+// pasada. Con 6.495 productos era trabajo repetido en cada carga del panel.
+let numBorradores = 0, numSinStock = 0, numSinFoto = 0, numSinCosto = 0;
+let activos = 0, pausados = 0, valorTotalCentavos = 0;
+for (const p of products) {
+	if (p.estado === 'borrador') numBorradores++;
+	else if (p.estado === 'activo') {
+		activos++;
+		valorTotalCentavos += (p.precio || 0) * (p.stock || 0);
+	} else if (p.estado === 'pausado') pausados++;
 
-const valorTotalCentavos = products.filter(p => p.estado === 'activo').reduce((acc, p) => acc + ((p.precio || 0) * (p.stock || 0)), 0);
+	if (p.stock === 0 && p.estado !== 'borrador') numSinStock++;
+	if (!p.portada_url) numSinFoto++;
+	if ((!p.cost && !p.costo) || (p.cost <= 0 && p.costo <= 0)) numSinCosto++;
+}
+const total = products.length;
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
 let filteredProducts = [...products];
