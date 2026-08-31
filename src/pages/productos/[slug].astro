@@ -6,7 +6,8 @@ import Footer from '../../components/Footer.astro';
 import AddToCartBtn from '../../components/shop/AddToCartBtn';
 import { precioDeVentaCentavos, precioListaCentavos } from '../../lib/pricing';
 import { getCachedCatalog, getOptimizedImageUrl } from '../../lib/server/catalogCache';
-import { agruparVariantes, grupoDeProducto, etiquetaDeVariante } from '../../lib/variantes';
+import { grupoDeProducto, etiquetaDeVariante } from '../../lib/variantes';
+import { getVistaCatalogo, variantesDelGrupo } from '../../lib/server/catalogView';
 import { sanitizeRichHtml } from '../../lib/sanitizeHtml';
 
 const { slug } = Astro.params;
@@ -32,8 +33,10 @@ try {
 	// vitrina y la ficha podían discrepar sobre qué producto está publicado.
 	const cache = await getCachedCatalog();
 	const catalogo: any[] = cache.products || [];
+	// Índices calculados una vez por refresco del caché, no por visita.
+	const vista = getVistaCatalogo(cache);
 
-	product = catalogo.find((p: any) => p.slug === slug) || null;
+	product = (slug ? vista.porSlug.get(slug) : null) || null;
 
 	if (!product) {
 		// 404 real en vez del redirect a /productos: el soft-404 confundía a
@@ -71,9 +74,14 @@ try {
 	// Las demás variantes del mismo grupo. La vitrina muestra una sola tarjeta
 	// por grupo, así que la ficha es donde el comprador ve el resto: sin esto,
 	// las otras 132 entregas del Titanic quedarían inalcanzables.
-	const claveGrupo = grupoDeProducto(product).toLowerCase();
-	hermanas = catalogo
-		.filter((p: any) => grupoDeProducto(p).toLowerCase() === claveGrupo)
+	//
+	// La clave sale de variantesDelGrupo, que usa el MISMO criterio que la
+	// vitrina. Acá se comparaba con grupoDeProducto(p).toLowerCase(), sin
+	// normalizar tildes ni espacios: con un nombre acentuado de forma
+	// inconsistente la tarjeta anunciaba tres variantes y la ficha mostraba
+	// dos, dejando la tercera inalcanzable — justo lo que este bloque existe
+	// para evitar.
+	hermanas = variantesDelGrupo(vista, product)
 		.map((p: any) => ({
 			$id: p.$id,
 			slug: p.slug,
@@ -91,13 +99,12 @@ try {
 
 	category = catId ? (cache.categories || []).find((c: any) => c.$id === catId) || null : null;
 
-	const idCategoria = (p: any) =>
-		p.categoria_id ? (typeof p.categoria_id === 'string' ? p.categoria_id : p.categoria_id.$id) : null;
-
 	// Relacionados de la MISMA categoría: la sección promete "te puede
 	// interesar", no cuatro productos al azar.
 	relatedProducts = catId
-		? catalogo.filter((p: any) => p.$id !== product.$id && idCategoria(p) === catId).slice(0, 4)
+		? (vista.porCategoria.get(catId) || [])
+				.filter((p: any) => p.$id !== product.$id)
+				.slice(0, 4)
 		: [];
 
 	// Fallback: si la categoría no tiene suficientes, se completa con recientes.

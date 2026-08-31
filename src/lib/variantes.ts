@@ -46,6 +46,23 @@ const normalizar = (s: string) =>
 	s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim();
 
 /**
+ * Clave de agrupado de un producto. Es la que usa `agruparVariantes`, y la
+ * única forma correcta de preguntar "¿estos dos productos son variantes del
+ * mismo?".
+ *
+ * Existe porque la ficha de producto comparaba con
+ * `grupoDeProducto(p).toLowerCase()`, sin normalizar tildes ni espacios. Con un
+ * nombre acentuado de forma inconsistente —cosa normal en un catálogo
+ * importado por CSV desde varias fuentes— la vitrina y la ficha discrepaban: la
+ * tarjeta anunciaba tres variantes y la ficha mostraba dos, dejando la tercera
+ * inalcanzable. Que la clave viva en un solo lugar impide que vuelvan a
+ * separarse.
+ */
+export function claveDeGrupo(producto: ProductoAgrupable): string {
+	return normalizar(grupoDeProducto(producto));
+}
+
+/**
  * Nombre del grupo al que pertenece un producto.
  * Si no tiene separador ni override, el producto es su propio grupo.
  */
@@ -91,7 +108,7 @@ export function agruparVariantes<T extends ProductoAgrupable>(productos: T[]): G
 
 	for (const producto of productos || []) {
 		const base = grupoDeProducto(producto);
-		const clave = normalizar(base);
+		const clave = claveDeGrupo(producto);
 		if (!clave) continue;
 
 		const existente = porClave.get(clave);
