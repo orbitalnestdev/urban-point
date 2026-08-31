@@ -12,7 +12,7 @@
     "preview": "astro preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:legacy": "node --test tests/*.test.ts",
+    "test:e2e": "node --test tests/e2e/*.test.ts",
     "astro": "astro"
   },
   "dependencies": {
