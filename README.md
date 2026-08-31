@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Astro-5.0%20(SSR)-orange.svg" alt="Astro 5" />
-  <img src="https://img.shields.io/badge/React-18-blue.svg" alt="React 18" />
-  <img src="https://img.shields.io/badge/TailwindCSS-3.4-cyan.svg" alt="TailwindCSS" />
+  <img src="https://img.shields.io/badge/Astro-7.1%20(SSR)-orange.svg" alt="Astro 7" />
+  <img src="https://img.shields.io/badge/React-19-blue.svg" alt="React 19" />
+  <img src="https://img.shields.io/badge/TailwindCSS-4.3-cyan.svg" alt="TailwindCSS" />
   <img src="https://img.shields.io/badge/Appwrite-1.8.0%20Self--Hosted-red.svg" alt="Appwrite" />
   <img src="https://img.shields.io/badge/Mercado%20Pago-Checkout%20Pro-009EE3.svg" alt="Mercado Pago" />
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue.svg" alt="TypeScript" />
@@ -44,15 +44,15 @@
 - **Gestión de Catálogo & Modelo de 3 Estados**:
   - Productos con estados explícitos (`borrador`, `activo`, `pausado`).
   - Selector de 3 estados por fila en la tabla y **Drawer de Edición Rápida** de 2 columnas con formateo de moneda en vivo, badge derivado de *"Nuevo"* (<30 días) y barra flotante de acciones masivas.
-  - Editor completo por pestañas ([`/admin/catalogo/[id]`](file:///c:/Users/azcur/Workspace/UrbanPoint/urban-point/src/pages/admin/catalogo/[id].astro)): Identidad, Galería (Appwrite Storage), Precio/Margen, Stock, Logística y SEO.
-- **Dashboard Operativo Vivo ([`/admin/index.astro`](file:///c:/Users/azcur/Workspace/UrbanPoint/urban-point/src/pages/admin/index.astro))**: Métricas del día/mes, pedidos que requieren atención (nuevos sin confirmar, listos para retiro), solicitudes de canillitas y stock crítico.
-- **Análisis de Tendencias ([`/admin/analisis.astro`](file:///c:/Users/azcur/Workspace/UrbanPoint/urban-point/src/pages/admin/analisis.astro))**: Comparativa Retiro en Punto vs Envío a Domicilio, ranking de ventas por canillita y análisis de compradores nuevos vs recurrentes.
-- **Centro de Reportes CSV ([`/admin/reportes.astro`](file:///c:/Users/azcur/Workspace/UrbanPoint/urban-point/src/pages/admin/reportes.astro))**: Exportación descargable para Ventas, Comisiones, Liquidaciones e Inventario.
-- **Equipo de Trabajo ([`/admin/equipo/index.astro`](file:///c:/Users/azcur/Workspace/UrbanPoint/urban-point/src/pages/admin/equipo/index.astro))**:
+  - Editor completo por pestañas ([`/admin/catalogo/[id]`](src/pages/admin/catalogo/[id].astro)): Identidad, Galería (Appwrite Storage), Precio/Margen, Stock, Logística y SEO.
+- **Dashboard Operativo Vivo ([`/admin`](src/pages/admin/index.astro))**: Métricas del día/mes, pedidos que requieren atención (nuevos sin confirmar, listos para retiro), solicitudes de canillitas y stock crítico.
+- **Análisis de Tendencias ([`/admin/analisis`](src/pages/admin/analisis/index.astro))**: Comparativa Retiro en Punto vs Envío a Domicilio, ranking de ventas por canillita y análisis de compradores nuevos vs recurrentes.
+- **Centro de Reportes CSV ([`/admin/reportes`](src/pages/admin/reportes/index.astro))**: Exportación descargable para Ventas, Comisiones, Liquidaciones e Inventario.
+- **Equipo de Trabajo ([`/admin/equipo/index.astro`](src/pages/admin/equipo/index.astro))**:
   - Roles definidos: `admin` (Administrador) y `gestion` (Gestión de Tienda).
   - Middleware HTTP 403 para limitar accesos del rol `gestion`.
   - Protección estricta contra eliminación o degradación del último Administrador.
-- **Configuración en Vivo ([`/admin/configuracion/index.astro`](file:///c:/Users/azcur/Workspace/UrbanPoint/urban-point/src/pages/admin/configuracion/index.astro))**: Ajustes de Tienda, Contacto, WhatsApp, Comisiones de Canillita, Envíos, Mercado Pago, Notificaciones, SEO y Legales con impacto inmediato sin necesidad de redeploy.
+- **Configuración en Vivo ([`/admin/configuracion/index.astro`](src/pages/admin/configuracion/index.astro))**: Ajustes de Tienda, Contacto, WhatsApp, Comisiones de Canillita, Envíos, Mercado Pago, Notificaciones, SEO y Legales con impacto inmediato sin necesidad de redeploy.
 
 ### 📰 Portal de Canillitas (`/canillita`)
 - **Panel de Control para Comercios Afiliados**: Seguimiento de paquetes recibidos, códigos de retiro presentados por clientes y entregas confirmadas.
@@ -66,9 +66,9 @@
 
 ## 🛠️ Tecnologías Utilizadas
 
-- **Framework Web**: [Astro 5](https://astro.build/) en modo SSR (`prerender = false`) con `@astrojs/node`.
-- **Componentes UI**: [React 18](https://react.dev/) + [Lucide Icons SVG](https://lucide.dev/).
-- **Estilos**: Vanilla CSS & [TailwindCSS 3.4](https://tailwindcss.com/).
+- **Framework Web**: [Astro 7](https://astro.build/) en modo SSR (`prerender = false`) con `@astrojs/node`.
+- **Componentes UI**: [React 19](https://react.dev/) + [Lucide Icons SVG](https://lucide.dev/).
+- **Estilos**: Vanilla CSS & [TailwindCSS 4](https://tailwindcss.com/).
 - **Gestión de Estado**: [Nanostores](https://github.com/nanostores/nanostores).
 - **Backend & DB**: [Appwrite 1.8.0 Self-hosted](https://appwrite.io/) (Colecciones: `products`, `orders`, `profiles`, `pickup_points`, `referral_codes`, `referral_attributions`, `commission_ledger`, `settings`, `payouts`).
 - **Pasarela de Pagos**: [Mercado Pago Checkout Pro SDK](https://www.mercadopago.com.ar/developers).
@@ -82,17 +82,20 @@ urban-point/
 ├── public/
 │   ├── images/              # Logos y banners estáticos
 │   └── favicon.svg
-├── scratch/                 # Suites de pruebas y verificación E2E
-│   ├── test_master_v2_e2e.mjs
-│   ├── test_products_master_v3.mjs
-│   └── test_addendum_master_suite.mjs
+├── docs/
+│   └── auditoria/           # Informes de auditoría y trazabilidad
+├── scripts/                 # Migración, seeds y diagnósticos (uso manual)
+├── tests/
+│   ├── unit/                # Suite de siempre (`npm test`, vitest)
+│   └── e2e/                 # Requiere Appwrite con credenciales (`npm run test:e2e`)
 ├── src/
 │   ├── actions/
 │   │   └── index.ts         # Server Actions (Checkout, Productos, Pedidos, Canillitas)
 │   ├── components/
 │   │   ├── FloatingWhatsApp.astro # Botón flotante público de WhatsApp
-│   │   ├── Navbar.astro
+│   │   ├── Header.astro
 │   │   ├── Footer.astro
+│   │   ├── ImpersonationBanner.astro # Aviso de "modo monitoreo" activo
 │   │   └── shop/
 │   │       ├── CartDrawer.tsx     # Carrito lateral responsivo
 │   │       └── AddToCartBtn.tsx
@@ -102,13 +105,16 @@ urban-point/
 │   ├── lib/
 │   │   └── server/
 │   │       ├── appwrite.ts  # Cliente Admin SDK de Appwrite
+│   │       ├── auth.ts      # requireRole() y jerarquía de impersonación
+│   │       ├── errors.ts    # Mensajes de error seguros para el cliente
+│   │       ├── rateLimit.ts # Limitador por IP del alta pública
 │   │       └── settings.ts  # Helper de configuración global en vivo
 │   ├── middleware.ts        # Captura ?ref=CODIGO y protección HTTP 403 por rol
 │   ├── pages/
 │   │   ├── admin/
 │   │   │   ├── index.astro        # Dashboard general de métricas
-│   │   │   ├── analisis.astro     # Análisis de tendencias y canales
-│   │   │   ├── reportes.astro     # Exportadores CSV
+│   │   │   ├── analisis/          # Análisis de tendencias y canales
+│   │   │   ├── reportes/          # Exportadores CSV
 │   │   │   ├── catalogo/          # ABM de productos y editor rápido
 │   │   │   ├── pedidos/           # Gestión de órdenes y entregas
 │   │   │   ├── clientes/          # Fichas dinámicas de compradores
@@ -147,7 +153,25 @@ PUBLIC_APPWRITE_ENDPOINT=https://aw.orbitalnest.net/v1
 PUBLIC_APPWRITE_PROJECT_ID=6a6a5321001439f06817
 APPWRITE_API_KEY=tu_secret_api_key
 MP_ACCESS_TOKEN=tu_mercadopago_access_token
+
+# Secreto del webhook de Mercado Pago. Sin esto el webhook responde 503 y
+# ningún pago se acredita: es a propósito, antes la falta de la variable
+# activaba un modo que regalaba pedidos.
+MP_WEBHOOK_SECRET=tu_webhook_secret
+
+# URL pública del sitio. Define las back_urls y la notification_url que se le
+# mandan a Mercado Pago. Configurala siempre en producción: sin ella la URL se
+# deduce de los headers de la petición, que los controla el cliente.
+PUBLIC_SITE_URL=https://urbanpoints.com.ar
+
+# Opcional: hosts extra aceptados al deducir la URL base (separados por comas).
+# PUBLIC_SITE_HOSTS=staging.urbanpoints.com.ar
 ```
+
+> `APPWRITE_API_KEY` es obligatoria: el servidor falla al arrancar si falta, en
+> vez de responder 500 en cada request. También es la clave con la que se firma
+> el acceso de invitados a sus pedidos, así que rotarla invalida esos permisos
+> (los compradores logueados no se ven afectados).
 
 ### 4. Iniciar Servidor de Desarrollo
 ```bash
@@ -164,7 +188,8 @@ La aplicación se ejecutará en **`http://localhost:4321`**.
 | `npm run dev` | Inicia el servidor de desarrollo local en `localhost:4321` |
 | `npm run build` | Compila la aplicación de producción en `./dist` |
 | `npm run preview` | Previsualiza la build de producción |
-| `node scratch/test_addendum_master_suite.mjs` | Ejecuta la suite de verificación completa del Addendum |
+| `npm test` | Corre la suite de tests unitarios (vitest) |
+| `npm run test:e2e` | Tests de integración: necesitan Appwrite y credenciales |
 
 ---
 
