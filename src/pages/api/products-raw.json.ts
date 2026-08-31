@@ -9,8 +9,7 @@ export const prerender = false;
  */
 export const GET: APIRoute = async ({ locals }) => {
 	const user = locals.user;
-	const profile = locals.profile;
-	const role = profile?.role || user?.role;
+	const role = user?.role;
 
 	if (!user || (role !== 'admin' && role !== 'gestion')) {
 		return new Response(JSON.stringify({ error: 'No autorizado' }), {
