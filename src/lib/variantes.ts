@@ -119,7 +119,34 @@ export function agruparVariantes<T extends ProductoAgrupable>(productos: T[]): G
 		}
 	}
 
-	return [...porClave.values()];
+	const grupos = [...porClave.values()];
+
+	// Un grupo de UNA sola variante no tiene nada que desambiguar: la tarjeta
+	// muestra el nombre completo, no el recorte.
+	//
+	// El separador " - " marca la variante en las colecciones por fascículo
+	// ("Construye el Titanic - Fasciculo N.01"), pero en el resto del catálogo
+	// es puntuación del nombre. Medido sobre los 1.081 productos del scrape de
+	// electrodomésticos: 136 (13%) quedaban con la tarjeta recortada, perdiendo
+	// 19 caracteres en promedio y hasta 70 —"5000w Frio/calor Blanco", "Gas
+	// Envasado. Negro"—, que son justamente las specs.
+	//
+	// Peor todavía: el buscador de la vitrina indexa sobre este campo, así que
+	// 129 productos (12%) no aparecían al buscar palabras de su propio nombre.
+	// "Plateado" devolvía 47 resultados en vez de 66.
+	//
+	// La ficha ya resolvía este caso (`hermanas.length > 1 ? nombreGrupo :
+	// product.nombre`); acá se hace lo mismo para la vitrina y la home.
+	//
+	// La CLAVE no cambia: si más adelante aparece una hermana, el grupo pasa a
+	// tener dos y el nombre vuelve a ser el tronco común, que es lo correcto.
+	for (const grupo of grupos) {
+		if (grupo.variantes.length !== 1) continue;
+		const nombreCompleto = (grupo.principal?.nombre || '').trim();
+		if (nombreCompleto) grupo.base = nombreCompleto;
+	}
+
+	return grupos;
 }
 
 /**

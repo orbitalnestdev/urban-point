@@ -3,6 +3,7 @@ import {
 	grupoDeProducto,
 	etiquetaDeVariante,
 	agruparVariantes,
+	claveDeGrupo,
 	compararPorPrioridad
 } from '../../src/lib/variantes';
 
@@ -87,6 +88,57 @@ describe('agruparVariantes', () => {
 		const grupos = agruparVariantes(productos);
 		const cafe = grupos.find(g => g.base === 'Café');
 		expect(cafe?.variantes).toHaveLength(1);
+	});
+
+	/**
+	 * El guion separa la variante en las colecciones por fascículo, pero en el
+	 * resto del catálogo es puntuación del nombre. Recortarlo igual dejaba 136
+	 * de 1.081 productos (13%) con la tarjeta mutilada —"Aire Acondicionado
+	 * Portatil Vitta Home" por "... - 5000w Frio/calor Blanco"— y, como el
+	 * buscador de la vitrina indexa sobre este campo, 129 no aparecían al
+	 * buscar palabras de su propio nombre.
+	 */
+	describe('grupo de una sola variante: la tarjeta muestra el nombre completo', () => {
+		it('no recorta cuando el guion no separa una variante', () => {
+			const grupos = agruparVariantes([
+				{ $id: '1', nombre: 'Aire Acondicionado Portatil Vitta Home - 5000w Frio/calor Blanco' }
+			]);
+			expect(grupos).toHaveLength(1);
+			expect(grupos[0].base).toBe('Aire Acondicionado Portatil Vitta Home - 5000w Frio/calor Blanco');
+		});
+
+		it('conserva el tronco común cuando el grupo sí tiene varias variantes', () => {
+			const grupos = agruparVariantes([
+				{ $id: '1', nombre: 'Construye el Titanic - Fasciculo N.01' },
+				{ $id: '2', nombre: 'Construye el Titanic - Fasciculo N.02' }
+			]);
+			expect(grupos[0].base).toBe('Construye el Titanic');
+		});
+
+		it('la clave de agrupado no cambia: si aparece una hermana, se juntan', () => {
+			const solo = agruparVariantes([{ $id: '1', nombre: 'Anafe Cocina - Gas Envasado' }]);
+			const conHermana = agruparVariantes([
+				{ $id: '1', nombre: 'Anafe Cocina - Gas Envasado' },
+				{ $id: '2', nombre: 'Anafe Cocina - Gas Natural' }
+			]);
+			expect(solo[0].clave).toBe(conHermana[0].clave);
+			expect(solo[0].base).toBe('Anafe Cocina - Gas Envasado');
+			expect(conHermana[0].base).toBe('Anafe Cocina');
+			expect(conHermana[0].variantes).toHaveLength(2);
+		});
+
+		it('el override de grupo tampoco recorta si queda solo', () => {
+			const grupos = agruparVariantes([
+				{ $id: '1', nombre: 'Remera Algodón - Talle S Negro', grupo: 'Remera Algodón' }
+			]);
+			expect(grupos[0].base).toBe('Remera Algodón - Talle S Negro');
+			expect(grupos[0].clave).toBe(claveDeGrupo({ nombre: 'Remera Algodón - Talle M' , grupo: 'Remera Algodón' }));
+		});
+
+		it('un nombre vacío no rompe el grupo', () => {
+			const grupos = agruparVariantes([{ $id: '1', nombre: '', grupo: 'Coleccion' }]);
+			expect(grupos[0].base).toBe('Coleccion');
+		});
 	});
 
 	it('agrupa aunque difieran acentos o mayúsculas', () => {
