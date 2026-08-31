@@ -5,6 +5,8 @@ import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
 import Pagination from '../../../components/admin/Pagination.astro';
 import { toSafeJson } from '../../../lib/safeJson';
+import { solicitudesPendientes } from '../../../lib/server/payoutRequests';
+import { actions } from 'astro:actions';
 import { 
   DollarSign, 
   Calendar, 
@@ -33,6 +35,12 @@ const periodoParam = Astro.url.searchParams.get('periodo') || '';
 const estadoParam = Astro.url.searchParams.get('estado') || 'todos';
 const qParam = Astro.url.searchParams.get('q') || '';
 const tabParam = Astro.url.searchParams.get('tab') || 'resumen';
+
+// Solicitudes de cobro abiertas. Si la colección todavía no se creó, el módulo
+// devuelve [] y el panel se comporta como antes.
+let solicitudesCobro: any[] = [];
+// Nombre del canillita para mostrar en el aviso de solicitudes.
+const nombrePorProfile: Record<string, string> = {};
 
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
@@ -79,13 +87,18 @@ try {
     databases.listDocuments('urbanpoint', 'referral_codes', [Query.limit(500)]).catch(() => ({ documents: [] }))
   ]);
 
+  solicitudesCobro = await solicitudesPendientes();
+
   pickupPoints = pointsRes.documents || [];
   profiles = profilesRes.documents || [];
   refCodes = refRes.documents || [];
 
   // Map profile details & bank info
   const profileMap: Record<string, any> = {};
-  profiles.forEach(p => { profileMap[p.$id] = p; });
+  profiles.forEach(p => {
+    profileMap[p.$id] = p;
+    nombrePorProfile[p.$id] = p.nombre || p.email || p.$id;
+  });
 
   const pointMap: Record<string, any> = {};
   pickupPoints.forEach(pt => {
@@ -552,6 +565,48 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 				<p class="text-[11px] text-emerald-700 font-medium mt-1">{summaryCanillitasList.filter(s => (s as any).disponibleTotalCentavos > 0).length} canillitas con saldo confirmado</p>
 			</div>
 		</div>
+
+		{/* Solicitudes de cobro pendientes. Antes el canillita no tenía forma de
+		    pedir su liquidación y el cobro dependía de que el admin se acordara. */}
+		{solicitudesCobro.length > 0 && (
+			<div class="bg-amber-50 border border-amber-200 rounded-3xl p-6 mb-6">
+				<h3 class="text-sm font-black text-amber-900 mb-4 flex items-center gap-2">
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+					{solicitudesCobro.length} solicitud{solicitudesCobro.length === 1 ? '' : 'es'} de cobro sin resolver
+				</h3>
+				<div class="space-y-2">
+					{solicitudesCobro.map((sol) => (
+						<div class="bg-white border border-amber-200/70 rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap">
+							<div>
+								<p class="font-bold text-slate-900 text-sm">
+									{nombrePorProfile[sol.profile_id] || sol.profile_id}
+									<span class="ml-2 text-indigo-700">{formateador.format((sol.monto_centavos || 0) / 100)}</span>
+								</p>
+								<p class="text-[11px] text-slate-500 mt-0.5">
+									Pidió el {new Date(sol.solicitado_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })}
+									{sol.estado === 'aprobada' ? ' · aprobada, falta transferir' : ''}
+								</p>
+								{sol.nota_canillita && <p class="text-[11px] text-slate-600 mt-1 max-w-md">{sol.nota_canillita}</p>}
+							</div>
+							{sol.estado === 'solicitada' && (
+								<div class="flex items-center gap-2 shrink-0">
+									<form method="POST" action={actions.resolverSolicitudLiquidacion}>
+										<input type="hidden" name="solicitudId" value={sol.$id} />
+										<input type="hidden" name="estado" value="aprobada" />
+										<button type="submit" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-xl transition-colors cursor-pointer">Aprobar</button>
+									</form>
+									<form method="POST" action={actions.resolverSolicitudLiquidacion}>
+										<input type="hidden" name="solicitudId" value={sol.$id} />
+										<input type="hidden" name="estado" value="rechazada" />
+										<button type="submit" class="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-bold text-[11px] rounded-xl transition-colors cursor-pointer">Rechazar</button>
+									</form>
+								</div>
+							)}
+						</div>
+					))}
+				</div>
+			</div>
+		)}
 
 		<!-- Navigation Tabs -->
 		<div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">

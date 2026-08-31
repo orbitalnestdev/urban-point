@@ -19,7 +19,8 @@ import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 import { invalidateSessionCache } from '../middleware';
 
 
-import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, confirmarComisionesDeOrden } from '../lib/commissions';
+import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, confirmarComisionesDeOrden, getCanillitaStats } from '../lib/commissions';
+import { crearSolicitud, solicitudAbierta, resolverSolicitud, cerrarSolicitudPorPago } from '../lib/server/payoutRequests';
 
 import { createAdminClient, escribirDocumentoTolerante } from '../lib/server/appwrite';
 import { invalidateCatalogCache } from '../lib/server/catalogCache';
@@ -1387,9 +1388,79 @@ export const server = {
 
 				await sincronizarSaldoDisponible(input.profileId);
 
+				// Si el canillita había pedido el cobro, la solicitud se cierra
+				// sola. No falla el pago si esto falla: la plata ya se movió.
+				await cerrarSolicitudPorPago(input.profileId, res.payoutId);
+
 				return { success: true, payoutId: res.payoutId, montoCentavos: res.montoCentavos };
 			} catch(e: any) {
 				return { success: false, error: mensajeParaCliente(e) };
+			}
+		}
+	}),
+
+	/**
+	 * El canillita pide que le paguen su saldo pendiente.
+	 *
+	 * El monto NO viene del formulario: se calcula acá desde el
+	 * commission_ledger. Dejar que el cliente informe cuánto se le debe sería
+	 * el mismo error que ya se corrigió en el checkout con los precios.
+	 */
+	solicitarLiquidacion: defineAction({
+		accept: 'form',
+		input: z.object({
+			nota: z.string().max(500).optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				const usuario = requireRole(ctx, 'canillita');
+
+				const abierta = await solicitudAbierta(usuario.profileId);
+				if (abierta) {
+					throw new Error('Ya tenés una solicitud de cobro en curso. Te avisamos cuando se resuelva.');
+				}
+
+				const stats = await getCanillitaStats(usuario.profileId);
+				const montoCentavos = stats.totalPendienteCentavos || 0;
+				if (montoCentavos <= 0) {
+					throw new Error('No tenés comisiones pendientes de cobro en este momento.');
+				}
+
+				const solicitud = await crearSolicitud({
+					profileId: usuario.profileId,
+					montoCentavos,
+					nota: input.nota
+				});
+
+				return { success: true, solicitudId: solicitud.$id, montoCentavos };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
+			}
+		}
+	}),
+
+	/** El admin aprueba o rechaza una solicitud de cobro. */
+	resolverSolicitudLiquidacion: defineAction({
+		accept: 'form',
+		input: z.object({
+			solicitudId: z.string(),
+			estado: z.enum(['aprobada', 'rechazada']),
+			notaAdmin: z.string().max(500).optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				const actor = requireRole(ctx, 'admin');
+
+				await resolverSolicitud({
+					solicitudId: input.solicitudId,
+					estado: input.estado,
+					actorProfileId: actor.profileId,
+					notaAdmin: input.notaAdmin
+				});
+
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
 			}
 		}
 	}),
