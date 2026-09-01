@@ -503,8 +503,12 @@ const paginationItems = filteredPages.map((p, index) => ({
 
 									<td class="p-3.5 text-center" onclick="event.stopPropagation()">
 										<div class="flex items-center justify-center gap-1.5">
-											<button class="btn-open-drawer px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition-colors">
-												Editar
+											<button
+												class="btn-open-drawer px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition-colors inline-flex items-center gap-1"
+												title="Retocar precio, stock o estado sin salir del listado"
+											>
+												<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+												Rápida
 											</button>
 											<a 
 												href={`/productos/${product.slug || product.$id}`} 
@@ -806,23 +810,23 @@ const paginationItems = filteredPages.map((p, index) => ({
 		isDirty = false;
 	};
 
+	// Criterio: clic en la fila -> editor completo, que es lo que uno quiere
+	// nueve de cada diez veces. El drawer de edición rápida queda detrás de su
+	// propio botón, para el caso de retocar precio o stock sin salir del
+	// listado. Antes era al revés y el editor completo quedaba escondido.
 	document.querySelectorAll('.tr-product').forEach(tr => {
 		tr.addEventListener('click', (e) => {
 			if ((e.target as HTMLElement).closest('button, input, select, a')) return;
-			const data = (e.currentTarget as HTMLElement).dataset;
-			openPanel(data);
+			const id = (e.currentTarget as HTMLElement).dataset.id;
+			if (id) window.location.href = `/admin/catalogo/${id}`;
 		});
 	});
 
-	// Criterio: tap en la tarjeta -> edición rápida (el drawer de arriba);
-	// botón "Editar" -> editor completo. Los dos abrían el mismo drawer, así
-	// que al editor completo sólo se llegaba desde adentro del panel.
 	document.querySelectorAll('.btn-open-drawer').forEach(btn => {
 		btn.addEventListener('click', (e) => {
 			e.stopPropagation();
 			const tr = (e.currentTarget as HTMLElement).closest('.tr-product') as HTMLElement;
-			const id = tr?.dataset.id;
-			if (id) window.location.href = `/admin/catalogo/${id}`;
+			if (tr) openPanel(tr.dataset);
 		});
 	});
 
