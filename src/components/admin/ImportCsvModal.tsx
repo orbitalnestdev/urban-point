@@ -1,3 +1,4 @@
+import { claveDeGrupo, grupoDeProducto } from '../../lib/variantes';
 import React, { useEffect, useState } from 'react';
 import { actions } from 'astro:actions';
 import { parseCsvText } from '../../lib/csvParser';
@@ -175,17 +176,29 @@ export default function ImportCsvModal({}: Props) {
       ? parsedRows.filter(row => !(row[mapping.sku!] || '').trim()).length
       : parsedRows.length;
 
+  /**
+   * Cuántas fichas van a quedar en la tienda con este archivo.
+   *
+   * Usa grupoDeProducto/claveDeGrupo, el MISMO criterio que la vitrina. Antes
+   * duplicaba la lógica acá y estaba mal de dos formas: la expresión regular
+   * era /s+[-–—]s+/ —sin las barras invertidas, o sea "una o más letras s"—
+   * así que nunca separaba por el guion, y la clave era un toLowerCase() sin
+   * normalizar tildes ni espacios. Resultado: para tres variantes de una
+   * remera anunciaba 3 fichas y la tienda mostraba 1.
+   */
   const resumenAgrupado = () => {
     if (!mapping.nombre || !parsedRows.length) return null;
     const grupos = new Map<string, string[]>();
     for (const row of parsedRows) {
       const nombre = (row[mapping.nombre] || '').trim();
       if (!nombre) continue;
-      const explicito = mapping.grupo ? (row[mapping.grupo] || '').trim() : '';
-      const partes = nombre.split(/s+[-–—]s+/);
-      const base = explicito || (partes.length > 1 ? partes.slice(0, -1).join(' - ').trim() : nombre);
-      const clave = base.toLowerCase();
-      grupos.set(clave, [...(grupos.get(clave) || []), base]);
+      const producto = {
+        nombre,
+        grupo: mapping.grupo ? (row[mapping.grupo] || '').trim() : ''
+      };
+      const clave = claveDeGrupo(producto);
+      if (!clave) continue;
+      grupos.set(clave, [...(grupos.get(clave) || []), grupoDeProducto(producto)]);
     }
     const conVarias = [...grupos.values()].filter(v => v.length > 1);
     return {

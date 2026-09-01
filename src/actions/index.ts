@@ -2279,7 +2279,14 @@ export const server = {
 					if (item.costo !== undefined && item.costo !== null) payload.costo = item.costo;
 					if (catId) payload.categoria_id = catId;
 					if (item.marca) payload.marca = item.marca;
-					if (item.grupo && item.grupo.trim()) payload.grupo = item.grupo.trim();
+					// Con grupo explícito, el producto es una variante. Sin esto las
+					// importadas por CSV quedaban sin `tipo` y el editor no las
+					// mostraba como variantes, a diferencia de las creadas por el
+					// modal: lo mismo con dos caras según cómo se cargó.
+					if (item.grupo && item.grupo.trim()) {
+						payload.grupo = item.grupo.trim();
+						payload.tipo = 'variantes';
+					}
 					if (item.orden !== undefined && item.orden !== null) payload.orden = item.orden;
 
 					// Manejo inteligente de múltiples fotos: la 1ra es portada, las siguientes van a galería

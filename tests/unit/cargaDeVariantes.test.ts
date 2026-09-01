@@ -228,3 +228,48 @@ describe('los integrantes del combo no son un dato invisible', () => {
 		expect(/Qué incluye este combo/.test(ficha)).toBe(true);
 	});
 });
+
+/**
+ * El importador de CSV es la vía práctica para cargar variantes de a muchas.
+ * Su vista previa duplicaba la lógica de agrupado y estaba mal de dos formas:
+ * la expresión regular era /s+[-–—]s+/ —sin barras invertidas, o sea "una o
+ * más letras s"— así que nunca separaba por el guion, y la clave era un
+ * toLowerCase() sin normalizar. Para tres variantes de una remera anunciaba
+ * 3 fichas y la tienda mostraba 1.
+ */
+describe('importador de variantes por CSV', () => {
+	const modal = leer('src/components/admin/ImportCsvModal.tsx');
+
+	it('la vista previa usa el módulo real, no una copia', () => {
+		expect(/from '\.\.\/\.\.\/lib\/variantes'/.test(modal)).toBe(true);
+		expect(/claveDeGrupo\(producto\)/.test(modal)).toBe(true);
+	});
+
+	it('no quedó la expresión regular rota', () => {
+		// Sobre el código: el archivo la cita en un comentario para explicar
+		// justamente cuál era el bug.
+		const soloCodigo = modal
+			.replace(/\/\*[\s\S]*?\*\//g, '')
+			.split('\n')
+			.filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*'))
+			.join('\n');
+		expect(/\.split\(\/s\+/.test(soloCodigo), 'volvió la regex sin barras invertidas').toBe(false);
+	});
+
+	it('no vuelve a armar la clave con un toLowerCase suelto', () => {
+		expect(/const clave = base\.toLowerCase\(\)/.test(modal)).toBe(false);
+	});
+
+	it('reconoce la columna Grupo y sus sinónimos', () => {
+		expect(/\^grupo\$\|\^familia\$\|\^coleccion\$\|\^serie\$/.test(modal)).toBe(true);
+	});
+
+	it('el importador guarda grupo y marca el tipo', () => {
+		const handler = acciones.slice(
+			acciones.indexOf('importProductsBulk: defineAction'),
+			acciones.indexOf('reimportProductsStock: defineAction')
+		);
+		expect(/payload\.grupo = item\.grupo\.trim\(\)/.test(handler)).toBe(true);
+		expect(/payload\.tipo = 'variantes'/.test(handler)).toBe(true);
+	});
+});
