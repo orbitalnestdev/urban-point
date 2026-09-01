@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import NewProductModal from '../../../components/admin/NewProductModal.tsx';
+import { toSafeJson } from '../../../lib/safeJson';
 import ImportCsvModal from '../../../components/admin/ImportCsvModal.tsx';
 import ReimportModal from '../../../components/admin/ReimportModal.tsx';
 import { createAdminClient } from '../../../lib/server/appwrite';
@@ -704,6 +705,14 @@ const paginationItems = filteredPages.map((p, index) => ({
 		</div>
 
 	</main>
+	{/* Catálogo compacto para el armador de combos del modal de alta: sólo id y
+	    nombre, que es lo único que necesita para buscar y elegir. */}
+	<script
+		type="application/json"
+		id="productos-json-data"
+		set:html={toSafeJson(products.map((p: any) => ({ $id: p.$id, nombre: p.nombre })))}
+	/>
+
 	<NewProductModal client:load />
 	<ImportCsvModal client:load />
 	<ReimportModal client:load />

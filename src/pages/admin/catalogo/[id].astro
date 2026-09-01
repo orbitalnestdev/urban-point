@@ -48,6 +48,34 @@ if (allProdRes.status === 'fulfilled') {
 // sería falso, y un conteo equivocado es peor que ninguno.
 const grupoDeducido = grupoDeProducto(product);
 
+// El tipo sale del documento, no de `?tipo=` en la URL: así sobrevive a volver
+// desde el listado, que enlaza sin parámetros.
+const tipoProducto: string = product.tipo || 'simple';
+
+// Integrantes del combo, con el nombre resuelto para poder mostrarlos. Si el
+// producto integrante no está entre los que se trajeron, se muestra el id:
+// mejor eso que ocultar que el combo lo incluye.
+let comboItems: Array<{ product_id: string; cantidad: number; nombre: string }> = [];
+if (tipoProducto === 'combo' && product.combo_items) {
+	try {
+		const crudos = typeof product.combo_items === 'string'
+			? JSON.parse(product.combo_items)
+			: product.combo_items;
+		if (Array.isArray(crudos)) {
+			const porId = new Map<string, any>(allProducts.map((p: any) => [p.$id, p]));
+			comboItems = crudos
+				.filter((it: any) => it && it.product_id)
+				.map((it: any) => ({
+					product_id: String(it.product_id),
+					cantidad: Number(it.cantidad) || 1,
+					nombre: porId.get(String(it.product_id))?.nombre || String(it.product_id)
+				}));
+		}
+	} catch (e) {
+		console.warn('combo_items no es JSON válido en el producto', id);
+	}
+}
+
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
 let galeriaUrls: string[] = [];
@@ -69,6 +97,12 @@ if (product.galeria_urls) {
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
 						<span>EDITAR PRODUCTO #{product.sku || product.$id.substring(0, 6)}</span>
+						{tipoProducto === 'variantes' && (
+							<span class="px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[10px] rounded-full font-extrabold">CON VARIANTES</span>
+						)}
+						{tipoProducto === 'combo' && (
+							<span class="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] rounded-full font-extrabold">COMBO</span>
+						)}
 						{product.grupo && (
 							<span class="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded-full font-extrabold normal-case tracking-normal">{product.grupo}</span>
 						)}
@@ -186,6 +220,28 @@ if (product.galeria_urls) {
 										: ` Si lo dejás vacío se deduce del nombre: “${grupoDeducido}”.`}
 								</p>
 							</div>
+
+						{tipoProducto === 'combo' && (
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Productos que integran el combo</label>
+								<div id="combo-lista" class="space-y-2 mb-3"></div>
+								<div class="flex items-center gap-2">
+									<select id="combo-select" class="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+										<option value="">-- Elegí un producto --</option>
+										{allProducts.map((p: any) => (
+											<option value={p.$id}>{p.nombre}</option>
+										))}
+									</select>
+									<button type="button" id="combo-agregar" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer shrink-0">
+										Agregar
+									</button>
+								</div>
+								<p class="text-xs text-slate-500 mt-1.5 leading-relaxed">
+									El combo se vende como un producto más, con su propio precio y su propio
+									stock. Esta lista es lo que ve el comprador en la ficha.
+								</p>
+							</div>
+						)}
 
 							<div>
 								<label class="block text-sm font-bold text-slate-900 mb-1">Descripción</label>
@@ -745,7 +801,7 @@ if (product.galeria_urls) {
 
 			</div>
 		</div>
-		<div id="product-meta-data" data-product={JSON.stringify(product)} data-categories={JSON.stringify(categories)} data-settings={JSON.stringify(siteSettings)}></div>
+		<div id="product-meta-data" data-product={JSON.stringify(product)} data-categories={JSON.stringify(categories)} data-settings={JSON.stringify(siteSettings)} data-combo={JSON.stringify(comboItems)}></div>
 	</main>
 
 	<script>
@@ -849,6 +905,103 @@ if (product.galeria_urls) {
 			}
 		});
 
+
+		// --- Integrantes del combo ---------------------------------------
+		// Se editan acá y viajan como JSON en combo_items al guardar. El nombre
+		// se resuelve en el servidor: si un integrante ya no está en la tanda
+		// que se trajo, se muestra su id en vez de ocultarlo.
+		let comboItems: Array<{ product_id: string; cantidad: number; nombre: string }> = [];
+		try {
+			comboItems = JSON.parse(
+				document.getElementById('product-meta-data')?.dataset.combo || '[]'
+			);
+		} catch (e) {
+			comboItems = [];
+		}
+
+		const listaCombo = document.getElementById('combo-lista');
+
+		const pintarCombo = () => {
+			if (!listaCombo) return;
+			listaCombo.innerHTML = '';
+
+			if (comboItems.length === 0) {
+				const vacio = document.createElement('p');
+				vacio.className = 'text-xs text-slate-400 font-medium py-2';
+				vacio.textContent = 'Todavía no agregaste productos a este combo.';
+				listaCombo.appendChild(vacio);
+				return;
+			}
+
+			comboItems.forEach((it, i) => {
+				const fila = document.createElement('div');
+				fila.className = 'flex items-center justify-between gap-3 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl';
+
+				const nombre = document.createElement('span');
+				nombre.className = 'text-xs font-bold text-slate-800 truncate';
+				nombre.textContent = it.nombre;
+
+				const controles = document.createElement('div');
+				controles.className = 'flex items-center gap-1.5 shrink-0';
+
+				const menos = document.createElement('button');
+				menos.type = 'button';
+				menos.className = 'w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-600 font-bold text-xs cursor-pointer';
+				menos.textContent = '−';
+				menos.addEventListener('click', () => {
+					comboItems[i].cantidad = Math.max(1, comboItems[i].cantidad - 1);
+					pintarCombo();
+				});
+
+				const cant = document.createElement('span');
+				cant.className = 'w-6 text-center text-xs font-extrabold text-slate-900 tabular-nums';
+				cant.textContent = String(it.cantidad);
+
+				const mas = document.createElement('button');
+				mas.type = 'button';
+				mas.className = 'w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-600 font-bold text-xs cursor-pointer';
+				mas.textContent = '+';
+				mas.addEventListener('click', () => {
+					comboItems[i].cantidad += 1;
+					pintarCombo();
+				});
+
+				const quitar = document.createElement('button');
+				quitar.type = 'button';
+				quitar.className = 'ml-1 text-slate-300 hover:text-rose-600 transition-colors cursor-pointer';
+				quitar.title = 'Quitar del combo';
+				quitar.textContent = '✕';
+				quitar.addEventListener('click', () => {
+					comboItems.splice(i, 1);
+					pintarCombo();
+				});
+
+				controles.append(menos, cant, mas, quitar);
+				fila.append(nombre, controles);
+				listaCombo.appendChild(fila);
+			});
+		};
+
+		pintarCombo();
+
+		document.getElementById('combo-agregar')?.addEventListener('click', () => {
+			const sel = document.getElementById('combo-select') as HTMLSelectElement | null;
+			const id = sel?.value;
+			if (!id) return;
+
+			const yaEsta = comboItems.find((x) => x.product_id === id);
+			if (yaEsta) {
+				yaEsta.cantidad += 1;
+			} else {
+				comboItems.push({
+					product_id: id,
+					cantidad: 1,
+					nombre: sel?.options[sel.selectedIndex]?.text || id
+				});
+			}
+			if (sel) sel.value = '';
+			pintarCombo();
+		});
 
 		// Multilevel Pricing Live Calculations
 		const categoriesMap = new Map();
@@ -1107,6 +1260,7 @@ if (product.galeria_urls) {
 					nombre,
 					marca,
 					grupo,
+					combo_items: JSON.stringify(comboItems.map(({ product_id, cantidad }) => ({ product_id, cantidad }))),
 					descripcion,
 					cost: Math.round(costoArs * 100),
 					costo: Math.round(costoArs * 100),

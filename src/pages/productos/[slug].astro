@@ -21,6 +21,7 @@ let category: any = null;
 let relatedProducts: any[] = [];
 let galleryImages: string[] = [];
 let hermanas: any[] = [];
+let comboIncluye: Array<{ nombre: string; cantidad: number; slug?: string }> = [];
 let nombreGrupo = '';
 let barcode = '';
 
@@ -97,6 +98,28 @@ try {
 		}));
 	nombreGrupo = grupoDeProducto(product);
 
+	// Qué incluye, si es un combo. Un integrante despublicado se omite en vez
+	// de mostrarse como un id suelto.
+	if (product.tipo === 'combo' && product.combo_items) {
+		try {
+			const crudos = typeof product.combo_items === 'string'
+				? JSON.parse(product.combo_items)
+				: product.combo_items;
+			if (Array.isArray(crudos)) {
+				const porId = new Map<string, any>(catalogo.map((p: any) => [p.$id, p]));
+				comboIncluye = crudos
+					.map((it: any) => {
+						const p = porId.get(String(it?.product_id));
+						return p ? { nombre: p.nombre, cantidad: Number(it.cantidad) || 1, slug: p.slug } : null;
+					})
+					.filter(Boolean) as Array<{ nombre: string; cantidad: number; slug?: string }>;
+			}
+		} catch (e) {
+			console.warn('combo_items inválido en', product.$id);
+		}
+	}
+
+
 	const catId = product.categoria_id
 		? (typeof product.categoria_id === 'string' ? product.categoria_id : product.categoria_id.$id)
 		: null;
@@ -142,6 +165,7 @@ const sinStock = typeof product.stock === 'number' && product.stock <= 0;
 // La descripción viene del admin como HTML rico y se inyecta con set:html:
 // se sanea para cortar scripts/handlers embebidos (XSS almacenado).
 const descripcionSegura = product.descripcion ? sanitizeRichHtml(product.descripcion) : '';
+
 ---
 
 <Layout title={`${product.nombre} | UrbanPoint`}>
@@ -347,6 +371,33 @@ const descripcionSegura = product.descripcion ? sanitizeRichHtml(product.descrip
 					</div>
 				</div>
 			</div>
+
+			{/* Qué trae el combo. Sin esto, los integrantes serían un dato que
+			    sólo ve el admin — el mismo problema que tenía la pestaña vieja. */}
+			{comboIncluye.length > 0 && (
+				<div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 md:p-10 mb-12">
+					<h2 class="text-2xl font-extrabold text-slate-900 mb-6 flex items-center gap-3">
+						<span class="w-2.5 h-7 bg-amber-500 rounded-full"></span>
+						Qué incluye este combo
+					</h2>
+					<ul class="divide-y divide-slate-100">
+						{comboIncluye.map((it) => (
+							<li class="py-3 flex items-center gap-3">
+								<span class="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 text-xs font-extrabold flex items-center justify-center shrink-0 tabular-nums">
+									{it.cantidad}
+								</span>
+								{it.slug ? (
+									<a href={`/productos/${it.slug}`} class="text-sm font-semibold text-slate-800 hover:text-[#2D5A27] transition-colors">
+										{it.nombre}
+									</a>
+								) : (
+									<span class="text-sm font-semibold text-slate-800">{it.nombre}</span>
+								)}
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
 
 			<!-- Specifications & Description Section -->
 			{product.descripcion && (

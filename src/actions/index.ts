@@ -1660,13 +1660,17 @@ export const server = {
 
 	createProduct: defineAction({
 		accept: 'json',
-		// `tipo` (simple/variantes/combo) se quitó del input: se recibía y se
-		// descartaba, nunca entraba al payload. El editor decidía qué pestañas
-		// mostrar leyendo ?tipo= de la URL, así que al volver desde el listado
-		// —que enlaza sin el parámetro— desaparecían. Las variantes se resuelven
-		// con documentos hermanos agrupados por `grupo`, no con un tipo.
+		// `tipo` sí se guarda ahora. Antes se recibía y se descartaba, y el
+		// editor lo leía de `?tipo=` en la URL: al volver desde el listado, que
+		// enlaza sin el parámetro, el producto perdía su tipo.
 		input: z.object({
-			nombre: z.string().min(2)
+			nombre: z.string().min(2),
+			tipo: z.enum(['simple', 'variantes', 'combo']).optional(),
+			grupo: z.string().optional(),
+			precio: z.number().int().min(0).optional(),
+			stock: z.number().int().min(0).optional(),
+			sku: z.string().optional(),
+			combo_items: z.string().optional()
 		}),
 		handler: async (input, ctx) => {
 			try {
@@ -1678,23 +1682,105 @@ export const server = {
 					.replace(/[^a-z0-9]+/g, '-')
 					.replace(/(^-|-$)+/g, '') + '-' + Math.floor(Math.random()*1000);
 
-				const sku = 'SKU-' + Math.floor(100000 + Math.random() * 900000);
+				const sku = (input.sku || '').trim() || 'SKU-' + Math.floor(100000 + Math.random() * 900000);
 
 				const payload: any = {
 					nombre: input.nombre,
 					slug: slug,
 					sku: sku,
 					descripcion: '',
-					precio: 0,
-					stock: 0,
+					precio: input.precio ?? 0,
+					stock: input.stock ?? 0,
 					estado: 'borrador',
-					iva_pct: 21.0
+					iva_pct: 21.0,
+					tipo: input.tipo || 'simple'
 				};
+
+				if (input.grupo && input.grupo.trim()) payload.grupo = input.grupo.trim();
+				if (input.combo_items) payload.combo_items = input.combo_items;
 
 				const doc = await escribirDocumentoTolerante('products', payload);
 				invalidateCatalogCache();
 
 				return { success: true, id: doc.$id };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
+			}
+		}
+	}),
+
+	/**
+	 * Alta de un producto con variantes.
+	 *
+	 * Crea UN DOCUMENTO POR VARIANTE, todos con el mismo `grupo`. Ese es el
+	 * modelo que entiende la tienda (ver lib/variantes.ts): así cada talle,
+	 * color o número de fascículo conserva su stock, su SKU y su renglón en
+	 * order_items cuando alguien lo compra.
+	 *
+	 * La alternativa —guardar las variantes como JSON dentro de un producto—
+	 * es la que tenía el editor y no funcionaba: no había forma de descontar
+	 * stock ni de saber qué variante se vendió.
+	 */
+	createProductoConVariantes: defineAction({
+		accept: 'json',
+		input: z.object({
+			grupo: z.string().min(2),
+			variantes: z.array(z.object({
+				etiqueta: z.string().min(1),
+				sku: z.string().optional(),
+				precio: z.number().int().min(0).optional(),
+				stock: z.number().int().min(0).optional()
+			})).min(1).max(100)
+		}),
+		handler: async (input, ctx) => {
+			try {
+				requireRole(ctx, 'admin', 'gestion');
+
+				const grupo = input.grupo.trim();
+
+				// Etiquetas repetidas producirían dos fichas indistinguibles
+				// dentro del mismo grupo.
+				const vistas = new Set<string>();
+				for (const v of input.variantes) {
+					const clave = v.etiqueta.trim().toLowerCase();
+					if (!clave) throw new Error('Hay una variante sin nombre.');
+					if (vistas.has(clave)) {
+						throw new Error(`La variante "${v.etiqueta.trim()}" está repetida.`);
+					}
+					vistas.add(clave);
+				}
+
+				const creados: string[] = [];
+				for (const [i, v] of input.variantes.entries()) {
+					const nombre = `${grupo} - ${v.etiqueta.trim()}`;
+					const base = nombre
+						.toLowerCase()
+						.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+						.replace(/[^a-z0-9]+/g, '-')
+						.replace(/(^-|-$)+/g, '');
+
+					const doc = await escribirDocumentoTolerante('products', {
+						nombre,
+						// El índice entra en el slug: con sólo un random de tres
+						// dígitos, un lote de variantes colisiona seguido.
+						slug: `${base}-${i}${Math.floor(100 + Math.random() * 900)}`,
+						sku: (v.sku || '').trim() || `SKU-${Math.floor(100000 + Math.random() * 900000)}`,
+						descripcion: '',
+						precio: v.precio ?? 0,
+						stock: v.stock ?? 0,
+						estado: 'borrador',
+						iva_pct: 21.0,
+						tipo: 'variantes',
+						grupo
+					});
+					creados.push(doc.$id);
+				}
+
+				invalidateCatalogCache();
+
+				// Se vuelve a la primera para seguir cargando descripción, fotos
+				// y precios finos en el editor completo.
+				return { success: true, ids: creados, id: creados[0], total: creados.length };
 			} catch (error: any) {
 				return { success: false, error: mensajeParaCliente(error) };
 			}
@@ -1742,6 +1828,8 @@ export const server = {
 			// editor ni siquiera lo mandaba al guardar— y nada lo leía: la
 			// tienda agrupa documentos hermanos, no un blob.
 			grupo: z.string().optional().nullable(),
+			/** JSON [{ product_id, cantidad }] de los integrantes de un combo. */
+			combo_items: z.string().optional(),
 			tramos_cantidad: z.string().optional(),
 			galeria_urls: z.string().optional(),
 			portada_url: z.string().optional(),
@@ -1806,6 +1894,7 @@ export const server = {
 				if (input.seo_config !== undefined) updateData.seo_config = input.seo_config;
 				// Vacío borra el override y el grupo vuelve a deducirse del nombre.
 				if (input.grupo !== undefined) updateData.grupo = (input.grupo || '').trim();
+				if (input.combo_items !== undefined) updateData.combo_items = input.combo_items;
 				if (input.tramos_cantidad !== undefined) updateData.tramos_cantidad = input.tramos_cantidad;
 				if (input.galeria_urls !== undefined) updateData.galeria_urls = input.galeria_urls;
 				if (input.portada_url !== undefined) updateData.portada_url = input.portada_url;

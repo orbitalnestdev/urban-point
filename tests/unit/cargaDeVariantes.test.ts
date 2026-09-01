@@ -50,12 +50,44 @@ describe('updateProduct maneja grupo, no el JSON de variantes', () => {
 		expect(/updateData\.variantes\s*=/.test(handlerUpdate)).toBe(false);
 	});
 
-	it('createProduct ya no recibe un tipo que descartaba', () => {
+	it('createProduct recibe el tipo Y lo guarda', () => {
 		const handlerCreate = acciones.slice(
 			acciones.indexOf('createProduct: defineAction'),
-			acciones.indexOf('updateProduct: defineAction')
+			acciones.indexOf('createProductoConVariantes: defineAction')
 		);
-		expect(/tipo: z\./.test(handlerCreate)).toBe(false);
+		// Antes se recibía y se descartaba: nunca entraba al payload, así que el
+		// editor tenía que leerlo de ?tipo= en la URL y se perdía al volver.
+		expect(/tipo: z\.enum\(\['simple', 'variantes', 'combo'\]\)/.test(handlerCreate)).toBe(true);
+		expect(/tipo: input\.tipo/.test(handlerCreate)).toBe(true);
+	});
+});
+
+describe('createProductoConVariantes crea documentos hermanos', () => {
+	const handler = acciones.slice(
+		acciones.indexOf('createProductoConVariantes: defineAction'),
+		acciones.indexOf('updateProduct: defineAction')
+	);
+
+	it('existe la action', () => {
+		expect(handler).not.toBe('');
+	});
+
+	it('escribe un producto por variante, no un JSON adentro de uno solo', () => {
+		expect(/for \(const \[i, v\] of input\.variantes\.entries\(\)\)/.test(handler)).toBe(true);
+		expect(/escribirDocumentoTolerante\('products'/.test(handler)).toBe(true);
+	});
+
+	it('todas comparten el mismo grupo, que es lo que las junta en la vitrina', () => {
+		expect(/\bgrupo\b/.test(handler)).toBe(true);
+		expect(/tipo: 'variantes'/.test(handler)).toBe(true);
+	});
+
+	it('rechaza etiquetas repetidas, que darían fichas indistinguibles', () => {
+		expect(/está repetida/.test(handler)).toBe(true);
+	});
+
+	it('el slug lleva el índice: un lote colisiona con sólo un random corto', () => {
+		expect(/\$\{i\}/.test(handler)).toBe(true);
 	});
 });
 
@@ -101,18 +133,65 @@ describe('la pestaña de variantes JSON ya no existe', () => {
 		expect(/S \/ Estándar|M \/ Estándar|L \/ Estándar/.test(editor)).toBe(false);
 	});
 
-	it('el alta ya no ofrece tipos que no se guardaban', () => {
-		expect(/handleSelectType/.test(modal)).toBe(false);
-		expect(/'combo'/.test(modal)).toBe(false);
-		// Sobre el código, no sobre los comentarios: lo que importa es que la
-		// redirección no arrastre un ?tipo= del que dependía la pestaña.
+	it('la redirección al editor no arrastra el ?tipo= del que dependía', () => {
 		const redireccion = /window\.location\.href\s*=\s*`[^`]*`/.exec(modal)?.[0] ?? '';
 		expect(redireccion, 'no se encontró la redirección').not.toBe('');
 		expect(redireccion.includes('tipo')).toBe(false);
 	});
+});
 
-	it('el alta explica cómo se cargan las variantes de verdad', () => {
-		expect(/Grupo de variantes/.test(modal)).toBe(true);
-		expect(/su propio producto/i.test(modal)).toBe(true);
+describe('el alta ofrece los tres tipos, y cada uno hace lo suyo', () => {
+	it('están las tres opciones', () => {
+		for (const tipo of ['simple', 'variantes', 'combo']) {
+			expect(new RegExp(`id: '${tipo}'`).test(modal), `falta la opción ${tipo}`).toBe(true);
+		}
+	});
+
+	it('cada tipo tiene su propio flujo de creación', () => {
+		expect(/crearSimple/.test(modal)).toBe(true);
+		expect(/crearConVariantes/.test(modal)).toBe(true);
+		expect(/crearCombo/.test(modal)).toBe(true);
+	});
+
+	it('las variantes se crean con la action de documentos hermanos', () => {
+		expect(/actions\.createProductoConVariantes/.test(modal)).toBe(true);
+	});
+
+	it('el tipo viaja al crear, para que quede guardado', () => {
+		expect(/tipo: 'simple'/.test(modal)).toBe(true);
+		expect(/tipo: 'combo'/.test(modal)).toBe(true);
+	});
+
+	it('no usa clases de Tailwind armadas al vuelo, que no se compilan', () => {
+		// Sobre el código, no sobre los comentarios: el propio archivo explica
+		// el problema citando un `bg-${color}-50` de ejemplo.
+		const soloCodigo = modal
+			.replace(/\/\*[\s\S]*?\*\//g, '')
+			.split('\n')
+			.filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*'))
+			.join('\n');
+		expect(/(bg|text|border)-\$\{/.test(soloCodigo)).toBe(false);
+	});
+});
+
+describe('los integrantes del combo no son un dato invisible', () => {
+	const ficha = leer('src/pages/productos/[slug].astro');
+
+	it('el editor los muestra y los deja editar', () => {
+		expect(editor.includes('combo-lista')).toBe(true);
+		expect(editor.includes('combo-agregar')).toBe(true);
+	});
+
+	it('viajan al guardar', () => {
+		expect(/combo_items: JSON\.stringify/.test(editor)).toBe(true);
+	});
+
+	it('updateProduct los persiste', () => {
+		expect(/updateData\.combo_items\s*=/.test(handlerUpdate)).toBe(true);
+	});
+
+	it('el comprador ve qué incluye el combo en la ficha', () => {
+		expect(ficha.includes('comboIncluye')).toBe(true);
+		expect(/Qué incluye este combo/.test(ficha)).toBe(true);
 	});
 });
