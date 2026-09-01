@@ -1,6 +1,7 @@
 import { Client, Databases, Query, ID } from 'node-appwrite';
 import { createAdminClient, escribirDocumentoTolerante } from './server/appwrite';
 import { estaPago } from './orderStates';
+import { unidadesQueMueve } from './combos';
 
 const db = new Proxy({} as Databases, {
 	get(_target, prop: keyof Databases) {
@@ -9,6 +10,28 @@ const db = new Proxy({} as Databases, {
 		return typeof val === 'function' ? val.bind(instance) : val;
 	}
 });
+
+/**
+ * Qué unidades de inventario mueve vender `cantidad` de este producto.
+ *
+ * Un combo no tiene stock propio: lo que sale del depósito son sus
+ * integrantes. Sin esta expansión, vender un "Combo Desayuno" no bajaba ni un
+ * café ni una medialuna y el inventario mentía.
+ */
+export async function unidadesDeInventario(
+	productId: string,
+	cantidad: number
+): Promise<Array<{ productId: string; cantidad: number }>> {
+	let producto: any = null;
+	try {
+		producto = await db.getDocument('urbanpoint', 'products', productId);
+	} catch {
+		// Producto borrado: se mueve su propio stock y que falle ahí, no acá.
+		return [{ productId, cantidad }];
+	}
+
+	return unidadesQueMueve(producto, cantidad);
+}
 
 /**
  * Descuenta unidades del stock de un producto de forma atómica.
@@ -22,29 +45,38 @@ const db = new Proxy({} as Databases, {
  * una sola operación, y con `min: 0` falla en vez de dejar stock negativo. Ese
  * error es justamente la señal de sobreventa: se propaga para que quien llama
  * decida (hoy, dejar registro y seguir con el resto de los ítems).
+ *
+ * Un combo se expande antes en sus integrantes: es lo que realmente sale del
+ * depósito.
  */
 export async function descontarStock(productId: string, cantidad: number) {
 	if (!(cantidad > 0)) return;
-	await db.decrementDocumentAttribute(
-		'urbanpoint',
-		'products',
-		productId,
-		'stock',
-		cantidad,
-		0
-	);
+
+	for (const u of await unidadesDeInventario(productId, cantidad)) {
+		await db.decrementDocumentAttribute(
+			'urbanpoint',
+			'products',
+			u.productId,
+			'stock',
+			u.cantidad,
+			0
+		);
+	}
 }
 
 /** Devuelve unidades al stock. Contraparte de descontarStock. */
 export async function restaurarStock(productId: string, cantidad: number) {
 	if (!(cantidad > 0)) return;
-	await db.incrementDocumentAttribute(
-		'urbanpoint',
-		'products',
-		productId,
-		'stock',
-		cantidad
-	);
+
+	for (const u of await unidadesDeInventario(productId, cantidad)) {
+		await db.incrementDocumentAttribute(
+			'urbanpoint',
+			'products',
+			u.productId,
+			'stock',
+			u.cantidad
+		);
+	}
 }
 
 // Función pura extraída para usar en el webhook y en el simulador

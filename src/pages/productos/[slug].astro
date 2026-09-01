@@ -10,6 +10,7 @@ import { grupoDeProducto, etiquetaDeVariante } from '../../lib/variantes';
 import { getVistaCatalogo, variantesDelGrupo, precioParaTier } from '../../lib/server/catalogView';
 import { tierDeRol } from '../../lib/pricingEngine';
 import { sanitizeRichHtml } from '../../lib/sanitizeHtml';
+import { esCombo, stockDisponible, integrantesDeCombo } from '../../lib/combos';
 
 const { slug } = Astro.params;
 
@@ -22,6 +23,8 @@ let relatedProducts: any[] = [];
 let galleryImages: string[] = [];
 let hermanas: any[] = [];
 let comboIncluye: Array<{ nombre: string; cantidad: number; slug?: string }> = [];
+// Unidades vendibles si es un combo; null si es un producto normal.
+let stockCombo: number | null = null;
 let nombreGrupo = '';
 let barcode = '';
 
@@ -98,25 +101,19 @@ try {
 		}));
 	nombreGrupo = grupoDeProducto(product);
 
-	// Qué incluye, si es un combo. Un integrante despublicado se omite en vez
-	// de mostrarse como un id suelto.
-	if (product.tipo === 'combo' && product.combo_items) {
-		try {
-			const crudos = typeof product.combo_items === 'string'
-				? JSON.parse(product.combo_items)
-				: product.combo_items;
-			if (Array.isArray(crudos)) {
-				const porId = new Map<string, any>(catalogo.map((p: any) => [p.$id, p]));
-				comboIncluye = crudos
-					.map((it: any) => {
-						const p = porId.get(String(it?.product_id));
-						return p ? { nombre: p.nombre, cantidad: Number(it.cantidad) || 1, slug: p.slug } : null;
-					})
-					.filter(Boolean) as Array<{ nombre: string; cantidad: number; slug?: string }>;
-			}
-		} catch (e) {
-			console.warn('combo_items inválido en', product.$id);
-		}
+	// Qué incluye, si es un combo, y cuántas unidades se pueden armar. Un
+	// integrante despublicado se omite de la lista en vez de mostrarse como un
+	// id suelto, pero sí cuenta como 0 para el stock: mejor mostrarlo agotado
+	// que vender algo que no se puede armar.
+	if (esCombo(product)) {
+		const porId = new Map<string, any>(catalogo.map((p: any) => [p.$id, p]));
+		stockCombo = stockDisponible(product, porId);
+		comboIncluye = integrantesDeCombo(product)
+			.map((it) => {
+				const p = porId.get(it.product_id);
+				return p ? { nombre: p.nombre, cantidad: it.cantidad, slug: p.slug } : null;
+			})
+			.filter(Boolean) as Array<{ nombre: string; cantidad: number; slug?: string }>;
 	}
 
 
@@ -160,7 +157,12 @@ const cuotaMonto = Math.round(precioMinorista / 3);
 
 // Sin stock: se deshabilita la compra y se muestra el badge. Sólo cuando el
 // stock viene como número (productos sin el campo no se bloquean por error).
-const sinStock = typeof product.stock === 'number' && product.stock <= 0;
+// Un combo no tiene stock propio: lo que se puede vender es lo que permita su
+// integrante más escaso. Sin esto se mostraría siempre agotado.
+const unidadesDisponibles = stockCombo;
+const sinStock = unidadesDisponibles !== null
+	? unidadesDisponibles <= 0
+	: (typeof product.stock === 'number' && product.stock <= 0);
 
 // La descripción viene del admin como HTML rico y se inyecta con set:html:
 // se sanea para cortar scripts/handlers embebidos (XSS almacenado).

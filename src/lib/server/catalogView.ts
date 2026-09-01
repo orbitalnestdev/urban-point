@@ -23,6 +23,7 @@
 import { precioDeVentaCentavos, precioListaCentavos } from '../pricing';
 import { resolveProductPriceForUser, tierDeRol, type PricingLevel } from '../pricingEngine';
 import { agruparVariantes, claveDeGrupo, type GrupoDeVariantes } from '../variantes';
+import { stockDisponible } from '../combos';
 import { getOptimizedImageUrl } from './catalogCache';
 
 /**
@@ -137,6 +138,10 @@ function construirVista(cache: any, tier: PricingLevel): VistaCatalogo {
 		familiaPorPadre.set(c.$id, [c.$id, ...(hijasPorPadre.get(c.$id) || [])].join(','));
 	}
 
+	// Índice por id: lo necesita el stock de los combos, que no tienen stock
+	// propio sino el que permitan sus integrantes.
+	const productoPorId = new Map<string, any>(products.map((p: any) => [p.$id, p]));
+
 	const grupos = agruparVariantes(products);
 
 	const compacto: EntradaVitrina[] = grupos.map((grupo) => {
@@ -155,7 +160,7 @@ function construirVista(cache: any, tier: PricingLevel): VistaCatalogo {
 				if (precio < minimo) minimo = precio;
 				if (precio > maximo) maximo = precio;
 			}
-			stockTotal += Number(v.stock) || 0;
+			stockTotal += stockDisponible(v, productoPorId);
 		}
 		if (minimo === Infinity) {
 			minimo = precioParaTier(principal, tier).venta;

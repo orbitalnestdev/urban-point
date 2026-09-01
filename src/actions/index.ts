@@ -20,6 +20,7 @@ import { invalidateSessionCache } from '../middleware';
 
 
 import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, confirmarComisionesDeOrden, getCanillitaStats } from '../lib/commissions';
+import { integrantesDeCombo } from '../lib/combos';
 import { crearSolicitud, solicitudAbierta, resolverSolicitud, cerrarSolicitudPorPago } from '../lib/server/payoutRequests';
 
 import { createAdminClient, escribirDocumentoTolerante } from '../lib/server/appwrite';
@@ -798,11 +799,37 @@ export const server = {
 					itemsConsolidados.map(item => db.getDocument('urbanpoint', 'products', item.productId))
 				);
 
+				// Stock disponible por producto, para poder validar combos: lo que
+				// limita a un combo no es su propio stock sino el de sus
+				// integrantes, y un mismo integrante puede aparecer en varios
+				// ítems del carrito.
+				const disponible = new Map<string, number>();
+				for (const p of productos) disponible.set(p.$id, Number(p.stock) || 0);
+
 				for (let i = 0; i < itemsConsolidados.length; i++) {
 					const item = itemsConsolidados[i];
 					const p = productos[i];
-					if (p.estado !== 'activo' || p.stock < item.cantidad) {
-						throw new Error(`El producto ${p.nombre} no está disponible o no hay stock suficiente.`);
+					if (p.estado !== 'activo') {
+						throw new Error(`El producto ${p.nombre} no está disponible.`);
+					}
+
+					const integrantes = integrantesDeCombo(p);
+					if (integrantes.length === 0) {
+						if ((Number(p.stock) || 0) < item.cantidad) {
+							throw new Error(`El producto ${p.nombre} no está disponible o no hay stock suficiente.`);
+						}
+					} else {
+						for (const it of integrantes) {
+							let stockIntegrante = disponible.get(it.product_id);
+							if (stockIntegrante === undefined) {
+								const doc: any = await db.getDocument('urbanpoint', 'products', it.product_id).catch(() => null);
+								stockIntegrante = Number(doc?.stock) || 0;
+								disponible.set(it.product_id, stockIntegrante);
+							}
+							if (stockIntegrante < it.cantidad * item.cantidad) {
+								throw new Error(`No hay stock suficiente para armar ${p.nombre}.`);
+							}
+						}
 					}
 
 					const priceInfo = resolveProductPriceForUser(p, userRole);
