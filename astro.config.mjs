@@ -9,12 +9,27 @@ export default defineConfig({
 
   security: {
     // Valida el header Origin en las peticiones que mutan estado con
-    // content-type de formulario. Estaba apagado; no apagarlo de nuevo para
-    // destrabar un POST que falla: si falla es porque viene de otro origen.
+    // content-type de formulario. No afecta al webhook de Mercado Pago, que
+    // llega como application/json.
+    checkOrigin: true,
+
+    // Sin esto, checkOrigin rechaza TODOS los formularios en producción.
     //
-    // No afecta al webhook de Mercado Pago, que llega como application/json
-    // (Astro sólo bloquea los content-type de formulario cross-origin).
-    checkOrigin: true
+    // Traefik termina el TLS y habla HTTP con el contenedor, así que Astro ve
+    // `req.socket.encrypted === false`. Y con allowedDomains vacío descarta
+    // los headers `x-forwarded-*` que Traefik sí manda, por lo que arma la URL
+    // como `http://localhost:3000`. El navegador manda
+    // `Origin: https://urbanpoints.com.ar`: no coinciden ni el protocolo ni el
+    // host, y el login devolvía "Cross-site POST form submissions are
+    // forbidden".
+    //
+    // Declarar el dominio hace que Astro confíe en esos headers y reconstruya
+    // el origen real. Sigue rechazando cualquier otro host, que es el punto.
+    //
+    // Si el sitio se sirve además en otro dominio, hay que agregarlo acá.
+    allowedDomains: [
+      { hostname: 'urbanpoints.com.ar', protocol: 'https' }
+    ]
   },
 
   server: {
