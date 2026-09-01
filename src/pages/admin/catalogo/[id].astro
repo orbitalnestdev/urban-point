@@ -2,7 +2,8 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
-import { grupoDeProducto } from '../../../lib/variantes';
+import { grupoDeProducto, claveDeGrupo } from '../../../lib/variantes';
+import { getAdminCachedCatalog } from '../../../lib/server/catalogCache';
 
 export const prerender = false;
 
@@ -20,11 +21,15 @@ let siteSettings: any = {};
 
 // Las cuatro consultas no dependen entre sí: en serie eran cuatro round-trips
 // encadenados. Sólo el getDocument del producto define si la página existe.
+// El catálogo sale del caché de admin, que ya tiene TODOS los productos. Antes
+// se pedía una tanda de 100 sueltos: alcanzaba para el selector de combos pero
+// no para encontrar las variantes hermanas, que pueden estar en cualquier parte
+// de un catálogo de miles.
 const [settingsRes, productRes, catRes, allProdRes] = await Promise.allSettled([
 	getSiteSettings(),
 	databases.getDocument('urbanpoint', 'products', id as string),
 	databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)]),
-	databases.listDocuments('urbanpoint', 'products', [Query.limit(100)])
+	getAdminCachedCatalog()
 ]);
 
 // Producto inexistente (o id inválido): volver al listado como antes.
@@ -37,16 +42,20 @@ product = productRes.value;
 if (settingsRes.status === 'fulfilled') siteSettings = settingsRes.value;
 if (catRes.status === 'fulfilled') categories = catRes.value.documents;
 if (allProdRes.status === 'fulfilled') {
-	allProducts = allProdRes.value.documents.filter(p => p.$id !== id);
+	allProducts = (allProdRes.value.products || []).filter((p: any) => p.$id !== id);
 }
 
 // Grupo que la tienda deduciría del nombre si no hay override cargado. Se usa
 // como placeholder para que se vea el efecto antes de escribir nada.
-//
-// No se muestra acá cuántas variantes tiene el grupo: `allProducts` está
-// limitado a 100 documentos, así que sobre un catálogo de miles el número
-// sería falso, y un conteo equivocado es peor que ninguno.
 const grupoDeducido = grupoDeProducto(product);
+
+// Las otras variantes del mismo grupo, con el MISMO criterio que la vitrina.
+// El panel no las mostraba: cargabas "un producto con variantes" y te quedaban
+// tres fichas que desde el admin no se veían relacionadas.
+const claveActual = claveDeGrupo(product);
+const hermanas = allProducts
+	.filter((p: any) => claveDeGrupo(p) === claveActual)
+	.sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
 
 // El tipo sale del documento, no de `?tipo=` en la URL: así sobrevive a volver
 // desde el listado, que enlaza sin parámetros.
@@ -220,6 +229,44 @@ if (product.galeria_urls) {
 										: ` Si lo dejás vacío se deduce del nombre: “${grupoDeducido}”.`}
 								</p>
 							</div>
+
+							{hermanas.length > 0 && (
+								<div class="border border-indigo-200 bg-indigo-50/40 rounded-2xl p-5">
+									<div class="flex items-baseline justify-between gap-3 mb-3">
+										<h3 class="text-sm font-extrabold text-slate-900">
+											Otras variantes de “{grupoDeducido}”
+										</h3>
+										<span class="text-[11px] font-bold text-indigo-700 shrink-0">
+											{hermanas.length + 1} en total
+										</span>
+									</div>
+
+									<div class="space-y-1.5">
+										{hermanas.map((h: any) => (
+											<a
+												href={`/admin/catalogo/${h.$id}`}
+												class="flex items-center justify-between gap-3 px-3 py-2 bg-white border border-slate-200 rounded-xl hover:border-indigo-400 transition-colors group"
+											>
+												<span class="text-xs font-bold text-slate-800 truncate group-hover:text-indigo-700">
+													{h.nombre}
+												</span>
+												<span class="flex items-center gap-3 shrink-0 text-[11px] font-bold">
+													<span class="font-mono text-slate-400">{h.sku || '—'}</span>
+													<span class={(h.stock || 0) > 0 ? 'text-slate-600' : 'text-rose-600'}>
+														stock {h.stock ?? 0}
+													</span>
+													<span class="text-slate-900">{formateador.format((h.precio || 0) / 100)}</span>
+												</span>
+											</a>
+										))}
+									</div>
+
+									<p class="text-[11px] text-slate-500 mt-3 leading-relaxed">
+										En la tienda se muestran como una sola tarjeta con un selector.
+										Cada una conserva su stock, su SKU y su precio.
+									</p>
+								</div>
+							)}
 
 						{tipoProducto === 'combo' && (
 							<div>

@@ -174,6 +174,39 @@ describe('el alta ofrece los tres tipos, y cada uno hace lo suyo', () => {
 	});
 });
 
+/**
+ * El agrupado funcionaba en la tienda pero era invisible en el panel: cargabas
+ * "un producto con variantes" y te quedaban tres filas sueltas que no se veían
+ * relacionadas, y el editor de una variante no mostraba las otras.
+ */
+describe('el panel muestra el agrupado', () => {
+	it('el editor lista las variantes hermanas', () => {
+		expect(/const hermanas =/.test(editor), 'el editor no calcula las hermanas').toBe(true);
+		expect(/Otras variantes de/.test(editor), 'no las muestra').toBe(true);
+		expect(/\/admin\/catalogo\/\$\{h\.\$id\}/.test(editor), 'no enlaza a cada una').toBe(true);
+	});
+
+	it('el editor usa el criterio canónico, no uno propio', () => {
+		expect(/claveDeGrupo\(p\)\s*===\s*claveActual/.test(editor)).toBe(true);
+		expect(/\.toLowerCase\(\)\s*===/.test(editor), 'volvió a comparar a mano').toBe(false);
+	});
+
+	it('el editor busca sobre el catálogo completo, no sobre una tanda de 100', () => {
+		expect(/getAdminCachedCatalog/.test(editor)).toBe(true);
+		expect(/'products',\s*\[Query\.limit\(100\)\]/.test(editor)).toBe(false);
+	});
+
+	it('el listado marca las filas que son variantes de un mismo producto', () => {
+		expect(/conteoPorGrupo/.test(listado)).toBe(true);
+		expect(/grupoDeFila/.test(listado)).toBe(true);
+	});
+
+	it('el listado no marca los productos que están solos', () => {
+		// grupoDeFila devuelve null cuando el grupo tiene una sola ficha.
+		expect(/>\s*1\s*\?\s*grupoDeProducto\(p\)\s*:\s*null/.test(listado)).toBe(true);
+	});
+});
+
 describe('los integrantes del combo no son un dato invisible', () => {
 	const ficha = leer('src/pages/productos/[slug].astro');
 

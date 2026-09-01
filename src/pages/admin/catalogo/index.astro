@@ -2,6 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import NewProductModal from '../../../components/admin/NewProductModal.tsx';
 import { toSafeJson } from '../../../lib/safeJson';
+import { claveDeGrupo, grupoDeProducto } from '../../../lib/variantes';
 import ImportCsvModal from '../../../components/admin/ImportCsvModal.tsx';
 import ReimportModal from '../../../components/admin/ReimportModal.tsx';
 import { createAdminClient } from '../../../lib/server/appwrite';
@@ -68,6 +69,21 @@ for (const p of products) {
 }
 const total = products.length;
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+
+// Cuántos productos comparten cada grupo, para marcar en la fila las que son
+// variantes de un mismo producto. Sin esto, cargar "un producto con variantes"
+// dejaba tres filas sueltas que desde el panel no se veían relacionadas.
+// Una sola pasada sobre el catálogo.
+const conteoPorGrupo = new Map<string, number>();
+for (const p of products) {
+	const k = claveDeGrupo(p);
+	if (k) conteoPorGrupo.set(k, (conteoPorGrupo.get(k) || 0) + 1);
+}
+/** Nombre del grupo si el producto tiene hermanas; null si está solo. */
+const grupoDeFila = (p: any): string | null => {
+	const k = claveDeGrupo(p);
+	return k && (conteoPorGrupo.get(k) || 0) > 1 ? grupoDeProducto(p) : null;
+};
 
 let filteredProducts = [...products];
 
@@ -452,7 +468,17 @@ const paginationItems = filteredPages.map((p, index) => ({
 														</span>
 													)}
 												</div>
-												<p class="text-[10px] text-slate-400 font-mono mt-0.5">{product.sku || 'SKU N/A'}</p>
+												<div class="flex items-center gap-2 mt-0.5">
+												<p class="text-[10px] text-slate-400 font-mono">{product.sku || 'SKU N/A'}</p>
+												{grupoDeFila(product) && (
+													<span
+														class="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200 truncate max-w-[160px]"
+														title={`Variante de "${grupoDeFila(product)}" · ${conteoPorGrupo.get(claveDeGrupo(product))} en total`}
+													>
+														{grupoDeFila(product)}
+													</span>
+												)}
+											</div>
 											</div>
 										</div>
 									</td>
