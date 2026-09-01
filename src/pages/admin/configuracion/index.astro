@@ -441,10 +441,62 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 			</div>
 		</form>
 
+		{/* TEMPORAL — sacar junto con la action migrarEsquemaProductos una vez
+		    corrida. Está fuera del <form> de settings para no enviarse con él. */}
+		<div class="mt-8 bg-white border border-amber-200 rounded-3xl p-6 shadow-sm">
+			<h3 class="text-xs font-bold uppercase tracking-wider text-amber-700 border-b border-amber-100 pb-3">
+				Mantenimiento · esquema de productos
+			</h3>
+			<p class="text-xs text-slate-600 leading-relaxed mt-4 max-w-2xl">
+				Crea en la colección <strong>products</strong> los atributos <code>grupo</code>,
+				<code>tipo</code> y <code>combo_items</code>. Sin ellos, el agrupado de variantes
+				cargado a mano y los combos se descartan al guardar, sin aviso. Se puede
+				ejecutar más de una vez: lo que ya existe no se toca.
+			</p>
+			<div class="flex items-center gap-3 mt-4">
+				<button
+					type="button"
+					id="btn-migrar-esquema"
+					class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+				>
+					Crear atributos faltantes
+				</button>
+				<span id="migrar-resultado" class="text-xs font-bold text-slate-600"></span>
+			</div>
+		</div>
+
 	</main>
 
 	<script>
 		import { actions } from 'astro:actions';
+
+		// TEMPORAL — ver el bloque de mantenimiento en el markup.
+		const btnMigrar = document.getElementById('btn-migrar-esquema') as HTMLButtonElement | null;
+		const salidaMigrar = document.getElementById('migrar-resultado');
+		btnMigrar?.addEventListener('click', async () => {
+			btnMigrar.disabled = true;
+			if (salidaMigrar) salidaMigrar.textContent = 'Creando...';
+
+			const { data, error } = await actions.migrarEsquemaProductos({});
+
+			if (error || !data?.success) {
+				if (salidaMigrar) {
+					salidaMigrar.textContent = 'Error: ' + (error?.message || data?.error || 'desconocido');
+					salidaMigrar.className = 'text-xs font-bold text-rose-700';
+				}
+				btnMigrar.disabled = false;
+				return;
+			}
+
+			const creados = data.creados || [];
+			const previos = data.yaExistian || [];
+			if (salidaMigrar) {
+				salidaMigrar.textContent = creados.length
+					? `Creados: ${creados.join(', ')}.` + (previos.length ? ` Ya existían: ${previos.join(', ')}.` : '')
+					: `Nada que crear, ya estaban los ${previos.length}.`;
+				salidaMigrar.className = 'text-xs font-bold text-emerald-700';
+			}
+		});
 
 		document.getElementById('btn-admin-desconectar-mp')?.addEventListener('click', async (e) => {
 			const btn = e.currentTarget as HTMLButtonElement;

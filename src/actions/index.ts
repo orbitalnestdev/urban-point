@@ -2882,6 +2882,74 @@ export const server = {
 		}
 	}),
 
+	/**
+	 * Crea en `products` los atributos que el código ya usa pero que no existen
+	 * en la base: `grupo`, `tipo` y `combo_items`.
+	 *
+	 * Existe porque todas las escrituras pasan por escribirDocumentoTolerante,
+	 * que ante un atributo desconocido lo saca del payload y reintenta: sin
+	 * estos, el agrupado explícito y los combos se descartan en silencio.
+	 *
+	 * Hace lo mismo que scripts/add_product_type_attributes.ts, pero desde el
+	 * servidor, que ya tiene la APPWRITE_API_KEY. Es idempotente: los atributos
+	 * que ya existen no se tocan.
+	 *
+	 * TEMPORAL: sacar esta action —y su botón en /admin/configuracion— una vez
+	 * corrida. Un endpoint que modifica el esquema no tiene por qué quedar vivo.
+	 */
+	migrarEsquemaProductos: defineAction({
+		accept: 'json',
+		handler: async (_input, ctx) => {
+			try {
+				requireRole(ctx, 'admin');
+
+				const { databases } = createAdminClient();
+				const DB = 'urbanpoint';
+				const COL = 'products';
+
+				const actuales = await databases.listAttributes(DB, COL);
+				const yaEstan = new Set((actuales as any).attributes?.map((a: any) => a.key) || []);
+
+				const plan = [
+					{
+						key: 'grupo',
+						crear: () => databases.createStringAttribute(DB, COL, 'grupo', 255, false)
+					},
+					{
+						key: 'tipo',
+						crear: () => databases.createEnumAttribute(
+							DB, COL, 'tipo', ['simple', 'variantes', 'combo'], false, 'simple'
+						)
+					},
+					{
+						key: 'combo_items',
+						crear: () => databases.createStringAttribute(DB, COL, 'combo_items', 5000, false)
+					}
+				];
+
+				const creados: string[] = [];
+				const yaExistian: string[] = [];
+
+				for (const attr of plan) {
+					if (yaEstan.has(attr.key)) {
+						yaExistian.push(attr.key);
+						continue;
+					}
+					await attr.crear();
+					creados.push(attr.key);
+					// Appwrite los crea de forma asíncrona; conviene espaciarlos.
+					await new Promise((r) => setTimeout(r, 600));
+				}
+
+				if (creados.length > 0) invalidateCatalogCache();
+
+				return { success: true, creados, yaExistian };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error, 'migrarEsquemaProductos') };
+			}
+		}
+	}),
+
 	updateProfileRole: defineAction({
 		accept: 'json',
 		input: z.object({
