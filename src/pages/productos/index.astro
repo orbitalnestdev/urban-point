@@ -200,7 +200,10 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 									data-nombre="todos los productos"
 								>
 									<span class="truncate">Todos los productos</span>
-									<span class="text-[10px] font-extrabold shrink-0 opacity-70">{products.length}</span>
+									{/* Se cuentan TARJETAS, igual que el número de arriba. Antes acá
+									    iban los productos sueltos (6.185) y arriba los grupos (1.672):
+									    dos números correctos y contradictorios en la misma pantalla. */}
+									<span class="text-[10px] font-extrabold shrink-0 opacity-70">{grupos.length}</span>
 								</button>
 
 								{categoriasPadre.map((parent) => (
@@ -406,6 +409,9 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 			// p = precio minimo del grupo, x = maximo, v = cuantas variantes tiene
 			p: number; x: number; l: number | null; k: number | null;
 			c: string; u: string; q: string; v: number;
+			// t = etiquetas de las variantes, sólo en los grupos que tienen más
+			// de una. Sirve para que el buscador las alcance.
+			t?: string;
 		};
 
 		document.addEventListener('DOMContentLoaded', () => {
@@ -446,7 +452,11 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 			const indice = catalogo.map((it) => ({
 				it,
 				n: normalizar(it.n || ''),
-				m: normalizar(it.m || '')
+				m: normalizar(it.m || ''),
+				// Etiquetas de las variantes: la tarjeta muestra el tronco común,
+				// así que sin esto buscar "Fasciculo N.42" no encontraba la ficha
+				// que sí lo contiene.
+				t: normalizar(it.t || '')
 			}));
 
 			const moneda = new Intl.NumberFormat('es-AR', {
@@ -603,7 +613,7 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 				const soloConStock = !!soloDispo?.checked;
 
 				const res = indice.filter((e) =>
-					(!term || e.n.includes(term) || e.m.includes(term)) &&
+					(!term || e.n.includes(term) || e.m.includes(term) || e.t.includes(term)) &&
 					(todas || permitidas.includes(e.it.c)) &&
 					(!soloConStock || e.it.k === null || e.it.k > 0)
 				).map((e) => e.it);

@@ -22,7 +22,7 @@
 
 import { precioDeVentaCentavos, precioListaCentavos } from '../pricing';
 import { resolveProductPriceForUser, tierDeRol, type PricingLevel } from '../pricingEngine';
-import { agruparVariantes, claveDeGrupo, type GrupoDeVariantes } from '../variantes';
+import { agruparVariantes, claveDeGrupo, etiquetaDeVariante, type GrupoDeVariantes } from '../variantes';
 import { stockDisponible } from '../combos';
 import { getOptimizedImageUrl } from './catalogCache';
 
@@ -93,6 +93,8 @@ export interface EntradaVitrina {
 	i: string; s: string; n: string; m: string;
 	p: number; x: number; l: number | null;
 	k: number; c: string; u: string; q: string; v: number;
+	/** Etiquetas de las variantes, para que el buscador las alcance. */
+	t?: string;
 }
 
 export interface VistaCatalogo {
@@ -169,6 +171,24 @@ function construirVista(cache: any, tier: PricingLevel): VistaCatalogo {
 
 		const listaCentavos = precioParaTier(principal, tier).lista;
 
+		// Etiquetas distintivas de las variantes, para el buscador. La tarjeta
+		// muestra el tronco común ("Construye el Titanic"), así que sin esto
+		// buscar "Fasciculo N.42" no encontraba nada: en el catálogo real son
+		// 4.513 productos (73%) inalcanzables por su propia etiqueta.
+		//
+		// Se indexan SÓLO las etiquetas, no los nombres completos: repetir el
+		// tronco en cada una multiplicaba el peso del JSON sin agregar nada,
+		// porque el tronco ya está en `n`.
+		let terminos = '';
+		if (grupo.variantes.length > 1) {
+			const vistas = new Set<string>();
+			for (const v of grupo.variantes) {
+				const etq = etiquetaDeVariante(v).trim();
+				if (etq && etq !== grupo.base) vistas.add(etq);
+			}
+			terminos = [...vistas].join(' ');
+		}
+
 		return {
 			i: principal.$id,
 			s: principal.slug,
@@ -181,7 +201,8 @@ function construirVista(cache: any, tier: PricingLevel): VistaCatalogo {
 			c: idCategoria(principal) || 'none',
 			u: getOptimizedImageUrl(principal.portada_url || '', 400, 400, 80),
 			q: principal.sku || principal.$id,
-			v: grupo.variantes.length
+			v: grupo.variantes.length,
+			...(terminos ? { t: terminos } : {})
 		};
 	});
 
