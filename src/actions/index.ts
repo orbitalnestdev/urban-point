@@ -1660,9 +1660,13 @@ export const server = {
 
 	createProduct: defineAction({
 		accept: 'json',
+		// `tipo` (simple/variantes/combo) se quitó del input: se recibía y se
+		// descartaba, nunca entraba al payload. El editor decidía qué pestañas
+		// mostrar leyendo ?tipo= de la URL, así que al volver desde el listado
+		// —que enlaza sin el parámetro— desaparecían. Las variantes se resuelven
+		// con documentos hermanos agrupados por `grupo`, no con un tipo.
 		input: z.object({
-			nombre: z.string().min(2),
-			tipo: z.string().optional()
+			nombre: z.string().min(2)
 		}),
 		handler: async (input, ctx) => {
 			try {
@@ -1728,7 +1732,16 @@ export const server = {
 			tiempo_reposicion: z.number().min(0).optional(),
 			envio_config: z.string().optional(),
 			seo_config: z.string().optional(),
-			variantes: z.string().optional(),
+			// `grupo` junta las variantes bajo una sola tarjeta en la vitrina
+			// (ver lib/variantes.ts). Hasta ahora sólo se podía cargar
+			// importando un CSV: no había campo en ninguna parte del panel, así
+			// que un agrupado mal deducido del nombre no se podía corregir.
+			//
+			// Reemplaza a `variantes`, que aceptaba un JSON con las variantes
+			// adentro del mismo documento. Nada lo escribía —la pestaña del
+			// editor ni siquiera lo mandaba al guardar— y nada lo leía: la
+			// tienda agrupa documentos hermanos, no un blob.
+			grupo: z.string().optional().nullable(),
 			tramos_cantidad: z.string().optional(),
 			galeria_urls: z.string().optional(),
 			portada_url: z.string().optional(),
@@ -1791,7 +1804,8 @@ export const server = {
 				if (input.tiempo_reposicion !== undefined) updateData.tiempo_reposicion = input.tiempo_reposicion;
 				if (input.envio_config !== undefined) updateData.envio_config = input.envio_config;
 				if (input.seo_config !== undefined) updateData.seo_config = input.seo_config;
-				if (input.variantes !== undefined) updateData.variantes = input.variantes;
+				// Vacío borra el override y el grupo vuelve a deducirse del nombre.
+				if (input.grupo !== undefined) updateData.grupo = (input.grupo || '').trim();
 				if (input.tramos_cantidad !== undefined) updateData.tramos_cantidad = input.tramos_cantidad;
 				if (input.galeria_urls !== undefined) updateData.galeria_urls = input.galeria_urls;
 				if (input.portada_url !== undefined) updateData.portada_url = input.portada_url;

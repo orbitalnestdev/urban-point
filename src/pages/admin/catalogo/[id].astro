@@ -2,13 +2,12 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { createAdminClient } from '../../../lib/server/appwrite';
 import { Query } from 'node-appwrite';
+import { grupoDeProducto } from '../../../lib/variantes';
 
 export const prerender = false;
 
 const { id } = Astro.params;
 const { databases } = createAdminClient();
-
-const tipoParam = Astro.url.searchParams.get('tipo') || 'simple';
 
 let product = null;
 let categories: any[] = [];
@@ -41,6 +40,14 @@ if (allProdRes.status === 'fulfilled') {
 	allProducts = allProdRes.value.documents.filter(p => p.$id !== id);
 }
 
+// Grupo que la tienda deduciría del nombre si no hay override cargado. Se usa
+// como placeholder para que se vea el efecto antes de escribir nada.
+//
+// No se muestra acá cuántas variantes tiene el grupo: `allProducts` está
+// limitado a 100 documentos, así que sobre un catálogo de miles el número
+// sería falso, y un conteo equivocado es peor que ninguno.
+const grupoDeducido = grupoDeProducto(product);
+
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
 let galeriaUrls: string[] = [];
@@ -62,11 +69,8 @@ if (product.galeria_urls) {
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
 						<span>EDITAR PRODUCTO #{product.sku || product.$id.substring(0, 6)}</span>
-						{tipoParam === 'variantes' && (
-							<span class="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded-full font-extrabold">CON VARIANTES</span>
-						)}
-						{tipoParam === 'combo' && (
-							<span class="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] rounded-full font-extrabold">COMBO</span>
+						{product.grupo && (
+							<span class="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded-full font-extrabold normal-case tracking-normal">{product.grupo}</span>
 						)}
 					</div>
 					<h1 class="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight leading-tight line-clamp-2" title={product.nombre}>
@@ -119,26 +123,6 @@ if (product.galeria_urls) {
 						<span class="text-xs text-slate-400 ml-6 font-normal">Cantidad &bull; reposición</span>
 					</button>
 
-					{tipoParam === 'variantes' && (
-						<button type="button" data-tab="tab-variantes" class="tab-btn w-full text-left flex flex-col px-4 py-3 rounded-xl border border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all font-bold cursor-pointer">
-							<div class="flex items-center gap-2 mb-0.5">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-blue-600"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-								Variantes (Talles / Colores)
-							</div>
-							<span class="text-xs text-slate-400 ml-6 font-normal">SKUs combinados &bull; stock individual</span>
-						</button>
-					)}
-
-					{tipoParam === 'combo' && (
-						<button type="button" data-tab="tab-variantes" class="tab-btn w-full text-left flex flex-col px-4 py-3 rounded-xl border border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all font-bold cursor-pointer">
-							<div class="flex items-center gap-2 mb-0.5">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-amber-600"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-								Armador de Combos
-							</div>
-							<span class="text-xs text-slate-400 ml-6 font-normal">Productos integrantes &bull; precio</span>
-						</button>
-					)}
-
 					<button type="button" data-tab="tab-envio" class="tab-btn w-full text-left flex flex-col px-4 py-3 rounded-xl border border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all font-bold cursor-pointer">
 						<div class="flex items-center gap-2 mb-0.5">
 							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
@@ -182,6 +166,25 @@ if (product.galeria_urls) {
 							<div>
 								<label class="block text-sm font-bold text-slate-900 mb-1">Nombre del Producto <span class="text-rose-500">*</span></label>
 								<input type="text" id="input-nombre" value={product.nombre} class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+							</div>
+
+							<div>
+								<label class="block text-sm font-bold text-slate-900 mb-1">Grupo de variantes</label>
+								<input
+									type="text"
+									id="input-grupo"
+									placeholder={grupoDeducido}
+									value={product.grupo || ''}
+									class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900"
+								/>
+								<p class="text-xs text-slate-500 mt-1.5 leading-relaxed">
+									Junta este producto con sus variantes bajo una sola tarjeta en la tienda.
+									Los productos que compartan el mismo grupo se muestran juntos, y cada uno
+									conserva su stock y su precio.
+									{product.grupo
+										? ' Vaciá el campo para volver a deducirlo del nombre.'
+										: ` Si lo dejás vacío se deduce del nombre: “${grupoDeducido}”.`}
+								</p>
 							</div>
 
 							<div>
@@ -586,75 +589,6 @@ if (product.galeria_urls) {
 					</div>
 				</div>
 
-				{/* Pestaña 4: Variantes / Personalización */}
-				<div id="tab-variantes" class="tab-panel space-y-6 hidden">
-					{tipoParam === 'variantes' && (
-						<div class="bg-white border border-blue-200 rounded-2xl p-8 shadow-sm">
-							<div class="mb-6 border-b border-slate-100 pb-4 flex justify-between items-center">
-								<div>
-									<h2 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-blue-600"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-										Gestor de Variantes (Talles / Colores)
-									</h2>
-									<p class="text-sm text-slate-500">Definí combinaciones específicas con su propio stock, precio y SKU.</p>
-								</div>
-								<button type="button" id="btn-agregar-variante" class="px-4 py-2 bg-blue-600 text-white font-bold text-sm rounded-xl hover:bg-blue-700 transition-colors shadow-md cursor-pointer">
-									+ Agregar Variante
-								</button>
-							</div>
-
-							<div class="space-y-4" id="lista-variantes"></div>
-						</div>
-					)}
-
-					{tipoParam === 'combo' && (
-						<div class="bg-white border border-amber-200 rounded-2xl p-8 shadow-sm">
-							<div class="mb-6 border-b border-slate-100 pb-4 flex justify-between items-center">
-								<div>
-									<h2 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-amber-600"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-										Armador de Combos
-									</h2>
-									<p class="text-sm text-slate-500">Seleccioná los productos que integran este combo y su estrategia de precio.</p>
-								</div>
-							</div>
-
-							<div class="space-y-6">
-								<div>
-									<label class="block text-sm font-bold text-slate-900 mb-2">Productos Integrantes del Combo</label>
-									<div class="space-y-3">
-										{allProducts.slice(0, 3).map(p => (
-											<label class="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors">
-												<div class="flex items-center gap-3">
-													<input type="checkbox" class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500" checked />
-													<div>
-														<p class="font-bold text-slate-900 text-sm">{p.nombre}</p>
-														<p class="text-xs text-slate-400">SKU: {p.sku} | Stock indiv: {p.stock}</p>
-													</div>
-												</div>
-												<span class="font-bold text-slate-900 text-sm">{formateador.format(p.precio / 100)}</span>
-											</label>
-										))}
-									</div>
-								</div>
-
-								<div class="p-4 bg-amber-50 rounded-xl border border-amber-200">
-									<p class="font-bold text-amber-900 text-sm mb-1">Estraegia de Precio Combo</p>
-									<p class="text-xs text-amber-800">El precio del combo se calcula automáticamente con el precio de los productos elegidos menos el descuento general.</p>
-								</div>
-							</div>
-						</div>
-					)}
-
-					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
-						<div class="mb-6 border-b border-slate-100 pb-4">
-							<h2 class="text-lg font-bold text-slate-900">Personalización y Grabados</h2>
-							<p class="text-sm text-slate-500">Opciones adicionales para el cliente.</p>
-						</div>
-						<p class="text-sm text-slate-400">Sin opciones de personalización configuradas para este producto.</p>
-					</div>
-				</div>
-
 				{/* Pestaña 5: Envío */}
 				<div id="tab-envio" class="tab-panel space-y-6 hidden">
 					<div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm space-y-8">
@@ -915,73 +849,6 @@ if (product.galeria_urls) {
 			}
 		});
 
-		let currentVariants: any[] = [];
-		try {
-			if (initialProduct.variantes) {
-				currentVariants = typeof initialProduct.variantes === 'string' ? JSON.parse(initialProduct.variantes) : initialProduct.variantes;
-			}
-		} catch (e) {
-			currentVariants = [];
-		}
-
-		if (!Array.isArray(currentVariants) || currentVariants.length === 0) {
-			currentVariants = [
-				{ opcion: 'S / Estándar', sku: `${initialProduct.sku || 'SKU'}-S`, stock: 10, precio: (initialProduct.precio || 0) / 100 },
-				{ opcion: 'M / Estándar', sku: `${initialProduct.sku || 'SKU'}-M`, stock: 15, precio: (initialProduct.precio || 0) / 100 },
-				{ opcion: 'L / Estándar', sku: `${initialProduct.sku || 'SKU'}-L`, stock: 8, precio: (initialProduct.precio || 0) / 100 }
-			];
-		}
-
-		const renderVariants = () => {
-			const container = document.getElementById('lista-variantes');
-			if (!container) return;
-
-			container.innerHTML = '';
-			currentVariants.forEach((v, index) => {
-				const row = document.createElement('div');
-				row.className = 'p-4 border border-slate-200 rounded-xl bg-slate-50 grid grid-cols-1 sm:grid-cols-4 gap-4 items-center variant-row';
-				row.innerHTML = `
-					<div>
-						<label class="block text-xs font-bold text-slate-500 mb-1">Talle / Opción</label>
-						<input type="text" value="${v.opcion || ''}" class="var-opcion w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-800" />
-					</div>
-					<div>
-						<label class="block text-xs font-bold text-slate-500 mb-1">SKU Variante</label>
-						<input type="text" value="${v.sku || ''}" class="var-sku w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-mono text-slate-600" />
-					</div>
-					<div>
-						<label class="block text-xs font-bold text-slate-500 mb-1">Stock Indiv.</label>
-						<input type="number" value="${v.stock || 0}" class="var-stock w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-800" />
-					</div>
-					<div class="flex items-end justify-end pb-1 h-full">
-						<button type="button" class="btn-remove-variant text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded transition-colors" data-index="${index}">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-						</button>
-					</div>
-				`;
-				container.appendChild(row);
-			});
-
-			document.querySelectorAll('.btn-remove-variant').forEach(btn => {
-				btn.addEventListener('click', (e) => {
-					const index = parseInt((e.currentTarget as HTMLButtonElement).dataset.index || '0');
-					currentVariants.splice(index, 1);
-					renderVariants();
-				});
-			});
-		};
-
-		renderVariants();
-
-		document.getElementById('btn-agregar-variante')?.addEventListener('click', () => {
-			currentVariants.push({
-				opcion: 'Nueva Opción',
-				sku: `${initialProduct.sku || 'SKU'}-VAR-${currentVariants.length + 1}`,
-				stock: 10,
-				precio: (initialProduct.precio || 0) / 100
-			});
-			renderVariants();
-		});
 
 		// Multilevel Pricing Live Calculations
 		const categoriesMap = new Map();
@@ -1162,6 +1029,7 @@ if (product.galeria_urls) {
 
 			const nombre = (document.getElementById('input-nombre') as HTMLInputElement)?.value;
 			const marca = (document.getElementById('input-marca') as HTMLInputElement)?.value;
+			const grupo = (document.getElementById('input-grupo') as HTMLInputElement)?.value?.trim() || '';
 			const descripcion = (document.getElementById('input-descripcion') as HTMLTextAreaElement)?.value;
 			
 			const costoArs = parseFloat((document.getElementById('input-costo') as HTMLInputElement)?.value || '0');
@@ -1238,6 +1106,7 @@ if (product.galeria_urls) {
 					id: productId,
 					nombre,
 					marca,
+					grupo,
 					descripcion,
 					cost: Math.round(costoArs * 100),
 					costo: Math.round(costoArs * 100),

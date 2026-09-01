@@ -419,6 +419,7 @@ const paginationItems = filteredPages.map((p, index) => ({
 									data-precio={product.precio}
 									data-stock={product.stock}
 									data-categoria={product.categoria_id?.$id || product.categoria_id || ''}
+									data-grupo={product.grupo || ''}
 									data-destacado={product.destacado ? 'true' : 'false'}
 									data-nuevo={showNuevoBadge ? 'true' : 'false'}
 								>
@@ -617,6 +618,19 @@ const paginationItems = filteredPages.map((p, index) => ({
 					</select>
 				</div>
 
+				{/* Grupo de variantes: acá porque corregir un agrupado mal deducido
+				    del nombre es justamente una tarea de a muchos productos. */}
+				<div>
+					<label class="block text-xs font-bold text-slate-900 mb-1">Grupo de variantes</label>
+					<input
+						type="text"
+						id="qe-grupo"
+						placeholder="Se deduce del nombre"
+						class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 bg-slate-50 focus:bg-white focus:border-emerald-600 outline-none"
+					/>
+					<p class="text-[10px] text-slate-400 font-medium mt-1">Los productos con el mismo grupo se muestran en una sola tarjeta. Vacío = se deduce del nombre.</p>
+				</div>
+
 				{/* 3. Inputs de Precio y Stock (2 Columnas con Formato) */}
 				<div class="grid grid-cols-2 gap-4">
 					<div>
@@ -711,7 +725,7 @@ const paginationItems = filteredPages.map((p, index) => ({
 	};
 
 	// Attach dirty check listeners
-	['qe-precio', 'qe-stock', 'qe-categoria', 'qe-destacado', 'qe-nuevo'].forEach(id => {
+	['qe-precio', 'qe-stock', 'qe-categoria', 'qe-grupo', 'qe-destacado', 'qe-nuevo'].forEach(id => {
 		const el = document.getElementById(id);
 		el?.addEventListener('change', markDirty);
 		el?.addEventListener('input', markDirty);
@@ -747,6 +761,9 @@ const paginationItems = filteredPages.map((p, index) => ({
 
 		const catEl = document.getElementById('qe-categoria') as HTMLSelectElement;
 		if (catEl) catEl.value = data.categoria || '';
+
+		const grupoEl = document.getElementById('qe-grupo') as HTMLInputElement;
+		if (grupoEl) grupoEl.value = data.grupo || '';
 
 		const destacadoEl = document.getElementById('qe-destacado') as HTMLInputElement;
 		if (destacadoEl) destacadoEl.checked = data.destacado === 'true';
@@ -842,6 +859,7 @@ const paginationItems = filteredPages.map((p, index) => ({
 
 		const estado = (document.querySelector('input[name="qe-estado"]:checked') as HTMLInputElement)?.value || 'borrador';
 		const categoria_id = (document.getElementById('qe-categoria') as HTMLSelectElement)?.value || null;
+		const grupo = (document.getElementById('qe-grupo') as HTMLInputElement)?.value?.trim() || '';
 		const destacado = (document.getElementById('qe-destacado') as HTMLInputElement)?.checked || false;
 		const nuevoManual = (document.getElementById('qe-nuevo') as HTMLInputElement)?.checked || false;
 
@@ -860,6 +878,7 @@ const paginationItems = filteredPages.map((p, index) => ({
 			stock: stockVal,
 			estado: estado as any,
 			categoria_id,
+			grupo,
 			destacado,
 			es_nuevo_manual: nuevoManual
 		});
