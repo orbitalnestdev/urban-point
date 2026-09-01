@@ -705,12 +705,14 @@ const paginationItems = filteredPages.map((p, index) => ({
 		</div>
 
 	</main>
-	{/* Catálogo compacto para el armador de combos del modal de alta: sólo id y
-	    nombre, que es lo único que necesita para buscar y elegir. */}
+	{/* Catálogo compacto para el armador de combos del modal de alta.
+	    Van como tuplas [id, nombre] y no como objetos: con 6.495 productos, las
+	    claves repetidas costaban ~130 KB de HTML de más en una página que ya
+	    renderiza una tabla. */}
 	<script
 		type="application/json"
 		id="productos-json-data"
-		set:html={toSafeJson(products.map((p: any) => ({ $id: p.$id, nombre: p.nombre })))}
+		set:html={toSafeJson(products.map((p: any) => [p.$id, p.nombre]))}
 	/>
 
 	<NewProductModal client:load />

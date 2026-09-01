@@ -93,8 +93,12 @@ export default function NewProductModal() {
 	useEffect(() => {
 		if (tipo !== 'combo' || catalogo.length > 0) return;
 		try {
+			// Llega como tuplas [id, nombre] para no repetir las claves 6.495 veces.
 			const raw = document.getElementById('productos-json-data')?.textContent;
-			if (raw) setCatalogo(JSON.parse(raw));
+			if (raw) {
+				const tuplas: Array<[string, string]> = JSON.parse(raw);
+				setCatalogo(tuplas.map(([$id, nombre]) => ({ $id, nombre })));
+			}
 		} catch {
 			// Sin catálogo embebido se puede crear el combo igual y elegir los
 			// integrantes después, desde el editor.
