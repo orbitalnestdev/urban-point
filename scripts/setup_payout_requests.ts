@@ -20,7 +20,7 @@
  *
  * Es idempotente: si la colección ya existe, no toca nada.
  */
-import { Client, Databases } from 'node-appwrite';
+import { Client, Databases, IndexType } from 'node-appwrite';
 import { config } from 'dotenv';
 config({ path: ['.env.local', '.env'] });
 
@@ -107,9 +107,9 @@ async function main() {
 	// Los índices necesitan que los atributos estén disponibles.
 	await esperar(2500);
 	try {
-		await db.createIndex(DB_ID, COL, 'idx_profile', 'key' as any, ['profile_id']);
+		await db.createIndex(DB_ID, COL, 'idx_profile', IndexType.Key, ['profile_id']);
 		await esperar(600);
-		await db.createIndex(DB_ID, COL, 'idx_estado', 'key' as any, ['estado']);
+		await db.createIndex(DB_ID, COL, 'idx_estado', IndexType.Key, ['estado']);
 	} catch (e: any) {
 		console.warn(
 			'Los atributos todavía se estaban creando y falló el índice. ' +
