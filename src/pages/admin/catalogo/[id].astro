@@ -486,6 +486,7 @@ if (product.galeria_urls) {
 									<span>Precio Calculado:</span>
 									<span id="lbl-price-distribuidor" class="text-base text-purple-950 font-black">$0</span>
 								</div>
+								<p id="lbl-price-source-distribuidor" class="hidden text-[10px] text-purple-600 font-semibold text-right -mt-1">Precio ya guardado — cargá el costo para automatizarlo</p>
 								<div class="grid grid-cols-3 gap-1 text-[10px] text-purple-700 font-medium pt-1 border-t border-purple-100">
 									<div>Markup: <strong id="lbl-markup-distribuidor">0%</strong></div>
 									<div>Margen s/venta: <strong id="lbl-margin-distribuidor">0%</strong></div>
@@ -544,6 +545,7 @@ if (product.galeria_urls) {
 									<span>Precio Calculado:</span>
 									<span id="lbl-price-canillita" class="text-base text-amber-950 font-black">$0</span>
 								</div>
+								<p id="lbl-price-source-canillita" class="hidden text-[10px] text-amber-600 font-semibold text-right -mt-1">Precio ya guardado — cargá el costo para automatizarlo</p>
 								<div class="grid grid-cols-3 gap-1 text-[10px] text-amber-700 font-medium pt-1 border-t border-amber-100">
 									<div>Markup: <strong id="lbl-markup-canillita">0%</strong></div>
 									<div>Margen s/venta: <strong id="lbl-margin-canillita">0%</strong></div>
@@ -602,6 +604,7 @@ if (product.galeria_urls) {
 									<span>Precio Calculado:</span>
 									<span id="lbl-price-publico" class="text-base text-emerald-950 font-black">$0</span>
 								</div>
+								<p id="lbl-price-source-publico" class="hidden text-[10px] text-emerald-600 font-semibold text-right -mt-1">Precio ya guardado — cargá el costo para automatizarlo</p>
 								<div class="grid grid-cols-3 gap-1 text-[10px] text-emerald-700 font-medium pt-1 border-t border-emerald-100">
 									<div>Markup: <strong id="lbl-markup-publico">0%</strong></div>
 									<div>Margen s/venta: <strong id="lbl-margin-publico">0%</strong></div>
@@ -889,7 +892,18 @@ if (product.galeria_urls) {
 			const metaEl = document.getElementById('product-meta-data');
 			initialProduct = JSON.parse(metaEl?.dataset.product || '{}');
 		} catch(e) {}
-		
+
+		// Precio ya guardado por nivel (lo que hoy cobra el checkout), en pesos.
+		// Sirve de fallback cuando no hay costo cargado: productos importados por
+		// CSV traen estos campos pero costo en 0, y sin esto la pestaña mostraba
+		// "Precio Calculado: $0" como si el producto no tuviera precio, cuando en
+		// realidad sí lo tiene — solo que no se está calculando desde costo.
+		const preciosGuardados: Record<string, number> = {
+			distribuidor: Number(initialProduct.precio_distribuidor || 0) / 100,
+			canillita: Number(initialProduct.precio_canillita || 0) / 100,
+			publico: Number(initialProduct.precio || 0) / 100
+		};
+
 		// Load Envio Config
 		let envioConfig: any = {};
 		try {
@@ -1151,20 +1165,21 @@ if (product.galeria_urls) {
 				let exactPesos = 0;
 				let roundedPesos = 0;
 				let markupPct = 0;
+				let esValorGuardado = false;
 
 				if (mode === 'fixed') {
 					const fixedVal = parseFloat((document.getElementById(`input-fixed-${level}`) as HTMLInputElement)?.value || '0');
 					exactPesos = fixedVal;
 					roundedPesos = applyRounding(exactPesos);
 					markupPct = costArs > 0 ? ((roundedPesos - costArs) / costArs) * 100 : 0;
-				} else {
+				} else if (costArs > 0) {
 					if (mode === 'percent') {
 						const inputPct = parseFloat((document.getElementById(`input-percent-${level}`) as HTMLInputElement)?.value || '');
 						if (Number.isFinite(inputPct)) {
 							markupPct = inputPct;
 						}
 					}
-					
+
 					if (markupPct === 0 && mode === 'inherit') {
 						const catKey = `markup_${level}`;
 						if (categoryDoc && categoryDoc[catKey] !== undefined && categoryDoc[catKey] !== null) {
@@ -1176,9 +1191,16 @@ if (product.galeria_urls) {
 
 					exactPesos = costArs * (1 + markupPct / 100);
 					roundedPesos = applyRounding(exactPesos);
+				} else {
+					// Sin costo no hay nada para calcular. Antes esto quedaba en $0,
+					// como si el producto no tuviera precio — se muestra el que ya
+					// está guardado (el que de verdad se cobra) en su lugar.
+					roundedPesos = preciosGuardados[level] || 0;
+					exactPesos = roundedPesos;
+					esValorGuardado = roundedPesos > 0;
 				}
 
-				const gainPesos = roundedPesos - costArs;
+				const gainPesos = costArs > 0 ? (roundedPesos - costArs) : 0;
 				const realMarginPct = roundedPesos > 0 && costArs > 0 ? ((roundedPesos - costArs) / roundedPesos) * 100 : 0;
 				prices[level] = { exactPesos, roundedPesos, markupPct, gainPesos };
 
@@ -1187,11 +1209,13 @@ if (product.galeria_urls) {
 				const lblMarkup = document.getElementById(`lbl-markup-${level}`);
 				const lblMargin = document.getElementById(`lbl-margin-${level}`);
 				const lblGain = document.getElementById(`lbl-gain-${level}`);
+				const lblSource = document.getElementById(`lbl-price-source-${level}`);
 
 				if (lblPrice) lblPrice.innerText = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(roundedPesos);
-				if (lblMarkup) lblMarkup.innerText = `${markupPct.toFixed(1)}%`;
-				if (lblMargin) lblMargin.innerText = `${realMarginPct.toFixed(1)}%`;
-				if (lblGain) lblGain.innerText = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(gainPesos);
+				if (lblMarkup) lblMarkup.innerText = esValorGuardado ? '—' : `${markupPct.toFixed(1)}%`;
+				if (lblMargin) lblMargin.innerText = esValorGuardado ? '—' : `${realMarginPct.toFixed(1)}%`;
+				if (lblGain) lblGain.innerText = esValorGuardado ? '—' : new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(gainPesos);
+				lblSource?.classList.toggle('hidden', !esValorGuardado);
 			});
 
 			// Hierarchy Validation Alerts
