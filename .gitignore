@@ -16,6 +16,8 @@ pnpm-debug.log*
 # environment variables
 .env
 .env.*
+# ...salvo la plantilla documentada: no tiene valores, hay que poder clonarla.
+!.env.local.ejemplo
 
 # scratch & test files
 scratch/

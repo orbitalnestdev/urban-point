@@ -61,6 +61,21 @@ const VARIABLES: Variable[] = [
 		valida: (v) => (v === 'true' ? null : `está en "${v}", tiene que ser "true" para probar`)
 	},
 	{
+		nombre: 'BIND_CLIENT_ID',
+		obligatoria: false,
+		para: 'BIND PSP (en evaluación, no usado aún)'
+	},
+	{
+		nombre: 'BIND_CLIENT_SECRET',
+		obligatoria: false,
+		para: 'BIND PSP (en evaluación, no usado aún)'
+	},
+	{
+		nombre: 'BIND_SCOPE',
+		obligatoria: false,
+		para: 'BIND PSP (en evaluación, no usado aún)'
+	},
+	{
 		nombre: 'PUBLIC_SITE_URL',
 		obligatoria: false,
 		para: 'notification_url que recibe Mercado Pago',
