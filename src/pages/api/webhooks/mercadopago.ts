@@ -27,7 +27,7 @@ const { databases: db } = createAdminClient();
  *
  * Antes no se validaba nada: cualquiera podía marcar pedidos como pagados.
  */
-function firmaValida(request: Request, dataId: string, secret: string): boolean {
+export function firmaValida(request: Request, dataId: string, secret: string): boolean {
 	const signature = request.headers.get('x-signature');
 	const requestId = request.headers.get('x-request-id');
 	if (!signature) return false;
@@ -123,10 +123,14 @@ export const POST: APIRoute = async ({ request }) => {
 /**
  * Aplica el estado del pago sobre la orden, de forma idempotente.
  *
+ * Exportada para poder probarla sin Mercado Pago: es la cadena que acredita,
+ * descuenta stock y devenga comisiones, y hasta ahora nunca se había
+ * ejecutado en una prueba (ver tests/unit/acreditacionPago.test.ts).
+ *
  * MP reintenta los webhooks y puede entregarlos fuera de orden, así que
  * reprocesar el mismo evento no puede duplicar el pedido ni la comisión.
  */
-async function aplicarEstadoDePago(
+export async function aplicarEstadoDePago(
 	orderId: string,
 	mpStatus: string,
 	paymentId: string,
