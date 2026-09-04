@@ -9,6 +9,9 @@ import { toSafeJson } from '../../lib/safeJson';
 const settings = await getSiteSettings();
 const mpEnabled = settings.mp_enabled;
 const transferenciaEnabled = settings.transferencia_enabled;
+const datosTransferencia = settings.transferencia_alias || settings.transferencia_cvu
+	? { alias: settings.transferencia_alias, cvu: settings.transferencia_cvu, titular: settings.transferencia_titular }
+	: null;
 const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cookie'));
 
 // Config de envío en CENTAVOS, la misma que usa createCheckout server-side:
@@ -119,6 +122,14 @@ const envioConfig = {
                             <input type="radio" name="payment_method" value="a_convenir" class="w-5 h-5 text-[#2D5A27] focus:ring-[#2D5A27] border-slate-300" checked={!mpEnabled && transferenciaEnabled} />
                         </div>
                         <span class="text-sm text-slate-600 leading-relaxed">Pagá en efectivo o mediante transferencia directamente al retirar tu pedido.</span>
+                        {datosTransferencia && (
+                            <div class="mt-3 pt-3 border-t border-dashed border-slate-200 text-xs space-y-1">
+                                <p class="font-bold text-slate-500 uppercase tracking-wide text-[10px]">Datos para transferir</p>
+                                {datosTransferencia.alias && <p class="text-slate-700"><span class="font-bold">Alias:</span> {datosTransferencia.alias}</p>}
+                                {datosTransferencia.cvu && <p class="text-slate-700"><span class="font-bold">CVU:</span> {datosTransferencia.cvu}</p>}
+                                {datosTransferencia.titular && <p class="text-slate-700"><span class="font-bold">Titular:</span> {datosTransferencia.titular}</p>}
+                            </div>
+                        )}
                     </label>
                 )}
             </div>

@@ -362,6 +362,22 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 								<input type="checkbox" name="transferencia_enabled" value="true" checked={settings.transferencia_enabled} id="chk-transf-enabled" class="w-4 h-4 text-emerald-600 rounded cursor-pointer" />
 								<label for="chk-transf-enabled" class="font-bold text-slate-800 cursor-pointer">Habilitar cobro por Transferencia / A Convenir en el Retiro</label>
 							</div>
+
+							<div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+								<div>
+									<label class="block font-bold text-slate-700 mb-1">Alias</label>
+									<input type="text" name="transferencia_alias" value={settings.transferencia_alias} placeholder="ej: mi.alias.mp" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold outline-none focus:border-indigo-600" />
+								</div>
+								<div>
+									<label class="block font-bold text-slate-700 mb-1">CVU</label>
+									<input type="text" name="transferencia_cvu" value={settings.transferencia_cvu} placeholder="ej: 0000003100..." class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold outline-none focus:border-indigo-600" />
+								</div>
+								<div>
+									<label class="block font-bold text-slate-700 mb-1">Titular</label>
+									<input type="text" name="transferencia_titular" value={settings.transferencia_titular} placeholder="ej: Nombre Apellido" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold outline-none focus:border-indigo-600" />
+								</div>
+								<p class="md:col-span-3 text-[11px] text-slate-400">Esto se muestra tal cual en el checkout a quien elija pagar por transferencia.</p>
+							</div>
 						</div>
 					</div>
 

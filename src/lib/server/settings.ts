@@ -41,6 +41,9 @@ export interface SiteSettings {
     mp_access_token: string;
     mp_enabled: boolean;
     transferencia_enabled: boolean;
+    transferencia_alias: string;
+    transferencia_cvu: string;
+    transferencia_titular: string;
 
     notify_email_order_created: boolean;
     notify_email_order_ready: boolean;
@@ -102,6 +105,9 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     mp_access_token: '',
     mp_enabled: true,
     transferencia_enabled: true,
+    transferencia_alias: '',
+    transferencia_cvu: '',
+    transferencia_titular: '',
 
     notify_email_order_created: true,
     notify_email_order_ready: true,
@@ -196,6 +202,9 @@ async function fetchSiteSettings(): Promise<SiteSettings> {
             mp_access_token: settingsMap.mp_access_token || DEFAULT_SETTINGS.mp_access_token,
             mp_enabled: settingsMap.mp_enabled !== undefined ? settingsMap.mp_enabled === 'true' : DEFAULT_SETTINGS.mp_enabled,
             transferencia_enabled: settingsMap.transferencia_enabled !== undefined ? settingsMap.transferencia_enabled === 'true' : DEFAULT_SETTINGS.transferencia_enabled,
+            transferencia_alias: settingsMap.transferencia_alias || DEFAULT_SETTINGS.transferencia_alias,
+            transferencia_cvu: settingsMap.transferencia_cvu || DEFAULT_SETTINGS.transferencia_cvu,
+            transferencia_titular: settingsMap.transferencia_titular || DEFAULT_SETTINGS.transferencia_titular,
 
             notify_email_order_created: settingsMap.notify_email_order_created !== undefined ? settingsMap.notify_email_order_created === 'true' : DEFAULT_SETTINGS.notify_email_order_created,
             notify_email_order_ready: settingsMap.notify_email_order_ready !== undefined ? settingsMap.notify_email_order_ready === 'true' : DEFAULT_SETTINGS.notify_email_order_ready,
