@@ -15,12 +15,19 @@ if (Astro.request.method === 'POST') {
 	try {
 		const formData = await Astro.request.formData();
 
+		// Un checkbox destildado no manda NADA en el FormData (a diferencia de
+		// un input de texto vacío): si se lo trata como cualquier otra clave,
+		// "guardar" con el checkbox destildado no escribe "false", simplemente
+		// no escribe nada, y el "true" guardado la vez anterior queda para
+		// siempre. Por eso el toggle de Mercado Pago no se podía apagar.
+		const CHECKBOXES = ['whatsapp_enabled', 'mp_enabled', 'transferencia_enabled', 'notify_email_order_created'];
+
 		// El form manda ~32 claves: guardarlas una por una en serie eran ~64
 		// round-trips encadenados contra Appwrite (varios segundos por submit).
 		// Se juntan todas las escrituras y se esperan de una sola vez.
 		const guardados: Promise<unknown>[] = [];
 		for (const [key, value] of formData.entries()) {
-			if (key && !key.startsWith('__')) {
+			if (key && !key.startsWith('__') && !CHECKBOXES.includes(key)) {
 				const strVal = value.toString();
 				// No guardar/sobrescribir la contraseña SMTP si el input está vacío
 				if (key === 'smtp_pass' && !strVal.trim()) {
@@ -28,6 +35,9 @@ if (Astro.request.method === 'POST') {
 				}
 				guardados.push(saveSiteSetting(key, strVal));
 			}
+		}
+		for (const nombre of CHECKBOXES) {
+			guardados.push(saveSiteSetting(nombre, formData.has(nombre) ? 'true' : 'false'));
 		}
 		await Promise.all(guardados);
 
