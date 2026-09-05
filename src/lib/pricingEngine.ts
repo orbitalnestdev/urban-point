@@ -220,22 +220,27 @@ export function resolveProductPriceForUser(
 ): { unitPriceCentavos: number; appliedLevel: 'publico' | 'canillita' | 'distribuidor' } {
 	const role = userRole?.toLowerCase() || 'cliente';
 
+	// Se prioriza el nombre en español: es el único que escribe el guardado
+	// normal de un producto (updateProduct). El nombre en inglés sólo lo
+	// escribe el recálculo masivo por categoría, y no siempre junto con el
+	// español — priorizarlo cobraba un precio viejo "congelado" en cualquier
+	// producto que pasó por ese recálculo y después se editó suelto.
 	if (role === 'distribuidor') {
-		const pDist = Number(product?.price_distribuidor ?? product?.precio_distribuidor);
+		const pDist = Number(product?.precio_distribuidor ?? product?.price_distribuidor);
 		if (Number.isFinite(pDist) && pDist > 0) {
 			return { unitPriceCentavos: Math.round(pDist), appliedLevel: 'distribuidor' };
 		}
 	}
 
 	if (role === 'canillita') {
-		const pCani = Number(product?.price_canillita ?? product?.precio_canillita);
+		const pCani = Number(product?.precio_canillita ?? product?.price_canillita);
 		if (Number.isFinite(pCani) && pCani > 0) {
 			return { unitPriceCentavos: Math.round(pCani), appliedLevel: 'canillita' };
 		}
 	}
 
 	// Fallback to public price
-	const pPub = Number(product?.price_publico ?? product?.precio);
+	const pPub = Number(product?.precio ?? product?.price_publico);
 	let unitPriceCentavos = Number.isFinite(pPub) && pPub > 0 ? Math.round(pPub) : 0;
 
 	// La vitrina muestra el precio promocional (ver precioDeVentaCentavos en

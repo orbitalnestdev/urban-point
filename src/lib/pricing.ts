@@ -1,5 +1,11 @@
 export * from './pricingEngine';
 
+// `precio` (español) es el único campo que actualiza el guardado normal de
+// un producto (updateProduct); `price_publico` (inglés) sólo lo escribe el
+// recálculo masivo por categoría, y no siempre junto con `precio`. Priorizar
+// `price_publico` significaba cobrar/mostrar un precio viejo "congelado" en
+// cualquier producto que alguna vez pasó por ese recálculo y después se
+// editó suelto — ver también resolveProductPriceForUser en pricingEngine.ts.
 export interface ProductoPrecio {
 	precio: number;
 	precio_promocional?: number | null;
@@ -17,7 +23,7 @@ function aCentavosEnteros(valor: unknown): number {
 /** ¿La promoción es aplicable? Debe ser positiva y menor al precio de lista. */
 export function tienePromocion(producto: ProductoPrecio): boolean {
 	const promo = aCentavosEnteros(producto?.precio_promocional);
-	const lista = aCentavosEnteros(producto?.price_publico ?? producto?.precio);
+	const lista = aCentavosEnteros(producto?.precio ?? producto?.price_publico);
 	return promo > 0 && promo < lista;
 }
 
@@ -26,7 +32,7 @@ export function tienePromocion(producto: ProductoPrecio): boolean {
  * Es el único número que debe usarse tanto para mostrar como para cobrar.
  */
 export function precioDeVentaCentavos(producto: ProductoPrecio): number {
-	const base = aCentavosEnteros(producto?.price_publico ?? producto?.precio);
+	const base = aCentavosEnteros(producto?.precio ?? producto?.price_publico);
 	return tienePromocion(producto)
 		? aCentavosEnteros(producto.precio_promocional)
 		: base;
@@ -34,12 +40,12 @@ export function precioDeVentaCentavos(producto: ProductoPrecio): number {
 
 /** Precio de lista tachado. Devuelve null si no hay promoción real. */
 export function precioListaCentavos(producto: ProductoPrecio): number | null {
-	return tienePromocion(producto) ? aCentavosEnteros(producto?.price_publico ?? producto?.precio) : null;
+	return tienePromocion(producto) ? aCentavosEnteros(producto?.precio ?? producto?.price_publico) : null;
 }
 
 export function porcentajeDescuento(producto: ProductoPrecio): number {
 	if (!tienePromocion(producto)) return 0;
-	const lista = aCentavosEnteros(producto?.price_publico ?? producto?.precio);
+	const lista = aCentavosEnteros(producto?.precio ?? producto?.price_publico);
 	const venta = aCentavosEnteros(producto.precio_promocional);
 	return Math.round(((lista - venta) / lista) * 100);
 }

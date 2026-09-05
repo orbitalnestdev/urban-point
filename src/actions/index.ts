@@ -2923,16 +2923,18 @@ export const server = {
 					const recalculated = recalculateProductPrices(prod, category, settings);
 					const patch: any = {};
 
+					// Sólo el nombre en español: es el único que lee resolveProductPriceForUser
+					// en primer lugar (ver pricingEngine.ts). Escribir también el nombre en
+					// inglés acá era lo que dejaba un precio viejo "congelado" en cualquier
+					// producto que después se editara suelto por updateProduct, que nunca
+					// toca esos campos en inglés.
 					if (recalculated.price_distribuidor !== null) {
-						patch.price_distribuidor = recalculated.price_distribuidor;
 						patch.precio_distribuidor = recalculated.price_distribuidor;
 					}
 					if (recalculated.price_canillita !== null) {
-						patch.price_canillita = recalculated.price_canillita;
 						patch.precio_canillita = recalculated.price_canillita;
 					}
 					if (recalculated.price_publico !== null) {
-						patch.price_publico = recalculated.price_publico;
 						patch.precio = recalculated.price_publico;
 					}
 
