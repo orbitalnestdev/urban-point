@@ -6,6 +6,7 @@ import { getSiteSettings } from '../../lib/server/settings';
 import { parseActiveNodeCookie } from '../../lib/nodeSession';
 import { toSafeJson } from '../../lib/safeJson';
 
+const esInvitado = !Astro.locals.user;
 const settings = await getSiteSettings();
 const mpEnabled = settings.mp_enabled;
 const transferenciaEnabled = settings.transferencia_enabled;
@@ -95,6 +96,32 @@ const envioConfig = {
                 </p>
             </div>
         </div>
+
+        {esInvitado && (
+            <div class="relative z-10">
+                <h2 class="text-xl font-bold text-slate-900 mb-6 flex items-center gap-3">
+                    <div class="p-2 bg-amber-50 text-amber-600 rounded-xl border border-amber-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </div>
+                    Tus datos de contacto
+                </h2>
+                <p class="text-sm text-slate-500 -mt-4 mb-4">Estás comprando sin cuenta. Necesitamos esto para que puedan avisarte del estado de tu pedido.</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre y apellido *</label>
+                        <input type="text" id="input-guest-name" required class="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[#2D5A27] font-semibold" placeholder="Ej: Juana Pérez" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Teléfono *</label>
+                        <input type="tel" id="input-guest-phone" required class="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[#2D5A27] font-semibold" placeholder="Ej: 11 5555-5555" />
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Email (opcional)</label>
+                        <input type="email" id="input-guest-email" class="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[#2D5A27] font-semibold" placeholder="Para mandarte la confirmación" />
+                    </div>
+                </div>
+            </div>
+        )}
 
         <!-- Payment Method Section -->
         <div class="relative z-10">
@@ -350,6 +377,19 @@ const envioConfig = {
             const labelOriginal = confirmBtn.innerHTML;
 
             confirmBtn.addEventListener('click', async () => {
+                const guestNameEl = document.getElementById('input-guest-name') as HTMLInputElement | null;
+                const guestPhoneEl = document.getElementById('input-guest-phone') as HTMLInputElement | null;
+                const guestEmailEl = document.getElementById('input-guest-email') as HTMLInputElement | null;
+
+                // Sólo existen en el DOM si es invitado (ver esInvitado en el
+                // frontmatter): si están, son obligatorios los dos primeros.
+                if (guestNameEl && guestPhoneEl) {
+                    if (!guestNameEl.value.trim() || !guestPhoneEl.value.trim()) {
+                        mostrarError('Completá tu nombre y teléfono para poder continuar.');
+                        return;
+                    }
+                }
+
                 confirmBtn.disabled = true;
                 confirmBtn.innerHTML = 'Procesando...';
                 if (errorBanner) errorBanner.classList.add('hidden');
@@ -370,7 +410,10 @@ const envioConfig = {
                         fulfillment: (finalCheckout.fulfillment as 'retiro' | 'envio') || 'retiro',
                         pickupPointId: finalCheckout.pickupPointId,
                         direccionEnvio: finalCheckout.direccionEnvio,
-                        paymentMethod: finalCheckout.paymentMethod
+                        paymentMethod: finalCheckout.paymentMethod,
+                        guestName: guestNameEl?.value,
+                        guestPhone: guestPhoneEl?.value,
+                        guestEmail: guestEmailEl?.value
                     });
 
                     if (error || !data?.success || !data?.init_point) {

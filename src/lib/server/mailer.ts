@@ -21,6 +21,7 @@ export interface OrderEmailData {
   pickup_code_hash?: string;
   customerName?: string;
   customerEmail?: string;
+  customerPhone?: string;
   canillitaEmail?: string;
   canillitaNombre?: string;
   pickupNodeName?: string;
@@ -294,7 +295,8 @@ export async function sendOrderNotificationEmails(
         <div style="background-color: #EFF6FF; border: 1.5px solid #BFDBFE; padding: 18px; border-radius: 14px; margin: 18px 0;">
           <p style="margin: 0; color: #1E40AF; font-size: 12px; font-weight: 800; uppercase;">👤 DATOS DEL CLIENTE</p>
           <p style="margin: 4px 0 0 0; color: #1E3A8A; font-size: 15px; font-weight: 800;">${order.customerName || 'Cliente'} (${order.customerEmail || 'Sin email'})</p>
-          
+          ${order.customerPhone ? `<p style="margin: 4px 0 0 0; color: #1E3A8A; font-size: 14px; font-weight: 700;">📞 ${order.customerPhone}</p>` : ''}
+
           ${order.pickup_code_hash ? `
             <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #93C5FD;">
               <span style="color: #1E40AF; font-size: 12px; font-weight: 700;">🔑 Código para pedir al momento de la entrega: </span>
@@ -347,6 +349,11 @@ export async function sendOrderNotificationEmails(
                 <td style="color: #64748B; font-size: 13px; font-weight: 700;">Cliente:</td>
                 <td style="color: #0F172A; font-size: 14px; font-weight: 700;">${order.customerName || 'Invitado/Cliente'} (${order.customerEmail || 'Sin email'})</td>
               </tr>
+              ${order.customerPhone ? `
+              <tr>
+                <td style="color: #64748B; font-size: 13px; font-weight: 700;">Teléfono:</td>
+                <td style="color: #0F172A; font-size: 14px; font-weight: 700;">${order.customerPhone}</td>
+              </tr>` : ''}
               <tr>
                 <td style="color: #64748B; font-size: 13px; font-weight: 700;">Modalidad:</td>
                 <td style="color: #059669; font-size: 13px; font-weight: 800; text-transform: uppercase;">${order.fulfillment || 'Retiro'}</td>

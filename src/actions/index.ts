@@ -763,7 +763,12 @@ export const server = {
 			costoEnvio: z.number().optional(),
 			// referralCode se quitó a propósito: la atribución se resuelve en el
 			// servidor desde la cookie, no con lo que informe el cliente.
-			paymentMethod: z.string().optional()
+			paymentMethod: z.string().optional(),
+			// Sólo se usan (y se exigen) cuando la compra es sin cuenta — ver
+			// más abajo. Con cuenta, el nombre/mail salen del profile.
+			guestName: z.string().trim().max(255).optional(),
+			guestPhone: z.string().trim().max(50).optional(),
+			guestEmail: z.string().trim().max(255).optional()
 		}),
 		handler: async (input, ctx) => {
 			try {
@@ -773,6 +778,19 @@ export const server = {
 					if (profile) profileId = profile.$id;
 				} catch (e) {
 					console.error("No profile attached to checkout:", e);
+				}
+
+				// Sin cuenta, hasta ahora el pedido no guardaba ningún dato de
+				// contacto: el canillita recibía "Nuevo Pedido" sin poder saber
+				// quién era ni cómo comunicarse. Se le exige nombre y teléfono acá
+				// (no en el schema de Zod, porque sólo aplica cuando es invitado).
+				if (!profileId) {
+					if (!input.guestName?.trim() || !input.guestPhone?.trim()) {
+						return {
+							success: false,
+							error: 'Para comprar sin cuenta necesitamos tu nombre y un teléfono de contacto.'
+						};
+					}
 				}
 
 				let referralCodeId = null;
@@ -976,6 +994,13 @@ export const server = {
 				}
 				if (profileId) {
 					orderPayload.customer_id = profileId;
+				} else {
+					// Validado más arriba: sin cuenta, estos dos son obligatorios.
+					orderPayload.guest_name = input.guestName!.trim().slice(0, 255);
+					orderPayload.guest_phone = input.guestPhone!.trim().slice(0, 50);
+					if (input.guestEmail?.trim()) {
+						orderPayload.guest_email = input.guestEmail.trim().slice(0, 255);
+					}
 				}
 
 				const orderDoc = await escribirDocumentoTolerante('orders', orderPayload);
@@ -998,8 +1023,9 @@ export const server = {
 				// mail duplicado que encima decía "Pagado" sobre un pendiente_pago.
 				if (input.paymentMethod === 'a_convenir') (async () => {
 					try {
-						let customerName = '';
-						let customerEmail = '';
+						let customerName = orderPayload.guest_name || '';
+						let customerEmail = orderPayload.guest_email || '';
+						let customerPhone = orderPayload.guest_phone || '';
 						let canillitaEmail = '';
 						let canillitaNombre = '';
 						let pickupNodeName = activeNodeSession?.nombre || '';
@@ -1034,6 +1060,7 @@ export const server = {
 							total: grandTotal,
 							customerName,
 							customerEmail,
+							customerPhone,
 							canillitaEmail,
 							canillitaNombre,
 							pickupNodeName,
