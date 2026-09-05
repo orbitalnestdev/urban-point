@@ -15,9 +15,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const listDocuments = vi.fn();
 const createDocument = vi.fn();
 const updateDocument = vi.fn();
+const getDocument = vi.fn();
+const deleteDocument = vi.fn();
 
 vi.mock('../../src/lib/server/appwrite', () => ({
-	createAdminClient: () => ({ databases: { listDocuments, createDocument, updateDocument } })
+	createAdminClient: () => ({ databases: { listDocuments, createDocument, updateDocument, getDocument, deleteDocument } })
 }));
 
 const faltaColeccion = Object.assign(
@@ -74,11 +76,14 @@ describe('un error real de Appwrite no se confunde con la colección faltante', 
 });
 
 describe('crearSolicitud', () => {
+	// createDocument se llama dos veces: la primera es el reclamo de exclusión
+	// mutua en processing_locks (ver src/lib/server/locks.ts), la segunda es
+	// la solicitud real — por eso los payloads de estos tests son calls[1].
 	it('nace en estado solicitada, con el monto que le pasa el servidor', async () => {
 		createDocument.mockResolvedValue({ $id: 's1' });
 		await mod.crearSolicitud({ profileId: 'p1', montoCentavos: 12345.6, nota: 'hola' });
 
-		const payload = createDocument.mock.calls[0][3];
+		const payload = createDocument.mock.calls[1][3];
 		expect(payload.profile_id).toBe('p1');
 		expect(payload.estado).toBe('solicitada');
 		expect(payload.monto_centavos).toBe(12346); // entero, sin flotantes
@@ -89,7 +94,20 @@ describe('crearSolicitud', () => {
 	it('recorta la nota a 500 caracteres', async () => {
 		createDocument.mockResolvedValue({ $id: 's1' });
 		await mod.crearSolicitud({ profileId: 'p1', montoCentavos: 100, nota: 'x'.repeat(900) });
-		expect(createDocument.mock.calls[0][3].nota_canillita).toHaveLength(500);
+		expect(createDocument.mock.calls[1][3].nota_canillita).toHaveLength(500);
+	});
+
+	it('no deja pedir dos veces a la vez: el segundo reclamo concurrente se rechaza', async () => {
+		// Primer pedido: reclamo (call 1) y solicitud (call 2) resuelven bien.
+		createDocument.mockResolvedValueOnce({ $id: 'lock1' });
+		createDocument.mockResolvedValueOnce({ $id: 's1' });
+		await mod.crearSolicitud({ profileId: 'p1', montoCentavos: 100 });
+
+		// Segundo pedido "simultáneo": el reclamo choca con un 409, tal como
+		// haría Appwrite si el documento con ese $id ya existe.
+		createDocument.mockRejectedValueOnce(Object.assign(new Error('Document already exists'), { code: 409 }));
+		await expect(mod.crearSolicitud({ profileId: 'p1', montoCentavos: 100 }))
+			.rejects.toThrow(/ya tenés una solicitud/i);
 	});
 });
 
@@ -113,6 +131,7 @@ describe('solicitudAbierta', () => {
 
 describe('resolverSolicitud', () => {
 	it('deja registro de quién resolvió y cuándo', async () => {
+		getDocument.mockResolvedValue({ $id: 's1', estado: 'solicitada', profile_id: 'p1' });
 		updateDocument.mockResolvedValue({ $id: 's1' });
 		await mod.resolverSolicitud({
 			solicitudId: 's1',
@@ -126,12 +145,34 @@ describe('resolverSolicitud', () => {
 		expect(payload.resuelto_por).toBe('admin-1');
 		expect(payload.nota_admin).toBe('ok');
 		expect(typeof payload.resuelto_at).toBe('string');
+		// 'aprobada' sigue siendo un estado abierto: no libera el reclamo.
+		expect(deleteDocument).not.toHaveBeenCalled();
+	});
+
+	it('no deja resolver una solicitud que ya estaba resuelta', async () => {
+		getDocument.mockResolvedValue({ $id: 's1', estado: 'pagada', profile_id: 'p1' });
+		await expect(mod.resolverSolicitud({
+			solicitudId: 's1',
+			estado: 'aprobada',
+			actorProfileId: 'admin-1'
+		})).rejects.toThrow(/ya está "pagada"/);
+		expect(updateDocument).not.toHaveBeenCalled();
+	});
+
+	it('al pasar a un estado final, libera el reclamo de "solicitud abierta"', async () => {
+		getDocument.mockResolvedValue({ $id: 's1', estado: 'solicitada', profile_id: 'p1' });
+		updateDocument.mockResolvedValue({ $id: 's1' });
+		await mod.resolverSolicitud({ solicitudId: 's1', estado: 'rechazada', actorProfileId: 'admin-1' });
+		// El ':' de la clave no es válido en un $id de Appwrite: locks.ts lo
+		// sanitiza (ver idDesdeClave) antes de usarlo.
+		expect(deleteDocument).toHaveBeenCalledWith('urbanpoint', 'processing_locks', 'open-payout-request_p1');
 	});
 });
 
 describe('cerrarSolicitudPorPago', () => {
 	it('marca como pagada la solicitud abierta y la enlaza al payout', async () => {
-		listDocuments.mockResolvedValue({ documents: [{ $id: 's1', estado: 'aprobada' }] });
+		listDocuments.mockResolvedValue({ documents: [{ $id: 's1', estado: 'aprobada', profile_id: 'p1' }] });
+		getDocument.mockResolvedValue({ $id: 's1', estado: 'aprobada', profile_id: 'p1' });
 		updateDocument.mockResolvedValue({ $id: 's1' });
 
 		await mod.cerrarSolicitudPorPago('p1', 'payout-9');

@@ -2,6 +2,7 @@ import { Client, Databases, Query, ID } from 'node-appwrite';
 import { createAdminClient, escribirDocumentoTolerante } from './server/appwrite';
 import { estaPago } from './orderStates';
 import { unidadesQueMueve } from './combos';
+import { intentarReclamar, liberar } from './server/locks';
 
 const db = new Proxy({} as Databases, {
 	get(_target, prop: keyof Databases) {
@@ -134,6 +135,18 @@ export async function resolverComisiones(orderId: string) {
 		]);
 		if (existingLedgers.documents.length > 0 || order.stock_descontado) {
 			console.log(`Comisiones ya procesadas anteriormente para la orden ${orderId}`);
+			return { success: true, alreadyProcessed: true };
+		}
+
+		// El check de arriba es "leer, después actuar": dos entregas casi
+		// simultáneas del webhook (o el webhook corriendo en paralelo con un
+		// admin confirmando el pago a mano) pueden pasarlo las dos antes de que
+		// cualquiera escriba, y cada una genera su propio juego de asientos —
+		// doble comisión por la misma venta. Este reclamo sí es atómico (ver
+		// src/lib/server/locks.ts): sólo una de las dos llamadas gana.
+		const reclamado = await intentarReclamar(`commission:${orderId}`, 'resolverComisiones');
+		if (!reclamado) {
+			console.log(`Otra ejecución ya está resolviendo las comisiones de la orden ${orderId}.`);
 			return { success: true, alreadyProcessed: true };
 		}
 
@@ -500,77 +513,95 @@ export async function liquidarComisiones(input: LiquidacionInput) {
 		};
 	}
 
-	// Sólo se paga lo confirmado ('disponible', es decir con pedido entregado).
-	// Liquidar asientos 'pendiente' pagaba comisiones de pedidos que podían
-	// cancelarse después, dejando la reversa contra un saldo ya cobrado.
-	// Se pagina con cursor: el viejo limit(500) sin paginar liquidaba un
-	// subconjunto arbitrario cuando había más asientos.
-	const asientosDisponibles: any[] = [];
-	let cursor: string | null = null;
-	while (true) {
-		const queries = [
-			Query.equal('profile_id', input.profileId),
-			Query.equal('estado', 'disponible'),
-			Query.limit(100)
-		];
-		if (cursor) queries.push(Query.cursorAfter(cursor));
-		const page = await db.listDocuments('urbanpoint', 'commission_ledger', queries);
-		asientosDisponibles.push(...page.documents);
-		if (page.documents.length < 100) break;
-		cursor = page.documents[page.documents.length - 1].$id;
+	// El check de arriba es "leer, después actuar": dos admins (o el mismo en
+	// dos pestañas, o un reintento de red) liquidando el mismo saldo casi al
+	// mismo tiempo pueden pasarlo los dos antes de que cualquiera escriba, y
+	// cada uno crea su propio payout por el saldo completo — doble pago. Este
+	// reclamo sí es atómico (ver src/lib/server/locks.ts). Se libera en el
+	// catch: a diferencia de resolverComisiones, la idempotencyKey acá puede
+	// legítimamente reintentarse si esta liquidación en particular falla.
+	const claveReclamo = `payout:${input.idempotencyKey}`;
+	const reclamado = await intentarReclamar(claveReclamo, 'liquidarComisiones');
+	if (!reclamado) {
+		throw new Error('Ya hay una liquidación en curso para este mismo pedido de pago. Esperá unos segundos y refrescá.');
 	}
 
-	const pendientes = asientosDisponibles.filter(d => d.tipo !== 'reversa');
+	try {
+		// Sólo se paga lo confirmado ('disponible', es decir con pedido entregado).
+		// Liquidar asientos 'pendiente' pagaba comisiones de pedidos que podían
+		// cancelarse después, dejando la reversa contra un saldo ya cobrado.
+		// Se pagina con cursor: el viejo limit(500) sin paginar liquidaba un
+		// subconjunto arbitrario cuando había más asientos.
+		const asientosDisponibles: any[] = [];
+		let cursor: string | null = null;
+		while (true) {
+			const queries = [
+				Query.equal('profile_id', input.profileId),
+				Query.equal('estado', 'disponible'),
+				Query.limit(100)
+			];
+			if (cursor) queries.push(Query.cursorAfter(cursor));
+			const page = await db.listDocuments('urbanpoint', 'commission_ledger', queries);
+			asientosDisponibles.push(...page.documents);
+			if (page.documents.length < 100) break;
+			cursor = page.documents[page.documents.length - 1].$id;
+		}
 
-	if (pendientes.length === 0) {
-		throw new Error('No hay comisiones confirmadas para liquidar. Las comisiones se confirman cuando el pedido se entrega.');
-	}
+		const pendientes = asientosDisponibles.filter(d => d.tipo !== 'reversa');
 
-	const montoCentavos = pendientes.reduce(
-		(acc, cur) => acc + (cur.monto_centavos || 0),
-		0
-	);
+		if (pendientes.length === 0) {
+			throw new Error('No hay comisiones confirmadas para liquidar. Las comisiones se confirman cuando el pedido se entrega.');
+		}
 
-	if (montoCentavos <= 0) {
-		throw new Error('El saldo pendiente no es positivo: no hay nada que liquidar.');
-	}
-
-	if (
-		input.montoCentavosEsperado !== undefined &&
-		input.montoCentavosEsperado !== montoCentavos
-	) {
-		throw new Error(
-			`El monto informado (${input.montoCentavosEsperado}) no coincide con el pendiente real (${montoCentavos}).`
+		const montoCentavos = pendientes.reduce(
+			(acc, cur) => acc + (cur.monto_centavos || 0),
+			0
 		);
+
+		if (montoCentavos <= 0) {
+			throw new Error('El saldo pendiente no es positivo: no hay nada que liquidar.');
+		}
+
+		if (
+			input.montoCentavosEsperado !== undefined &&
+			input.montoCentavosEsperado !== montoCentavos
+		) {
+			throw new Error(
+				`El monto informado (${input.montoCentavosEsperado}) no coincide con el pendiente real (${montoCentavos}).`
+			);
+		}
+
+		const fechas = pendientes.map((d) => new Date(d.$createdAt).getTime());
+		const desde = new Date(Math.min(...fechas));
+		const hasta = new Date(Math.max(...fechas));
+
+		const payout = await escribirDocumentoTolerante('payouts', {
+			profile_id: input.profileId,
+			monto_centavos: montoCentavos,
+			estado: 'pagado',
+			periodo_desde: desde.toISOString(),
+			periodo_hasta: hasta.toISOString(),
+			periodo: hasta.toISOString().substring(0, 7),
+			medio_pago: input.medioPago,
+			referencia_pago: input.referenciaPago,
+			pagado_at: new Date().toISOString(),
+			idempotency_key: input.idempotencyKey,
+			actor_id: input.actorProfileId,
+			notas: input.notas || `Liquidación de ${pendientes.length} devengo(s)`
+		});
+
+		for (const asiento of pendientes) {
+			await escribirDocumentoTolerante('commission_ledger', {
+				estado: 'liquidado',
+				payout_id: payout.$id
+			}, asiento.$id);
+		}
+
+		return { payoutId: payout.$id, montoCentavos, idempotencySkipped: false };
+	} catch (e) {
+		await liberar(claveReclamo);
+		throw e;
 	}
-
-	const fechas = pendientes.map((d) => new Date(d.$createdAt).getTime());
-	const desde = new Date(Math.min(...fechas));
-	const hasta = new Date(Math.max(...fechas));
-
-	const payout = await escribirDocumentoTolerante('payouts', {
-		profile_id: input.profileId,
-		monto_centavos: montoCentavos,
-		estado: 'pagado',
-		periodo_desde: desde.toISOString(),
-		periodo_hasta: hasta.toISOString(),
-		periodo: hasta.toISOString().substring(0, 7),
-		medio_pago: input.medioPago,
-		referencia_pago: input.referenciaPago,
-		pagado_at: new Date().toISOString(),
-		idempotency_key: input.idempotencyKey,
-		actor_id: input.actorProfileId,
-		notas: input.notas || `Liquidación de ${pendientes.length} devengo(s)`
-	});
-
-	for (const asiento of pendientes) {
-		await escribirDocumentoTolerante('commission_ledger', {
-			estado: 'liquidado',
-			payout_id: payout.$id
-		}, asiento.$id);
-	}
-
-	return { payoutId: payout.$id, montoCentavos, idempotencySkipped: false };
 }
 
 /**

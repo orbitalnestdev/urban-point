@@ -15,6 +15,7 @@
 
 import { Query, ID } from 'node-appwrite';
 import { createAdminClient } from './appwrite';
+import { intentarReclamar, liberar } from './locks';
 
 const DB = 'urbanpoint';
 export const COLECCION_SOLICITUDES = 'payout_requests';
@@ -128,6 +129,17 @@ export async function crearSolicitud(input: {
 }): Promise<SolicitudLiquidacion> {
 	const { databases } = createAdminClient();
 
+	// El llamador ya chequeó solicitudAbierta() antes de esto, pero es "leer,
+	// después actuar": un doble clic (conexión lenta, sin `disabled` en el
+	// formulario) puede pasar esa lectura dos veces antes de que cualquiera
+	// escriba. Este reclamo sí es atómico (ver src/lib/server/locks.ts) — se
+	// libera recién cuando la solicitud se resuelve (resolverSolicitud), no acá.
+	const claveReclamo = `open-payout-request:${input.profileId}`;
+	const reclamado = await intentarReclamar(claveReclamo, 'crearSolicitud');
+	if (!reclamado) {
+		throw new Error('Ya tenés una solicitud de cobro abierta.');
+	}
+
 	try {
 		const doc = await databases.createDocument(DB, COLECCION_SOLICITUDES, ID.unique(), {
 			profile_id: input.profileId,
@@ -138,6 +150,7 @@ export async function crearSolicitud(input: {
 		});
 		return doc as unknown as SolicitudLiquidacion;
 	} catch (e) {
+		await liberar(claveReclamo);
 		if (esColeccionFaltante(e)) throw new Error(AVISO_FALTA_COLECCION);
 		throw e;
 	}
@@ -153,6 +166,19 @@ export async function resolverSolicitud(input: {
 }): Promise<SolicitudLiquidacion> {
 	const { databases } = createAdminClient();
 
+	let actual: SolicitudLiquidacion | null = null;
+	try {
+		actual = (await databases.getDocument(DB, COLECCION_SOLICITUDES, input.solicitudId)) as unknown as SolicitudLiquidacion;
+	} catch (e) {
+		if (esColeccionFaltante(e)) throw new Error(AVISO_FALTA_COLECCION);
+		throw e;
+	}
+	// Sin esto se podía "aprobar" una solicitud ya rechazada, o pisar la nota
+	// de una ya resuelta, sin que nada lo impidiera.
+	if (!ESTADOS_ABIERTOS.includes(actual.estado)) {
+		throw new Error(`La solicitud ya está "${actual.estado}": no se puede volver a resolver.`);
+	}
+
 	const payload: Record<string, any> = {
 		estado: input.estado,
 		resuelto_at: new Date().toISOString(),
@@ -163,6 +189,12 @@ export async function resolverSolicitud(input: {
 
 	try {
 		const doc = await databases.updateDocument(DB, COLECCION_SOLICITUDES, input.solicitudId, payload);
+		// El reclamo de "solicitud abierta" (ver crearSolicitud) se libera
+		// recién cuando deja de estarlo — 'aprobada' sigue siendo un estado
+		// abierto (ver ESTADOS_ABIERTOS), así que todavía bloquea una nueva.
+		if (!ESTADOS_ABIERTOS.includes(input.estado)) {
+			await liberar(`open-payout-request:${actual.profile_id}`);
+		}
 		return doc as unknown as SolicitudLiquidacion;
 	} catch (e) {
 		if (esColeccionFaltante(e)) throw new Error(AVISO_FALTA_COLECCION);
