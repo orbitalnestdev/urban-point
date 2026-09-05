@@ -309,18 +309,43 @@ export async function revertirComisiones(orderId: string, motivo: string) {
 		// Idempotencia: si ya se revirtió, no se vuelve a compensar.
 		if (asiento.estado === 'revertido' || asiento.tipo === 'reversa') continue;
 
-		await escribirDocumentoTolerante('commission_ledger', {
-			profile_id: typeof asiento.profile_id === 'string' ? asiento.profile_id : asiento.profile_id?.$id,
-			order_id: orderId,
-			tipo: 'reversa',
-			estado: 'revertido',
-			monto_centavos: -(asiento.monto_centavos || 0),
-			motivo
-		});
+		const profileId = typeof asiento.profile_id === 'string' ? asiento.profile_id : asiento.profile_id?.$id;
 
-		await escribirDocumentoTolerante('commission_ledger', {
-			estado: 'revertido'
-		}, asiento.$id);
+		if (asiento.estado === 'liquidado') {
+			// La plata de este asiento ya salió (hay un payout real). Pisarlo a
+			// 'revertido' borraría el registro de que se pagó — el payout queda
+			// sin ningún asiento que lo explique — y ese dinero nunca se
+			// recupera de ningún lado, porque liquidarComisiones sólo suma
+			// asientos 'disponible'. En cambio: se deja el asiento original tal
+			// cual (es historia real) y se genera una deuda que se descuenta
+			// sola de la PRÓXIMA liquidación de este canillita.
+			//
+			// tipo 'ajuste', no 'reversa': liquidarComisiones y getCanillitaStats
+			// excluyen explícitamente todo lo que sea tipo 'reversa' de la suma
+			// (son sólo auditoría) — con ese tipo la deuda quedaría "disponible"
+			// pero invisible para el cálculo real, y nunca se descontaría de nada.
+			await escribirDocumentoTolerante('commission_ledger', {
+				profile_id: profileId,
+				order_id: orderId,
+				tipo: 'ajuste',
+				estado: 'disponible',
+				monto_centavos: -(asiento.monto_centavos || 0),
+				motivo: `${motivo} (ya liquidado — se descuenta de la próxima liquidación)`
+			});
+		} else {
+			await escribirDocumentoTolerante('commission_ledger', {
+				profile_id: profileId,
+				order_id: orderId,
+				tipo: 'reversa',
+				estado: 'revertido',
+				monto_centavos: -(asiento.monto_centavos || 0),
+				motivo
+			});
+
+			await escribirDocumentoTolerante('commission_ledger', {
+				estado: 'revertido'
+			}, asiento.$id);
+		}
 
 		revertidos++;
 	}
