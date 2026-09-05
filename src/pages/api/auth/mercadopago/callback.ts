@@ -13,7 +13,7 @@ export const prerender = false;
  * /canillita). El destino y dónde se guardan los tokens salen del
  * `state` firmado, no de nada que mande el cliente en la URL.
  */
-export const GET: APIRoute = async ({ request, url, cookies }) => {
+export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
 	const code = url.searchParams.get('code');
 	const stateFromUrl = url.searchParams.get('state');
 	const errorFromUrl = url.searchParams.get('error');
@@ -65,6 +65,20 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
 
 	const esPunto = statePayload.scopeTarget === 'point' && !!statePayload.pointId;
 	const volverA = esPunto ? '/canillita' : '/admin/configuracion#sec-pagos';
+
+	// La cookie+firma ya prueban que el navegador es el que arrancó el OAuth,
+	// pero no que siga siendo la MISMA persona: la ventana del state dura 15
+	// minutos, tiempo de sobra para que la sesión cambie (otro canillita en el
+	// mismo dispositivo, o un logout/login de por medio). Sin este chequeo, el
+	// token de Mercado Pago terminaba guardado en el punto de quien inició el
+	// flujo, no de quien efectivamente está logueado al volver de MP.
+	if (esPunto && locals.user?.profileId !== statePayload.profileId) {
+		console.warn('Callback OAuth MP de punto: la sesión actual no coincide con quien inició el vínculo.');
+		return new Response(null, {
+			status: 302,
+			headers: { Location: `/canillita?mp_error=sesion_distinta` }
+		});
+	}
 
 	try {
 		const tokens = await intercambiarCodigoPorTokens(code, redirectUri);

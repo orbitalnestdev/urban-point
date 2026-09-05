@@ -39,7 +39,7 @@ export const GET: APIRoute = async ({ locals, cookies, request, url }) => {
 		cookies.set('mp_oauth_state', state, {
 			path: '/',
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
+			secure: import.meta.env.PROD,
 			sameSite: 'lax',
 			maxAge: 900
 		});
