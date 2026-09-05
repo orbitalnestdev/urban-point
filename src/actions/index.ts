@@ -19,7 +19,7 @@ import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 import { invalidateSessionCache } from '../middleware';
 
 
-import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, confirmarComisionesDeOrden, getCanillitaStats } from '../lib/commissions';
+import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, confirmarComisionesDeOrden, getCanillitaStats, revertirComisiones, restaurarStockDeOrden } from '../lib/commissions';
 import { integrantesDeCombo } from '../lib/combos';
 import { crearSolicitud, solicitudAbierta, resolverSolicitud, cerrarSolicitudPorPago } from '../lib/server/payoutRequests';
 
@@ -284,72 +284,97 @@ export const server = {
 				const app = await db.getDocument('urbanpoint', 'canillita_applications', input.applicationId);
 				if (app.estado !== 'solicitado') throw new Error('La solicitud ya fue procesada.');
 
-				// 1. Crear o buscar usuario en Auth
-				let userId;
-				try {
-					const existingUsers = await users.list([Query.equal('email', app.email)]);
-					if (existingUsers.total > 0) {
-						userId = existingUsers.users[0].$id;
-					} else {
-						const newUser = await users.create(ID.unique(), app.email, undefined, undefined, app.nombre + ' ' + app.apellido);
-						userId = newUser.$id;
-					}
-				} catch(e) {
-					throw new Error('Error al gestionar el usuario Auth: ' + e);
-				}
-
-				// 2. Crear Perfil (Role: canillita)
-				let profile;
-				const existingProfiles = await db.listDocuments('urbanpoint', 'profiles', [
-					Query.equal('user_id', userId)
-				]);
-				if (existingProfiles.documents.length > 0) {
-					profile = existingProfiles.documents[0];
-					await db.updateDocument('urbanpoint', 'profiles', profile.$id, { role: 'canillita' });
-				} else {
-					profile = await db.createDocument('urbanpoint', 'profiles', ID.unique(), {
-						user_id: userId,
-						role: 'canillita',
-						nombre: app.nombre + ' ' + app.apellido,
-						email: app.email,
-						telefono: app.telefono,
-						saldo_disponible_centavos: 0
-					});
-				}
-
-				// 3. Crear Punto de Retiro (estado: activo) con toda la información
-				// completa. El slug es lo que le da su página propia en el sitio:
-				// sin él, /[slug] no matchea y el canillita aprobado se quedaba
-				// sin página hasta que un admin se la cargara a mano.
-				const slugPunto = await generarSlugPunto(app.nombre_comercial);
-
-				const pickupPoint = await db.createDocument('urbanpoint', 'pickup_points', ID.unique(), {
-					profile_id: profile.$id,
-					slug: slugPunto,
-					nombre_comercial: app.nombre_comercial,
-					direccion: app.direccion,
-					localidad: app.localidad || 'CABA',
-					provincia: app.provincia || 'CABA',
-					cbu: app.cbu || '',
-					condicion_fiscal: app.condicion_fiscal || 'Monotributo',
-					lat: app.lat,
-					lng: app.lng,
-					horarios: app.horarios,
-					estado: 'activo'
-				});
-
-				// 4. Crear Referral Code estandarizado
-				const codeStr = await generateUniqueReferralCode(app.nombre, app.apellido);
-				await db.createDocument('urbanpoint', 'referral_codes', ID.unique(), {
-					code: codeStr,
-					owner_id: profile.$id,
-					activo: true
-				});
-
-				// 5. Marcar como aprobado
+				// Se marca "aprobado" ACÁ, antes de crear nada, no al final: Appwrite
+				// no tiene compare-and-swap, así que esto no elimina la ventana de
+				// carrera ante dos aprobaciones simultáneas del mismo applicationId,
+				// pero la achica de "todo el alta" a un solo read-then-write.
 				await db.updateDocument('urbanpoint', 'canillita_applications', input.applicationId, {
 					estado: 'aprobado'
 				});
+
+				let profile: any;
+				let codeStr: string = '';
+				try {
+					// 1. Crear o buscar usuario en Auth
+					let userId;
+					try {
+						const existingUsers = await users.list([Query.equal('email', app.email)]);
+						if (existingUsers.total > 0) {
+							userId = existingUsers.users[0].$id;
+						} else {
+							const newUser = await users.create(ID.unique(), app.email, undefined, undefined, app.nombre + ' ' + app.apellido);
+							userId = newUser.$id;
+						}
+					} catch(e) {
+						throw new Error('Error al gestionar el usuario Auth: ' + e);
+					}
+
+					// 2. Crear Perfil (Role: canillita)
+					const existingProfiles = await db.listDocuments('urbanpoint', 'profiles', [
+						Query.equal('user_id', userId)
+					]);
+					if (existingProfiles.documents.length > 0) {
+						profile = existingProfiles.documents[0];
+						// Un email de solicitud que coincide con una cuenta de staff
+						// existente (admin/gestión) no se convierte en canillita en
+						// silencio: le pisaría el acceso a esa persona, y si era el
+						// único admin, la tienda se queda sin ninguno.
+						if (profile.role === 'admin' || profile.role === 'gestion') {
+							throw new Error(
+								`El email ${app.email} ya pertenece a una cuenta de ${profile.role === 'admin' ? 'Administrador' : 'Gestión'}. ` +
+								'No se puede convertir automáticamente en canillita — resolvé el conflicto de email a mano.'
+							);
+						}
+						await db.updateDocument('urbanpoint', 'profiles', profile.$id, { role: 'canillita' });
+					} else {
+						profile = await db.createDocument('urbanpoint', 'profiles', ID.unique(), {
+							user_id: userId,
+							role: 'canillita',
+							nombre: app.nombre + ' ' + app.apellido,
+							email: app.email,
+							telefono: app.telefono,
+							saldo_disponible_centavos: 0
+						});
+					}
+
+					// 3. Crear Punto de Retiro (estado: activo) con toda la información
+					// completa. El slug es lo que le da su página propia en el sitio:
+					// sin él, /[slug] no matchea y el canillita aprobado se quedaba
+					// sin página hasta que un admin se la cargara a mano.
+					const slugPunto = await generarSlugPunto(app.nombre_comercial);
+
+					await db.createDocument('urbanpoint', 'pickup_points', ID.unique(), {
+						profile_id: profile.$id,
+						slug: slugPunto,
+						nombre_comercial: app.nombre_comercial,
+						direccion: app.direccion,
+						localidad: app.localidad || 'CABA',
+						provincia: app.provincia || 'CABA',
+						cbu: app.cbu || '',
+						condicion_fiscal: app.condicion_fiscal || 'Monotributo',
+						lat: app.lat,
+						lng: app.lng,
+						horarios: app.horarios,
+						estado: 'activo'
+					});
+
+					// 4. Crear Referral Code estandarizado
+					codeStr = await generateUniqueReferralCode(app.nombre, app.apellido);
+					await db.createDocument('urbanpoint', 'referral_codes', ID.unique(), {
+						code: codeStr,
+						owner_id: profile.$id,
+						activo: true
+					});
+				} catch (e: any) {
+					// El estado ya había quedado en 'aprobado' para achicar la
+					// ventana de carrera (ver arriba). Si algo de esto falla, se
+					// revierte a 'solicitado' para poder reintentar en vez de
+					// dejar la solicitud "aprobada" a medias, sin punto de retiro.
+					await db.updateDocument('urbanpoint', 'canillita_applications', input.applicationId, {
+						estado: 'solicitado'
+					}).catch(() => {});
+					throw e;
+				}
 
 				// Enviar email de felicitaciones y bienvenida al Canillita
 				try {
@@ -815,20 +840,31 @@ export const server = {
 
 					const integrantes = integrantesDeCombo(p);
 					if (integrantes.length === 0) {
-						if ((Number(p.stock) || 0) < item.cantidad) {
+						// Se lee y se descuenta del mismo mapa que usan los combos: si
+						// este producto también es integrante de un combo más abajo en
+						// el carrito (o al revés), tienen que competir por el mismo
+						// stock en vez de validar cada uno contra el total sin gastar.
+						const stockPropio = disponible.get(p.$id) ?? (Number(p.stock) || 0);
+						if (stockPropio < item.cantidad) {
 							throw new Error(`El producto ${p.nombre} no está disponible o no hay stock suficiente.`);
 						}
+						disponible.set(p.$id, stockPropio - item.cantidad);
 					} else {
+						// Antes se consultaba disponible.get() para validar pero nunca
+						// se restaba: dos combos (o un combo y el mismo producto suelto)
+						// que comparten un integrante veían el mismo stock sin gastar y
+						// ambos pasaban, aunque entre los dos pidieran más de lo que hay.
 						for (const it of integrantes) {
 							let stockIntegrante = disponible.get(it.product_id);
 							if (stockIntegrante === undefined) {
 								const doc: any = await db.getDocument('urbanpoint', 'products', it.product_id).catch(() => null);
 								stockIntegrante = Number(doc?.stock) || 0;
-								disponible.set(it.product_id, stockIntegrante);
 							}
-							if (stockIntegrante < it.cantidad * item.cantidad) {
+							const requerido = it.cantidad * item.cantidad;
+							if (stockIntegrante < requerido) {
 								throw new Error(`No hay stock suficiente para armar ${p.nombre}.`);
 							}
+							disponible.set(it.product_id, stockIntegrante - requerido);
 						}
 					}
 
@@ -1565,6 +1601,16 @@ export const server = {
 						paid_at: new Date().toISOString()
 					});
 					await resolverComisiones(input.orderId);
+				} else if (targetState === 'reembolsado') {
+					// Mismo tratamiento que el reembolso/contracargo del webhook de MP
+					// (mercadopago.ts): antes esta rama sólo cambiaba el campo `estado`
+					// y dejaba la comisión del canillita cobrable y el stock sin volver,
+					// para un reembolso gestionado a mano (transferencia, efectivo).
+					await revertirComisiones(input.orderId, `Reversa por reembolso manual (admin ${actor.profileId})`);
+					await restaurarStockDeOrden(input.orderId);
+					await db.updateDocument('urbanpoint', 'orders', input.orderId, {
+						estado: 'reembolsado'
+					});
 				} else {
 					await db.updateDocument('urbanpoint', 'orders', input.orderId, {
 						estado: targetState
