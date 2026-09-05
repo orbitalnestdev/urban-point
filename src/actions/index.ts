@@ -1097,6 +1097,40 @@ export const server = {
 		}
 	}),
 
+	/** Desvincula la cuenta de Mercado Pago del punto propio del canillita logueado. */
+	disconnectMercadoPagoPunto: defineAction({
+		accept: 'json',
+		input: z.object({}),
+		handler: async (_input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'canillita') {
+					throw new Error('Solo un canillita puede desvincular el Mercado Pago de su propio punto.');
+				}
+
+				const puntos = await db.listDocuments('urbanpoint', 'pickup_points', [
+					Query.equal('profile_id', ctx.locals.user.profileId),
+					Query.limit(1)
+				]);
+				const punto = puntos.documents[0];
+				if (!punto) throw new Error('No se encontró un punto de retiro asociado a tu cuenta.');
+
+				await db.updateDocument('urbanpoint', 'pickup_points', punto.$id, {
+					mp_user_id: '',
+					mp_access_token: '',
+					mp_refresh_token: '',
+					mp_public_key: '',
+					mp_token_expires_at: '',
+					mp_connected_at: '',
+					mp_status: 'desconectado'
+				});
+
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
+			}
+		}
+	}),
+
 	auth_login: defineAction({
 		accept: 'form',
 		input: z.object({
