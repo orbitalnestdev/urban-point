@@ -2862,6 +2862,25 @@ export const server = {
 					throw new Error('Solo los administradores pueden gestionar categorías');
 				}
 
+				// Sin esto se podía poner una categoría como padre de sí misma o de
+				// su propio descendiente: el árbol admin y la vitrina sólo recorren
+				// desde raíces reales, así que esa rama (con sus productos)
+				// desaparecía en silencio de los dos lados sin borrarse de la base.
+				if (input.id && input.parent_id) {
+					if (input.parent_id === input.id) {
+						throw new Error('Una categoría no puede ser madre de sí misma.');
+					}
+					let cursor: string | null = input.parent_id;
+					for (let i = 0; cursor && i < 20; i++) {
+						if (cursor === input.id) {
+							throw new Error('Esa categoría es descendiente de la que estás editando: crearía un ciclo.');
+						}
+						const doc: any = await db.getDocument('urbanpoint', 'categories', cursor).catch(() => null);
+						const padre = doc?.parent_id;
+						cursor = typeof padre === 'string' ? padre : (padre?.$id ?? null);
+					}
+				}
+
 				const slugBase = input.slug || input.nombre;
 				const cleanSlug = slugBase.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 				const cleanImg = (input.imagen_url || '').trim();
@@ -2989,6 +3008,20 @@ export const server = {
 				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
 					throw new Error('Solo los administradores pueden eliminar categorías');
 				}
+
+				// Sin este chequeo, productos y subcategorías quedaban con un
+				// categoria_id/parent_id apuntando a un documento inexistente.
+				const [hijos, productosDeLaCategoria] = await Promise.all([
+					db.listDocuments('urbanpoint', 'categories', [Query.equal('parent_id', input.id), Query.limit(1)]),
+					db.listDocuments('urbanpoint', 'products', [Query.equal('categoria_id', input.id), Query.limit(1)])
+				]);
+				if (hijos.documents.length > 0) {
+					throw new Error('Esta categoría tiene subcategorías. Movelas o eliminalas primero.');
+				}
+				if (productosDeLaCategoria.documents.length > 0) {
+					throw new Error('Esta categoría tiene productos asociados. Reasignalos a otra categoría primero.');
+				}
+
 				await db.deleteDocument('urbanpoint', 'categories', input.id);
 				invalidateCatalogCache();
 				return { success: true };

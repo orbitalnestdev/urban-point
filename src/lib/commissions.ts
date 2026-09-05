@@ -200,9 +200,17 @@ export async function resolverComisiones(orderId: string) {
 		// 1. Determinar quién es el canillita de retiro (Fee de Logística)
 		let pickupProfileId: string | null = null;
 		if (order.pickup_point_id) {
-			const pickupPoint = await db.getDocument('urbanpoint', 'pickup_points', typeof order.pickup_point_id === 'string' ? order.pickup_point_id : order.pickup_point_id.$id);
-			if (pickupPoint.profile_id) {
-				pickupProfileId = typeof pickupPoint.profile_id === 'string' ? pickupPoint.profile_id : pickupPoint.profile_id.$id;
+			// Si el punto se borró (deletePickupPoint no valida pedidos en
+			// curso), este 404 tiraba toda la función — incluida la comisión de
+			// referido, que no depende del punto — y la orden quedaba pagada
+			// sin ningún asiento de comisión, sin reintento posible.
+			try {
+				const pickupPoint = await db.getDocument('urbanpoint', 'pickup_points', typeof order.pickup_point_id === 'string' ? order.pickup_point_id : order.pickup_point_id.$id);
+				if (pickupPoint.profile_id) {
+					pickupProfileId = typeof pickupPoint.profile_id === 'string' ? pickupPoint.profile_id : pickupPoint.profile_id.$id;
+				}
+			} catch (e) {
+				console.warn(`Punto de retiro ${order.pickup_point_id} de la orden ${orderId} ya no existe; se sigue sin comisión de logística.`, e);
 			}
 		}
 
@@ -239,7 +247,13 @@ export async function resolverComisiones(orderId: string) {
 							tipo: 'fee_logistica',
 							estado: 'pendiente',
 							monto_centavos: cents,
-							tasa_bp_snapshot: rule.valor,
+							// tasa_bp_snapshot está pensado para un % (0-10000 bp) y así lo
+							// tipó el esquema; en una regla monto_fijo, rule.valor son
+							// centavos (potencialmente muy por encima de ese rango) — sólo
+							// se guarda cuando de verdad es una tasa, para no arriesgar el
+							// asiento entero por un valor fuera de rango en un campo que
+							// es sólo de auditoría.
+							...(rule.tipo !== 'monto_fijo' ? { tasa_bp_snapshot: rule.valor } : {}),
 							motivo: `Fee logística por item ${product.nombre}`
 						});
 					}
@@ -264,7 +278,7 @@ export async function resolverComisiones(orderId: string) {
 							tipo: 'comision_referido',
 							estado: 'pendiente',
 							monto_centavos: cents,
-							tasa_bp_snapshot: rule.valor,
+							...(rule.tipo !== 'monto_fijo' ? { tasa_bp_snapshot: rule.valor } : {}),
 							motivo: `Referido venta de ${product.nombre}`
 						});
 					}

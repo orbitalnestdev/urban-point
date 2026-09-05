@@ -76,7 +76,11 @@ let totalPages = 1;
 
 try {
 	const [rawProfiles, rawOrders] = await Promise.all([
-		fetchAllDocs('profiles', [Query.notEqual('role', 'admin'), Query.orderDesc('$createdAt')]),
+		// 'gestion' es staff interno, no un cliente: sin este segundo filtro
+		// aparecía listado como "CLIENTE" (el ternario de más abajo no conoce
+		// ese rol) y su ficha podía terminar cambiándole el rol por error, sin
+		// que nada en esa pantalla supiera que alguna vez fue "gestión".
+		fetchAllDocs('profiles', [Query.notEqual('role', 'admin'), Query.notEqual('role', 'gestion'), Query.orderDesc('$createdAt')]),
 		fetchOrdersLight()
 	]);
 
