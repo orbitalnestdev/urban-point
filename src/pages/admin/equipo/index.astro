@@ -26,8 +26,13 @@ if (Astro.request.method === 'POST') {
         if (action === 'invite') {
             const email = formData.get('email')?.toString().trim();
             const nombre = formData.get('nombre')?.toString().trim();
-            const roleInput = formData.get('role')?.toString() || 'admin';
-            const profileRole = 'admin';
+            const roleInput = formData.get('role')?.toString() || 'gestion';
+            // El <select> del modal sólo ofrece 'gestion' o 'admin': cualquier
+            // otro valor (manipulado a mano) cae al más restrictivo, nunca a
+            // admin. Antes esta línea ignoraba roleInput y hardcodeaba
+            // 'admin' sin importar qué se eligiera en el formulario — toda
+            // invitación otorgaba acceso total.
+            const profileRole = roleInput === 'admin' ? 'admin' : 'gestion';
 
             if (!email || !nombre) {
                 throw new Error("El email y el nombre son obligatorios.");
@@ -51,7 +56,19 @@ if (Astro.request.method === 'POST') {
             ]);
 
             if (existing.documents.length > 0) {
-                await databases.updateDocument('urbanpoint', 'profiles', existing.documents[0].$id, {
+                const perfilExistente = existing.documents[0];
+                // "Invitar" a un email que ya es admin, eligiendo "Gestión", es
+                // otra forma de degradarlo — la misma protección que ya existe
+                // para "change_role" tiene que aplicar acá también.
+                if (perfilExistente.role === 'admin' && profileRole !== 'admin') {
+                    const allAdmins = await databases.listDocuments('urbanpoint', 'profiles', [
+                        Query.equal('role', 'admin')
+                    ]);
+                    if (allAdmins.documents.length <= 1) {
+                        throw new Error("No se puede degradar al único Administrador de la tienda.");
+                    }
+                }
+                await databases.updateDocument('urbanpoint', 'profiles', perfilExistente.$id, {
                     role: profileRole,
                     nombre
                 });
