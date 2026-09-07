@@ -185,12 +185,18 @@ export async function aplicarEstadoDePago(
 				// el email real del cliente sale de su profile (customer_id).
 				let customerEmail = order.customer_email || order.guest_email;
 				let customerName = order.customer_name || order.guest_name;
+				let customerPhone = order.guest_phone || '';
 				const custId = typeof order.customer_id === 'string' ? order.customer_id : order.customer_id?.$id;
-				if (!customerEmail && custId) {
+				if (custId) {
 					const custProf: any = await db.getDocument('urbanpoint', 'profiles', custId).catch(() => null);
 					if (custProf) {
-						customerEmail = custProf.email || '';
+						customerEmail = customerEmail || custProf.email || '';
 						customerName = customerName || custProf.nombre || '';
+						// Sólo para clientes con cuenta: lo cargan (si quieren) en
+						// "Mi cuenta", no se pide en el registro. Sin esto, un
+						// invitado sí tenía teléfono en el aviso y un cliente
+						// logueado no, aunque lo hubiera cargado.
+						customerPhone = customerPhone || custProf.telefono || '';
 					}
 				}
 				let canillitaEmail = '';
@@ -202,8 +208,21 @@ export async function aplicarEstadoDePago(
 				if (ptId) {
 					const pt: any = await db.getDocument('urbanpoint', 'pickup_points', ptId).catch(() => null);
 					if (pt) {
-						canillitaEmail = pt.email;
-						canillitaNombre = pt.nombre_comercial;
+						// pickup_points NO tiene un atributo "email" (nunca lo tuvo) —
+						// pt.email daba siempre undefined, así que sendOrderNotificationEmails
+						// nunca mandaba nada acá (revisa `if (order.canillitaEmail)`):
+						// ningún pedido pagado por Mercado Pago le llegó jamás al
+						// canillita por este camino. El email real vive en el profile
+						// del dueño del punto — mismo patrón que ya usa createCheckout
+						// para los pedidos "a convenir".
+						const canId = typeof pt.profile_id === 'string' ? pt.profile_id : pt.profile_id?.$id;
+						if (canId) {
+							const canProf: any = await db.getDocument('urbanpoint', 'profiles', canId).catch(() => null);
+							if (canProf) {
+								canillitaEmail = canProf.email || '';
+								canillitaNombre = canProf.nombre || pt.nombre_comercial;
+							}
+						}
 						pickupNodeName = pt.nombre_comercial;
 						pickupNodeAddress = pt.direccion + (pt.localidad ? `, ${pt.localidad}` : '');
 					}
@@ -220,6 +239,7 @@ export async function aplicarEstadoDePago(
 					pickup_code_hash: order.pickup_code_hash,
 					customerName,
 					customerEmail,
+					customerPhone,
 					canillitaEmail,
 					canillitaNombre,
 					pickupNodeName,

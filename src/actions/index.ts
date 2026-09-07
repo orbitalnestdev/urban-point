@@ -1082,6 +1082,10 @@ export const server = {
 								const custProf = await db.getDocument('urbanpoint', 'profiles', profileId);
 								customerName = custProf.nombre || '';
 								customerEmail = custProf.email || '';
+								// Sólo lo tiene si lo cargó en "Mi cuenta" — no se pide al
+								// registrarse. Mejor que nada, pero no garantiza que
+								// siempre haya un teléfono para un cliente con cuenta.
+								customerPhone = custProf.telefono || '';
 							} catch (e) {}
 						}
 
