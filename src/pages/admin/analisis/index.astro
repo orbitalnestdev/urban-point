@@ -11,22 +11,27 @@ const periodParam = Astro.url.searchParams.get('periodo') || '30';
 const { databases } = createAdminClient();
 let orders: any[] = [];
 let pickupPoints: any[] = [];
-let categories: any[] = [];
+let truncado = false;
 
 try {
-	// Las tres queries son independientes: correrlas en serie triplicaba la
-	// latencia de la página sin necesidad.
-	const [resOrders, resPoints, resCats] = await Promise.all([
+	// Las dos queries son independientes: correrlas en serie duplicaba la
+	// latencia de la página sin necesidad. (Antes traía también `categories`,
+	// sin usarla en ningún lado de este archivo — se sacó esa query.)
+	const [resOrders, resPoints] = await Promise.all([
 		databases.listDocuments('urbanpoint', 'orders', [
 			Query.orderDesc('$createdAt'),
 			Query.limit(500)
 		]),
-		databases.listDocuments('urbanpoint', 'pickup_points', [Query.limit(100)]),
-		databases.listDocuments('urbanpoint', 'categories', [Query.limit(100)])
+		databases.listDocuments('urbanpoint', 'pickup_points', [Query.limit(100)])
 	]);
-	orders = resOrders.documents.filter(o => o.estado !== 'cancelado');
+	// Un reembolso no toca `total` (ver updateOrderStatus): sin excluirlo,
+	// la plata ya devuelta seguía sumando a ventas/ranking de puntos.
+	orders = resOrders.documents.filter(o => o.estado !== 'cancelado' && o.estado !== 'reembolsado');
+	// Con más de 500 pedidos totales, "Histórico" u otro rango amplio queda
+	// calculado sobre un recorte arbitrario (los 500 más recientes) sin que
+	// se note — mejor avisarlo que mentir con un número que parece completo.
+	truncado = resOrders.documents.length >= 500;
 	pickupPoints = resPoints.documents;
-	categories = resCats.documents;
 } catch (e) {
 	console.error("Analysis Error:", e);
 }
@@ -123,6 +128,12 @@ const newCustomers = totalCustomers - recurrentCustomers;
 				))}
 			</div>
 		</header>
+
+		{truncado && (
+			<div class="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold px-4 py-3 rounded-xl">
+				⚠️ Hay más de 500 pedidos en total: estas estadísticas se calculan sólo sobre los 500 más recientes, no sobre el histórico completo.
+			</div>
+		)}
 
 		{/* 1. Modalidad de Entrega: Retiro en Punto vs Envío */}
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-6">

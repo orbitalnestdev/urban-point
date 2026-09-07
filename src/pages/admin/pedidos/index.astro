@@ -124,6 +124,12 @@ try {
 	console.error("Error loading orders page:", e);
 }
 
+// Con más de 1000 pedidos totales, la lista (y cualquier búsqueda dentro de
+// ella) opera sólo sobre los 1000 más recientes — recurrencia del mismo
+// límite que ya se subió una vez antes (de 200 a 1000, ver el comentario de
+// arriba). Mejor avisarlo que dejar que un pedido viejo "desaparezca".
+const pedidosTruncados = allOrders.length >= 1000;
+
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
 const counts = {
@@ -185,6 +191,12 @@ const getStatusClass = (estado: string) => {
 				</button>
 			</div>
 		</header>
+
+		{pedidosTruncados && (
+			<div class="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold px-4 py-3 rounded-xl">
+				⚠️ Hay más de 1000 pedidos: esta lista (filtros y buscador incluidos) sólo ve los 1000 más recientes.
+			</div>
+		)}
 
 		{/* Cards Métricas Vivas */}
 		<div class="grid grid-cols-1 md:grid-cols-4 gap-4">

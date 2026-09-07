@@ -41,6 +41,11 @@ try {
 	console.error("Dashboard error:", e);
 }
 
+// Con más de 200 pedidos totales, los KPIs de "pedidos atascados" se
+// calculan sólo sobre los 200 más recientes — un pedido viejo trabado queda
+// afuera de esa ventana sin que la tarjeta lo avise.
+const pedidosTruncados = orders.length >= 200;
+
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
 const CLASES_ESTADO: Record<EstadoPedido, string> = {
@@ -70,13 +75,16 @@ const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).
 const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Sales calculations
+// Sales calculations. Un reembolso no toca `total` (ver updateOrderStatus):
+// sin excluirlo acá, la plata que ya se devolvió seguía contando como venta.
+const esVentaReal = (o: any) => o.estado !== 'cancelado' && o.estado !== 'reembolsado';
+
 const salesTodayCentavos = orders
-	.filter(o => o.estado !== 'cancelado' && new Date(o.$createdAt).getTime() >= startOfToday)
+	.filter(o => esVentaReal(o) && new Date(o.$createdAt).getTime() >= startOfToday)
 	.reduce((acc, o) => acc + (o.total || 0), 0);
 
 const salesMonthCentavos = orders
-	.filter(o => o.estado !== 'cancelado' && new Date(o.$createdAt).getTime() >= startOfMonth)
+	.filter(o => esVentaReal(o) && new Date(o.$createdAt).getTime() >= startOfMonth)
 	.reduce((acc, o) => acc + (o.total || 0), 0);
 
 // Actionable metrics
@@ -87,8 +95,11 @@ const esperandoRetiro = (o: any) => o.estado === 'en_punto' || o.estado === 'pre
 const listosParaRetiro = orders.filter(esperandoRetiro).length;
 const sinRetirarStale = orders.filter(o => esperandoRetiro(o) && (now.getTime() - new Date(o.$createdAt).getTime()) > SEVEN_DAYS_MS).length;
 
-const sinStockCount = products.filter(p => p.stock === 0).length;
-const stockCriticoCount = products.filter(p => p.stock > 0 && p.stock <= 5).length;
+// Un producto en borrador todavía no se vende: contarlo acá infla la alerta
+// con algo que no es un problema operativo real (ver /admin/catalogo, que sí
+// excluye 'borrador' en el mismo cálculo).
+const sinStockCount = products.filter(p => p.stock === 0 && p.estado !== 'borrador').length;
+const stockCriticoCount = products.filter(p => p.stock > 0 && p.stock <= 5 && p.estado !== 'borrador').length;
 const totalPendingCommissionsCentavos = pendingLedgers.reduce((acc, l) => acc + (l.monto_centavos || 0), 0);
 
 const recentOrders = orders.slice(0, 8);
@@ -115,6 +126,12 @@ const recentOrders = orders.slice(0, 8);
 				</a>
 			</div>
 		</header>
+
+		{pedidosTruncados && (
+			<div class="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold px-4 py-3 rounded-xl">
+				⚠️ Hay más de 200 pedidos: estas métricas (incluidos los pedidos atascados) se calculan sólo sobre los 200 más recientes.
+			</div>
+		)}
 
 		{/* 1. Ventas del Día y del Mes */}
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -14,6 +14,27 @@ const relId = (rel: any): string =>
 	typeof rel === 'string' ? rel : rel?.$id || '';
 
 /**
+ * Trae TODOS los documentos que matchean, paginando con cursor. El
+ * `Query.limit(5000)` fijo que tenía cada reporte antes truncaba en
+ * silencio cualquier rango con más filas que eso — para un reporte que se
+ * usa para conciliar plata, un CSV incompleto sin avisar es peor que uno
+ * que tarda un poco más en generarse.
+ */
+async function fetchAllDocuments(databases: any, collection: string, queries: any[]) {
+	const out: any[] = [];
+	let cursor: string | null = null;
+	while (true) {
+		const q = [...queries, Query.limit(500)];
+		if (cursor) q.push(Query.cursorAfter(cursor));
+		const page = await databases.listDocuments('urbanpoint', collection, q);
+		out.push(...page.documents);
+		if (page.documents.length < 500) break;
+		cursor = page.documents[page.documents.length - 1].$id;
+	}
+	return out;
+}
+
+/**
  * GET /api/admin/reports?type=ventas|comisiones|liquidaciones|inventario
  *
  * Genera los CSV del Centro de Reportes. Los cuatro botones del panel
@@ -44,13 +65,32 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
 	// Rango de fechas: default últimos 30 días. Un valor inválido se ignora en
 	// favor del default para no romper la descarga.
-	const parseIso = (v: string | null): Date | null => {
+	//
+	// El <input type="date"> del panel manda "YYYY-MM-DD" sin hora. Pasarlo
+	// directo a `new Date(v)` lo interpreta como medianoche UTC, no medianoche
+	// en Argentina (UTC-3, sin horario de verano desde 2009) — con eso, pedir
+	// un solo día como "desde" y "hasta" caía en el mismo instante UTC y el
+	// reporte salía vacío; en general, todo el día "hasta" quedaba afuera.
+	const ARG_OFFSET_MS = 3 * 60 * 60 * 1000;
+	const soloFecha = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+	const parseInicioArg = (v: string | null): Date | null => {
 		if (!v) return null;
+		const m = soloFecha.exec(v);
+		if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]) + ARG_OFFSET_MS);
 		const d = new Date(v);
 		return isNaN(d.getTime()) ? null : d;
 	};
-	const hasta = parseIso(url.searchParams.get('hasta')) || new Date();
-	const desde = parseIso(url.searchParams.get('desde')) ||
+	const parseFinArg = (v: string | null): Date | null => {
+		if (!v) return null;
+		const m = soloFecha.exec(v);
+		if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]) + ARG_OFFSET_MS + 24 * 60 * 60 * 1000 - 1);
+		const d = new Date(v);
+		return isNaN(d.getTime()) ? null : d;
+	};
+
+	const hasta = parseFinArg(url.searchParams.get('hasta')) || new Date();
+	const desde = parseInicioArg(url.searchParams.get('desde')) ||
 		new Date(hasta.getTime() - 30 * 24 * 60 * 60 * 1000);
 
 	// El inventario es una foto del stock actual: filtrarlo por fecha de alta
@@ -65,12 +105,11 @@ export const GET: APIRoute = async ({ locals, url }) => {
 		let rows: Array<Record<string, any>> = [];
 
 		if (type === 'ventas') {
-			const res = await databases.listDocuments('urbanpoint', 'orders', [
+			const docs = await fetchAllDocuments(databases, 'orders', [
 				...dateQueries,
-				Query.orderDesc('$createdAt'),
-				Query.limit(5000)
+				Query.orderDesc('$createdAt')
 			]);
-			rows = res.documents.map((o: any) => ({
+			rows = docs.map((o: any) => ({
 				numero: o.numero || o.$id,
 				fecha: o.$createdAt,
 				estado: o.estado || '',
@@ -80,26 +119,27 @@ export const GET: APIRoute = async ({ locals, url }) => {
 				total: (o.total || 0) / 100
 			}));
 		} else if (type === 'comisiones') {
-			const res = await databases.listDocuments('urbanpoint', 'commission_ledger', [
+			const docs = await fetchAllDocuments(databases, 'commission_ledger', [
 				...dateQueries,
-				Query.orderDesc('$createdAt'),
-				Query.limit(5000)
+				Query.orderDesc('$createdAt')
 			]);
-			rows = res.documents.map((l: any) => ({
+			rows = docs.map((l: any) => ({
 				fecha: l.$createdAt,
 				tipo: l.tipo || '',
 				estado: l.estado || '',
 				monto: (l.monto_centavos || 0) / 100,
 				motivo: l.motivo || '',
+				// Sin esto no se podía saber a qué canillita corresponde cada
+				// fila — el reporte de liquidaciones sí lo trae (ver abajo).
+				profile_id: relId(l.profile_id),
 				order_id: relId(l.order_id)
 			}));
 		} else if (type === 'liquidaciones') {
-			const res = await databases.listDocuments('urbanpoint', 'payouts', [
+			const docs = await fetchAllDocuments(databases, 'payouts', [
 				...dateQueries,
-				Query.orderDesc('$createdAt'),
-				Query.limit(5000)
+				Query.orderDesc('$createdAt')
 			]);
-			rows = res.documents.map((p: any) => ({
+			rows = docs.map((p: any) => ({
 				fecha: p.$createdAt,
 				profile_id: relId(p.profile_id),
 				monto: (p.monto_centavos || 0) / 100,
@@ -107,11 +147,10 @@ export const GET: APIRoute = async ({ locals, url }) => {
 				referencia: p.referencia_pago || p.idempotency_key || ''
 			}));
 		} else {
-			const res = await databases.listDocuments('urbanpoint', 'products', [
-				Query.orderDesc('$createdAt'),
-				Query.limit(5000)
+			const docs = await fetchAllDocuments(databases, 'products', [
+				Query.orderDesc('$createdAt')
 			]);
-			rows = res.documents.map((p: any) => ({
+			rows = docs.map((p: any) => ({
 				sku: p.sku || '',
 				nombre: p.nombre || '',
 				estado: p.estado || '',
