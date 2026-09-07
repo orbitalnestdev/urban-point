@@ -791,9 +791,13 @@ export const server = {
 		handler: async (input, ctx) => {
 			try {
 				let profileId = null;
+				let clientProfile: any = null;
 				try {
 					const profile = await getClientProfile(ctx);
-					if (profile) profileId = profile.$id;
+					if (profile) {
+						profileId = profile.$id;
+						clientProfile = profile;
+					}
 				} catch (e) {
 					console.error("No profile attached to checkout:", e);
 				}
@@ -809,6 +813,14 @@ export const server = {
 							error: 'Para comprar sin cuenta necesitamos tu nombre y un teléfono de contacto.'
 						};
 					}
+				} else if (!clientProfile?.telefono?.trim() && !input.guestPhone?.trim()) {
+					// Con cuenta pero sin teléfono cargado en el perfil: se le pide
+					// acá también (mismo criterio que un invitado — la clienta lo
+					// quiere siempre, no sólo para compras sin cuenta).
+					return {
+						success: false,
+						error: 'Necesitamos un teléfono de contacto para tu pedido.'
+					};
 				}
 
 				let referralCodeId = null;
@@ -1017,29 +1029,32 @@ export const server = {
 
 				// Cobro directo del canillita: si el punto tiene su propia cuenta de
 				// Mercado Pago conectada, ESA cuenta cobra el pedido completo (precio
-				// público, igual que siempre) — la plataforma no cobra nada acá. Se
-				// resuelve antes de crear la orden para no dejar un pedido a medio
-				// armar si el punto en realidad no tiene MP conectado. mp_enabled (la
-				// cuenta general de la tienda) queda deliberadamente afuera de este
-				// camino: no hay fallback a la cuenta de la plataforma.
+				// público, igual que siempre) y no la general de la tienda. La clienta
+				// decidió por ahora una sola cuenta general para todo, así que esto
+				// pasó de ser obligatorio a ser sólo una prioridad: si el punto tiene
+				// cuenta propia se usa esa, si no, más abajo se sigue con la general
+				// (obtenerTokenPlataformaValido) — nunca se rechaza el pedido por esto.
 				let tokenVendedorDirecto: string | null = null;
-				if (input.paymentMethod === 'mercadopago') {
-					tokenVendedorDirecto = finalPickupPointId
-						? await obtenerTokenVendedorValido(finalPickupPointId)
-						: null;
-					if (!tokenVendedorDirecto) {
-						return {
-							success: false,
-							error: 'Este punto de retiro todavía no tiene Mercado Pago conectado. Elegí otro medio de pago.'
-						};
+				if (input.paymentMethod === 'mercadopago' && finalPickupPointId) {
+					tokenVendedorDirecto = await obtenerTokenVendedorValido(finalPickupPointId);
+					if (tokenVendedorDirecto) {
+						orderPayload.cobro_directo_canillita = true;
 					}
-					orderPayload.cobro_directo_canillita = true;
 				}
 				if (input.direccionEnvio) {
 					orderPayload.direccion_envio = input.direccionEnvio;
 				}
 				if (profileId) {
 					orderPayload.customer_id = profileId;
+					// Perfil sin teléfono: lo que acaba de completar en este pedido
+					// (validado más arriba) se guarda en la orden para el aviso al
+					// canillita, y en el perfil para no volver a pedirlo la próxima vez.
+					if (!clientProfile?.telefono?.trim() && input.guestPhone?.trim()) {
+						const telefonoNuevo = input.guestPhone.trim().slice(0, 50);
+						orderPayload.guest_phone = telefonoNuevo;
+						db.updateDocument('urbanpoint', 'profiles', profileId, { telefono: telefonoNuevo })
+							.catch((e: any) => console.warn(`No se pudo guardar el teléfono en el perfil ${profileId}:`, e));
+					}
 				} else {
 					// Validado más arriba: sin cuenta, estos dos son obligatorios.
 					orderPayload.guest_name = input.guestName!.trim().slice(0, 255);
@@ -1082,10 +1097,12 @@ export const server = {
 								const custProf = await db.getDocument('urbanpoint', 'profiles', profileId);
 								customerName = custProf.nombre || '';
 								customerEmail = custProf.email || '';
-								// Sólo lo tiene si lo cargó en "Mi cuenta" — no se pide al
-								// registrarse. Mejor que nada, pero no garantiza que
-								// siempre haya un teléfono para un cliente con cuenta.
-								customerPhone = custProf.telefono || '';
+								// El fallback va DESPUÉS: si el cliente acaba de cargar el
+								// teléfono en este mismo pedido (más arriba, unos milisegundos
+								// antes), este getDocument puede llegar a leer el perfil todavía
+								// sin ese guardado propagado — sobreescribir con '' perdería el
+								// dato que ya está bien en orderPayload.guest_phone.
+								customerPhone = customerPhone || custProf.telefono || '';
 							} catch (e) {}
 						}
 
