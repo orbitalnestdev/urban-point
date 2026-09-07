@@ -99,6 +99,10 @@ const displayAdminName = adminName ?? Astro.locals?.user?.name ?? 'Admin';
 					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
 					Liquidaciones
 				</a>
+				<a href="/admin/comisiones" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm whitespace-nowrap text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors">
+					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+					Comisiones
+				</a>
 
 				{isAdmin && (
 					<>

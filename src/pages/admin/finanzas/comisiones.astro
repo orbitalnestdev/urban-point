@@ -5,6 +5,15 @@ import { Query } from 'node-appwrite';
 
 export const prerender = false;
 
+// Sólo lectura ("el pago real se hace en /admin/liquidaciones", ver más
+// abajo), pero muestra el CBU de cada canillita — sin este chequeo, una
+// cuenta 'gestion' podía verlo por URL directa, algo que sí se cuida en
+// /admin/comisiones y /admin/liquidaciones (ambas admin-only).
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') {
+	return Astro.redirect('/');
+}
+
 const { databases } = createAdminClient();
 let ledgers: any[] = [];
 let pickupPoints: any[] = [];

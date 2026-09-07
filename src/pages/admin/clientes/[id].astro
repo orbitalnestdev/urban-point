@@ -7,6 +7,12 @@ import { ETIQUETAS, normalizarEstadoPedido, type EstadoPedido } from '../../../l
 export const prerender = false;
 
 const { id } = Astro.params;
+// El backend (updateProfileRole) ya exige admin estricto para esto, pero el
+// <select> de más abajo ofrecía "Administrador" también a una cuenta
+// 'gestion' que abriera esta ficha — mostrar una opción que el propio
+// visor no puede usar es el mismo patrón de "la UI no refleja el permiso
+// real" que se vino corrigiendo en el resto del panel.
+const esAdmin = Astro.locals.user?.role === 'admin';
 const { databases } = createAdminClient();
 
 let profile = null;
@@ -184,7 +190,7 @@ const getStatusLabel = (estado: string) => {
 						<option value="cliente" selected={profile.role === 'cliente'}>Cliente B2C</option>
 						<option value="canillita" selected={profile.role === 'canillita'}>Canillita Afiliado</option>
 						<option value="distribuidor" selected={profile.role === 'distribuidor'}>Distribuidor (Precio Mayorista)</option>
-						<option value="admin" selected={profile.role === 'admin'}>Administrador</option>
+						{esAdmin && <option value="admin" selected={profile.role === 'admin'}>Administrador</option>}
 					</select>
 					<p class="text-[10px] text-slate-400">El rol distribuidor se asigna directamente desde el panel sin flujo de alta público.</p>
 				</div>

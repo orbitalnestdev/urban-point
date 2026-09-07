@@ -5,6 +5,16 @@ import { Query } from 'node-appwrite';
 
 export const prerender = false;
 
+// Página superada por /admin/liquidaciones, pero sigue siendo accesible por
+// URL directa. A diferencia de /admin/comisiones y /admin/liquidaciones (que
+// sí son admin-only), esta no chequeaba rol: el middleware deja pasar a
+// 'gestion' a /admin/** salvo excepciones puntuales, así que esa cuenta
+// podía entrar acá aunque el resto del panel financiero le esté vedado.
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') {
+	return Astro.redirect('/');
+}
+
 const { databases } = createAdminClient();
 let ledgers: any[] = [];
 
