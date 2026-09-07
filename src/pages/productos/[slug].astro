@@ -168,9 +168,24 @@ const sinStock = unidadesDisponibles !== null
 // se sanea para cortar scripts/handlers embebidos (XSS almacenado).
 const descripcionSegura = product.descripcion ? sanitizeRichHtml(product.descripcion) : '';
 
+// El editor admin carga esto desde hace rato (pestaña SEO) pero nada lo leía
+// del lado público: el trabajo del admin no llegaba nunca a Google ni a
+// redes sociales. `seo_config` es un string JSON (mismo patrón que
+// combo_items/envio_config), puede faltar o venir vacío.
+let seoConfig: { titulo?: string; descripcion?: string; indexar?: boolean } = {};
+try {
+	seoConfig = product.seo_config
+		? (typeof product.seo_config === 'string' ? JSON.parse(product.seo_config) : product.seo_config)
+		: {};
+} catch (e) {}
+
+const tituloPagina = seoConfig.titulo?.trim() ? seoConfig.titulo.trim() : `${product.nombre} | UrbanPoint`;
+const descripcionSeo = seoConfig.descripcion?.trim() || undefined;
+const noIndexar = seoConfig.indexar === false;
+
 ---
 
-<Layout title={`${product.nombre} | UrbanPoint`}>
+<Layout title={tituloPagina} description={descripcionSeo} noindex={noIndexar}>
 	<!-- Header Navbar -->
 	<Header activePage="catalogo" />
 

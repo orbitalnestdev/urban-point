@@ -8,9 +8,15 @@ import { parseActiveNodeCookie } from '../lib/nodeSession';
 
 interface Props {
 	title: string;
+	description?: string;
+	noindex?: boolean;
 }
 
-const { title } = Astro.props;
+const {
+	title,
+	description = 'UrbanPoint - Comprá en línea y retirá tus pedidos cerca de tu casa. O sumate como Canillita y ganá comisiones.',
+	noindex = false
+} = Astro.props;
 const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cookie'));
 ---
 
@@ -18,7 +24,8 @@ const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cooki
 <html lang="es" class="scroll-smooth">
 	<head>
 		<meta charset="UTF-8" />
-		<meta name="description" content="UrbanPoint - Comprá en línea y retirá tus pedidos cerca de tu casa. O sumate como Canillita y ganá comisiones." />
+		<meta name="description" content={description} />
+		{noindex && <meta name="robots" content="noindex, nofollow" />}
 		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/jpeg" href="/images/favicon.jpg" />
 		<link rel="preconnect" href="https://aw.orbitalnest.net" crossorigin>

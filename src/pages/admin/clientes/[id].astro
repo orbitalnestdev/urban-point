@@ -7,6 +7,7 @@ import { ETIQUETAS, normalizarEstadoPedido, type EstadoPedido } from '../../../l
 export const prerender = false;
 
 const { id } = Astro.params;
+const recienCreado = Astro.url.searchParams.get('creado') === '1';
 // El backend (updateProfileRole) ya exige admin estricto para esto, pero el
 // <select> de más abajo ofrecía "Administrador" también a una cuenta
 // 'gestion' que abriera esta ficha — mostrar una opción que el propio
@@ -138,6 +139,12 @@ const getStatusLabel = (estado: string) => {
 				</a>
 			</div>
 		</header>
+
+		{recienCreado && (
+			<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-4 py-3 rounded-xl">
+				✓ Cliente creado correctamente.
+			</div>
+		)}
 
 		{/* Cards Resumen Métricas */}
 		<div class="grid grid-cols-1 md:grid-cols-4 gap-4">

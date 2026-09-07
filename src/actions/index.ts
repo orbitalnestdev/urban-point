@@ -70,6 +70,24 @@ const users = new Proxy({} as Users, {
 });
 
 /**
+ * portada_url/galeria_urls no validaban esquema ni dominio: una columna de
+ * imagen en un CSV podía traer cualquier string, y eso terminaba tal cual en
+ * un <img src> que ve cualquier visitante público de la ficha del producto
+ * — no es XSS, pero sí un vector de tracking/phishing hacia un dominio de
+ * terceros. Se filtra a sólo http(s) válido; lo demás se descarta en
+ * silencio en vez de hacer fallar toda la fila de una importación masiva.
+ */
+function urlDeImagenValida(url: string): boolean {
+	if (!/^https?:\/\//i.test(url)) return false;
+	try {
+		new URL(url);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Recalcula el saldo disponible del canillita desde el ledger.
  *
  * Antes se pisaba con 0 o se restaba a ojo el monto liquidado, con lo que
@@ -2030,8 +2048,18 @@ export const server = {
 				if (input.grupo !== undefined) updateData.grupo = (input.grupo || '').trim();
 				if (input.combo_items !== undefined) updateData.combo_items = input.combo_items;
 				if (input.tramos_cantidad !== undefined) updateData.tramos_cantidad = input.tramos_cantidad;
-				if (input.galeria_urls !== undefined) updateData.galeria_urls = input.galeria_urls;
-				if (input.portada_url !== undefined) updateData.portada_url = input.portada_url;
+				if (input.galeria_urls !== undefined) {
+					try {
+						const parsed = JSON.parse(input.galeria_urls);
+						const validas = Array.isArray(parsed) ? parsed.filter((u: any) => typeof u === 'string' && urlDeImagenValida(u)) : [];
+						updateData.galeria_urls = JSON.stringify(validas);
+					} catch {
+						updateData.galeria_urls = '[]';
+					}
+				}
+				if (input.portada_url !== undefined) {
+					updateData.portada_url = urlDeImagenValida(input.portada_url) ? input.portada_url : '';
+				}
 				if (input.destacado !== undefined) updateData.destacado = input.destacado;
 
 				if (input.categoria_id !== undefined) {
@@ -2398,7 +2426,7 @@ export const server = {
 
 					// Manejo inteligente de múltiples fotos: la 1ra es portada, las siguientes van a galería
 					if (item.portada_url) {
-						const urls = item.portada_url.split(/[,|\n;]/).map(u => u.trim()).filter(Boolean);
+						const urls = item.portada_url.split(/[,|\n;]/).map(u => u.trim()).filter(urlDeImagenValida);
 						if (urls.length > 0) {
 							payload.portada_url = urls[0];
 							if (urls.length > 1) {
@@ -2587,7 +2615,7 @@ export const server = {
 						if (catId) patch.categoria_id = catId;
 						if (update.marca !== undefined) patch.marca = update.marca;
 						if (update.portada_url !== undefined) {
-							const urls = (update.portada_url || '').split(/[,|\n;]/).map(u => u.trim()).filter(Boolean);
+							const urls = (update.portada_url || '').split(/[,|\n;]/).map(u => u.trim()).filter(urlDeImagenValida);
 							if (urls.length > 0) {
 								patch.portada_url = urls[0];
 								if (urls.length > 1) {
@@ -2629,7 +2657,7 @@ export const server = {
 						if (catId) newPayload.categoria_id = catId;
 						if (update.marca) newPayload.marca = update.marca;
 						if (update.portada_url) {
-							const urls = update.portada_url.split(/[,|\n;]/).map(u => u.trim()).filter(Boolean);
+							const urls = update.portada_url.split(/[,|\n;]/).map(u => u.trim()).filter(urlDeImagenValida);
 							if (urls.length > 0) {
 								newPayload.portada_url = urls[0];
 								if (urls.length > 1) {
