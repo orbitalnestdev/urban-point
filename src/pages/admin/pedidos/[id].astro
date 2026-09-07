@@ -65,6 +65,16 @@ try {
 	return Astro.redirect('/admin/pedidos');
 }
 
+// Con cuenta, el nombre/teléfono/email viven en el profile. Sin cuenta
+// (invitado), createCheckout los guarda directo en la orden (guest_*):
+// leer sólo `customer` dejaba estos pedidos sin ningún dato de contacto
+// acá y en el remito, aunque el comprador los hubiera cargado.
+const customerDisplay = {
+	nombre: customer?.nombre || order.guest_name || null,
+	telefono: customer?.telefono || order.guest_phone || null,
+	email: customer?.email || order.guest_email || null
+};
+
 const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
 
 // Stepper index calculation (1 to 5)
@@ -431,18 +441,18 @@ const totalMargenUrbanPointCents = Math.max(0, orderTotalCents - totalMontoDistr
 					<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Cliente</h3>
 					<div class="flex items-center gap-3">
 						<div class="w-10 h-10 rounded-full bg-purple-100 text-purple-700 font-bold text-sm flex items-center justify-center">
-							{customer?.nombre?.substring(0, 1)?.toUpperCase() || '?'}
+							{customerDisplay.nombre?.substring(0, 1)?.toUpperCase() || '?'}
 						</div>
 						<div>
-							<p class="font-bold text-slate-900 text-sm">{customer?.nombre || 'Compra como invitado'}</p>
-							{customer?.telefono && (
-								<p class="text-[11px] text-slate-400 font-medium">{customer.telefono}</p>
+							<p class="font-bold text-slate-900 text-sm">{customerDisplay.nombre || 'Compra como invitado'}</p>
+							{customerDisplay.telefono && (
+								<p class="text-[11px] text-slate-400 font-medium">{customerDisplay.telefono}</p>
 							)}
 						</div>
 					</div>
-					{customer?.email && (
+					{customerDisplay.email && (
 						<div class="text-xs text-slate-500 font-medium border-t border-slate-100 pt-3">
-							<p>{customer.email}</p>
+							<p>{customerDisplay.email}</p>
 						</div>
 					)}
 				</div>
@@ -627,9 +637,9 @@ const totalMargenUrbanPointCents = Math.max(0, orderTotalCents - totalMontoDistr
 			<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; font-size: 12px;">
 				<div style="border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; background: #f8fafc;">
 					<strong style="display: block; font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Datos del Cliente</strong>
-					<p style="font-weight: 800; font-size: 14px; margin: 0 0 4px 0; color: #0f172a;">{customer?.nombre || 'Cliente Registrado'}</p>
-					<p style="margin: 2px 0; color: #334155;">Email: {customer?.email || 'N/A'}</p>
-					<p style="margin: 2px 0; color: #334155;">Teléfono: {customer?.telefono || 'N/A'}</p>
+					<p style="font-weight: 800; font-size: 14px; margin: 0 0 4px 0; color: #0f172a;">{customerDisplay.nombre || 'Cliente Registrado'}</p>
+					<p style="margin: 2px 0; color: #334155;">Email: {customerDisplay.email || 'N/A'}</p>
+					<p style="margin: 2px 0; color: #334155;">Teléfono: {customerDisplay.telefono || 'N/A'}</p>
 				</div>
 
 				<div style="border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; background: #f8fafc;">

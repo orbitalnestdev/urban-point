@@ -29,7 +29,7 @@ try {
 			Query.select([
 				'numero', 'estado', 'fulfillment', 'total', 'customer_id',
 				'pickup_point_id', 'canillita_id', 'comision_total_centavos',
-				'pickup_code_hash', '$createdAt'
+				'pickup_code_hash', '$createdAt', 'guest_name', 'guest_phone', 'guest_email'
 			]),
 			Query.orderDesc('$createdAt'),
 			Query.limit(1000)
@@ -73,9 +73,17 @@ try {
 		const canId = o.canillita_id || (pickupPoint ? (typeof pickupPoint.profile_id === 'string' ? pickupPoint.profile_id : pickupPoint.profile_id?.$id) : null);
 		const canillitaProfile = canId ? profileMap[canId] : null;
 
+		// Sin cuenta, el nombre/teléfono viven en la orden (guest_*), no en un
+		// profile: sin este fallback la tabla mostraba "Cliente Registrado"
+		// genérico para todo pedido de invitado, sin ningún dato para ubicarlo.
+		const customerDisplayName = customerProfile?.nombre || o.guest_name || null;
+		const customerDisplayContact = customerProfile?.email || o.guest_phone || null;
+
 		return {
 			...o,
 			customerProfile,
+			customerDisplayName,
+			customerDisplayContact,
 			pickupPoint,
 			canillitaProfile,
 			totalItems: o.items_count || 1,
@@ -107,6 +115,9 @@ try {
 			o.pickup_code_hash?.toLowerCase().includes(q) ||
 			o.customerProfile?.nombre?.toLowerCase().includes(q) ||
 			o.customerProfile?.email?.toLowerCase().includes(q) ||
+			o.guest_name?.toLowerCase().includes(q) ||
+			o.guest_phone?.toLowerCase().includes(q) ||
+			o.guest_email?.toLowerCase().includes(q) ||
 			o.pickupPoint?.nombre_comercial?.toLowerCase().includes(q) ||
 			o.canillitaProfile?.nombre?.toLowerCase().includes(q)
 		);
@@ -327,10 +338,12 @@ const getStatusClass = (estado: string) => {
 									</td>
 
 									<td class="p-3.5">
-										{o.customerProfile ? (
+										{o.customerDisplayName ? (
 											<div>
-												<p class="font-bold text-slate-900">{o.customerProfile.nombre}</p>
-												<p class="text-[10px] text-slate-400">{o.customerProfile.email}</p>
+												<p class="font-bold text-slate-900">{o.customerDisplayName}</p>
+												{o.customerDisplayContact && (
+													<p class="text-[10px] text-slate-400">{o.customerDisplayContact}</p>
+												)}
 											</div>
 										) : (
 											<div>
