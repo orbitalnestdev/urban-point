@@ -5,15 +5,29 @@ import Logo from '../../components/Logo.astro';
 import { getSiteSettings } from '../../lib/server/settings';
 import { parseActiveNodeCookie } from '../../lib/nodeSession';
 import { toSafeJson } from '../../lib/safeJson';
+import { createAdminClient } from '../../lib/server/appwrite';
 
 const esInvitado = !Astro.locals.user;
 const settings = await getSiteSettings();
-const mpEnabled = settings.mp_enabled;
 const transferenciaEnabled = settings.transferencia_enabled;
 const datosTransferencia = settings.transferencia_alias || settings.transferencia_cvu
 	? { alias: settings.transferencia_alias, cvu: settings.transferencia_cvu, titular: settings.transferencia_titular }
 	: null;
 const activeNodeSession = parseActiveNodeCookie(Astro.request.headers.get('cookie'));
+
+// Mercado Pago ya no es un botón general de la tienda: sólo se ofrece cuando
+// el PUNTO elegido tiene su propia cuenta conectada (cobro directo del
+// canillita, no de la plataforma). settings.mp_enabled queda sin usar acá a
+// propósito — createCheckout es quien de verdad exige la cuenta del punto,
+// esto es sólo para no ofrecer una opción que después va a fallar.
+let mpEnabled = false;
+if (activeNodeSession?.id) {
+	try {
+		const { databases } = createAdminClient();
+		const punto = await databases.getDocument('urbanpoint', 'pickup_points', activeNodeSession.id);
+		mpEnabled = punto.mp_status === 'conectado';
+	} catch (e) {}
+}
 
 // Config de envío en CENTAVOS, la misma que usa createCheckout server-side:
 // el total que se muestra tiene que ser el que se cobra.

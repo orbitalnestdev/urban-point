@@ -43,7 +43,7 @@ import {
 	resolveProductPriceForUser,
 	tierDeRol
 } from '../lib/pricingEngine';
-import { obtenerTokenPlataformaValido } from '../lib/server/mercadopagoOAuth';
+import { obtenerTokenPlataformaValido, obtenerTokenVendedorValido } from '../lib/server/mercadopagoOAuth';
 
 const client = new Proxy({} as Client, {
 	get(_target, prop: keyof Client) {
@@ -908,6 +908,12 @@ export const server = {
 					const unitarioCentavos = priceInfo.unitPriceCentavos;
 					const subtotalCentavos = unitarioCentavos * item.cantidad;
 					const costoUnitario = Math.round(Number(p.cost ?? p.costo ?? 0));
+					// Foto del precio_canillita al momento de la venta, siempre —
+					// no sólo cuando el pedido termine siendo "cobro directo" (eso
+					// recién se sabe más abajo, después de resolver el punto). Sin
+					// esta foto, calcular la deuda del canillita más tarde leería el
+					// precio_canillita ACTUAL del producto, que puede haber cambiado.
+					const precioCanillitaUnitario = resolveProductPriceForUser(p, 'canillita').unitPriceCentavos;
 
 					prefItems.push({
 						id: p.$id,
@@ -924,6 +930,7 @@ export const server = {
 						precio_unitario: unitarioCentavos,
 						applied_level: priceInfo.appliedLevel,
 						costo_unitario: costoUnitario,
+						costo_canillita_unitario: precioCanillitaUnitario,
 						cantidad: item.cantidad,
 						subtotal: subtotalCentavos
 					});
@@ -1006,6 +1013,27 @@ export const server = {
 				if (finalPickupPointId) {
 					orderPayload.pickup_point_id = finalPickupPointId;
 					orderPayload.pickup_node_id = finalPickupPointId;
+				}
+
+				// Cobro directo del canillita: si el punto tiene su propia cuenta de
+				// Mercado Pago conectada, ESA cuenta cobra el pedido completo (precio
+				// público, igual que siempre) — la plataforma no cobra nada acá. Se
+				// resuelve antes de crear la orden para no dejar un pedido a medio
+				// armar si el punto en realidad no tiene MP conectado. mp_enabled (la
+				// cuenta general de la tienda) queda deliberadamente afuera de este
+				// camino: no hay fallback a la cuenta de la plataforma.
+				let tokenVendedorDirecto: string | null = null;
+				if (input.paymentMethod === 'mercadopago') {
+					tokenVendedorDirecto = finalPickupPointId
+						? await obtenerTokenVendedorValido(finalPickupPointId)
+						: null;
+					if (!tokenVendedorDirecto) {
+						return {
+							success: false,
+							error: 'Este punto de retiro todavía no tiene Mercado Pago conectado. Elegí otro medio de pago.'
+						};
+					}
+					orderPayload.cobro_directo_canillita = true;
 				}
 				if (input.direccionEnvio) {
 					orderPayload.direccion_envio = input.direccionEnvio;
@@ -1101,7 +1129,10 @@ export const server = {
 					return { success: true, init_point: `/checkout/success?order_id=${orderDoc.$id}` };
 				}
 
-				const mpAccessToken = await obtenerTokenPlataformaValido();
+				// Si el punto tiene cuenta propia, ya se resolvió y validó ese token
+				// más arriba (tokenVendedorDirecto) — no se vuelve a pedir el de la
+				// plataforma en ese caso, ni como fallback.
+				const mpAccessToken = tokenVendedorDirecto || await obtenerTokenPlataformaValido();
 
 				if (!mpAccessToken) {
 					// Antes se devolvía un link de sandbox falso con success: true y

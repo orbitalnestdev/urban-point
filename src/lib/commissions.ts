@@ -239,16 +239,44 @@ export async function resolverComisiones(orderId: string) {
 		}
 
 		let totalComissionCents = 0;
+		// Cobro directo del canillita: el pedido se cobró con la cuenta de
+		// Mercado Pago del punto, no con la de la plataforma (ver createCheckout).
+		// El canillita ya se quedó con su margen apenas cobró — no hace falta
+		// pagarle un fee de logística además. En cambio, pasa a deberle a la
+		// tienda el precio_canillita de lo vendido.
+		const cobroDirecto = order.cobro_directo_canillita === true;
 
 		for (const item of itemsRes.documents) {
 			const productId = typeof item.product_id === 'string' ? item.product_id : item.product_id.$id;
 			const product = await db.getDocument('urbanpoint', 'products', productId);
 			const categoryId = product.categoria_id ? (typeof product.categoria_id === 'string' ? product.categoria_id : product.categoria_id.$id) : null;
-			
+
 			const baseCents = item.subtotal || (item.precio_unitario * item.cantidad);
 
-			// Devengo 1: Logística
-			if (pickupProfileId) {
+			// Devengo 1: Logística — o, en cobro directo, la deuda con la tienda.
+			if (pickupProfileId && cobroDirecto) {
+				// Foto tomada en createCheckout (item.costo_canillita_unitario), no
+				// el precio_canillita actual del producto: éste pudo cambiar desde
+				// la venta. Si por algún motivo la foto no está (pedidos de antes
+				// de este campo), no se inventa una deuda sin base real.
+				const costoCanillitaUnitario = Number(item.costo_canillita_unitario);
+				if (Number.isFinite(costoCanillitaUnitario) && costoCanillitaUnitario > 0) {
+					const deudaCents = costoCanillitaUnitario * (item.cantidad || 1);
+					// tipo 'ajuste', no 'reversa': liquidarComisiones y
+					// getCanillitaStats excluyen 'reversa' de cualquier suma — con
+					// ese tipo la deuda no se descontaría de la próxima liquidación.
+					await escribirDocumentoTolerante('commission_ledger', {
+						profile_id: pickupProfileId,
+						order_id: orderId,
+						tipo: 'ajuste',
+						estado: 'disponible',
+						monto_centavos: -deudaCents,
+						motivo: `Cobro directo: debe precio canillita de ${product.nombre}`
+					});
+				} else {
+					console.warn(`Orden ${orderId}, item ${productId}: cobro directo sin costo_canillita_unitario snapshoteado — no se registró deuda.`);
+				}
+			} else if (pickupProfileId) {
 				const rule = await evaluateCommissionRule(db, pickupProfileId, categoryId);
 				if (rule) {
 					const cents = calculateAmount(baseCents, rule);
@@ -277,8 +305,11 @@ export async function resolverComisiones(orderId: string) {
 			const isSelfReferral = customerProfileId && customerProfileId === referrerProfileId;
 			// Si el referido es el mismo dueño del punto de retiro, ya cobró el
 			// fee de logística por este ítem: acreditarle además la comisión de
-			// referido duplicaba el pago al mismo perfil por la misma venta.
-			const yaCobraLogistica = pickupProfileId && pickupProfileId === referrerProfileId;
+			// referido duplicaba el pago al mismo perfil por la misma venta. En
+			// cobro directo esto no aplica: el punto ya no cobra ningún fee de
+			// logística (le queda debiendo a la tienda), así que no hay nada que
+			// se solape con la comisión de referido.
+			const yaCobraLogistica = !cobroDirecto && pickupProfileId && pickupProfileId === referrerProfileId;
 			if (referrerProfileId && !isSelfReferral && !yaCobraLogistica) {
 				const rule = await evaluateCommissionRule(db, referrerProfileId, categoryId);
 				if (rule) {

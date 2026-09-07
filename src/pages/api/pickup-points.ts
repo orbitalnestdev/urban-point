@@ -20,7 +20,11 @@ const publicar = (p: Record<string, any>) => ({
 	horarios: p.horarios,
 	slug: p.slug,
 	lat: p.lat,
-	lng: p.lng
+	lng: p.lng,
+	// Sólo el booleano de si tiene Mercado Pago propio conectado — nunca el
+	// token, ni el mp_user_id. Lo usa /checkout/pago para saber si ofrecer
+	// esa opción de pago para este punto en particular.
+	mp_conectado: p.mp_status === 'conectado'
 });
 
 export const GET: APIRoute = async ({ url }) => {
