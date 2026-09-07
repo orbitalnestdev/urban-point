@@ -2462,16 +2462,21 @@ export const server = {
 	reimportProductsStock: defineAction({
 		accept: 'json',
 		input: z.object({
+			// A diferencia de updateProduct, este schema no tenía .min(0) en
+			// ningún campo numérico: una celda de Excel con un error de fórmula
+			// (o una fila manipulada) escribía stock o precio negativos sin que
+			// nada lo rechazara, ni acá ni en el cliente (ReimportModal.tsx
+			// conserva el signo "-" al parsear).
 			updates: z.array(z.object({
 				id: z.string().optional(),
 				sku: z.string().optional(),
 				nombre: z.string().optional(),
-				precio: z.number().optional(),
-				precio_promocional: z.number().optional().nullable(),
-				precio_canillita: z.number().optional().nullable(),
-				precio_distribuidor: z.number().optional().nullable(),
-				costo: z.number().optional().nullable(),
-				stock: z.number().optional(),
+				precio: z.number().min(0).optional(),
+				precio_promocional: z.number().min(0).optional().nullable(),
+				precio_canillita: z.number().min(0).optional().nullable(),
+				precio_distribuidor: z.number().min(0).optional().nullable(),
+				costo: z.number().min(0).optional().nullable(),
+				stock: z.number().min(0).optional(),
 				estado: z.string().optional(),
 				categoria_id: z.string().optional().nullable(),
 				categoria_nombre: z.string().optional().nullable(),
