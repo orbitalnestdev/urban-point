@@ -807,20 +807,45 @@ const totalMargenUrbanPointCents = Math.max(0, orderTotalCents - totalMontoDistr
 			const subtotal = item.cantidad * (item.precio_unitario_centavos || item.precio_unitario || 0);
 			totalCentavos += subtotal;
 
+			// nombre_snapshot/sku_snapshot pueden venir de una importación CSV o
+			// —vía updateOrderItems— de cualquiera con rol admin/gestion: nunca
+			// se sanitizan como HTML. Con innerHTML, un nombre de producto tipo
+			// <img src=x onerror=...> corría en la sesión de quien abriera esta
+			// pestaña. Todo lo que sale de `item` se arma con textContent, no
+			// con template strings dentro de innerHTML.
 			const div = document.createElement('div');
 			div.className = "p-4 border border-slate-200 rounded-2xl bg-slate-50/50 flex items-center justify-between gap-4";
-			div.innerHTML = `
-				<div class="flex-1">
-					<p class="font-bold text-slate-900 text-xs">${item.nombre_snapshot || 'Producto'}</p>
-					<p class="text-[10px] text-slate-400 font-mono">${item.sku_snapshot || 'SKU-N/A'}</p>
-				</div>
-				<div class="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2 py-1">
-					<button class="btn-minus text-slate-400 hover:text-slate-700 font-bold px-1.5" data-idx="${idx}">-</button>
-					<span class="text-xs font-bold text-slate-900">${item.cantidad}</span>
-					<button class="btn-plus text-slate-400 hover:text-slate-700 font-bold px-1.5" data-idx="${idx}">+</button>
-				</div>
-				<p class="font-bold text-slate-900 text-xs w-24 text-right">${formateador.format(subtotal / 100)}</p>
-			`;
+
+			const info = document.createElement('div');
+			info.className = 'flex-1';
+			const pNombre = document.createElement('p');
+			pNombre.className = 'font-bold text-slate-900 text-xs';
+			pNombre.textContent = item.nombre_snapshot || 'Producto';
+			const pSku = document.createElement('p');
+			pSku.className = 'text-[10px] text-slate-400 font-mono';
+			pSku.textContent = item.sku_snapshot || 'SKU-N/A';
+			info.append(pNombre, pSku);
+
+			const controles = document.createElement('div');
+			controles.className = 'flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2 py-1';
+			const btnMinus = document.createElement('button');
+			btnMinus.className = 'btn-minus text-slate-400 hover:text-slate-700 font-bold px-1.5';
+			btnMinus.dataset.idx = String(idx);
+			btnMinus.textContent = '-';
+			const spanCant = document.createElement('span');
+			spanCant.className = 'text-xs font-bold text-slate-900';
+			spanCant.textContent = String(item.cantidad);
+			const btnPlus = document.createElement('button');
+			btnPlus.className = 'btn-plus text-slate-400 hover:text-slate-700 font-bold px-1.5';
+			btnPlus.dataset.idx = String(idx);
+			btnPlus.textContent = '+';
+			controles.append(btnMinus, spanCant, btnPlus);
+
+			const pSubtotal = document.createElement('p');
+			pSubtotal.className = 'font-bold text-slate-900 text-xs w-24 text-right';
+			pSubtotal.textContent = formateador.format(subtotal / 100);
+
+			div.append(info, controles, pSubtotal);
 			container.appendChild(div);
 		});
 
