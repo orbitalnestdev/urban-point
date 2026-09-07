@@ -33,7 +33,11 @@ export const POST: APIRoute = async ({ request, cookies, redirect, locals }) => 
 
     const profileId = form?.get('profile_id')?.toString().trim() || '';
     const syntheticRole = form?.get('role')?.toString().trim() || '';
-    const redirectTo = form?.get('redirect')?.toString().trim() || '';
+    // Ningún llamador real manda este campo hoy (todos usan profile_id/role
+    // fijos), pero si alguno lo hiciera en el futuro, sin esta validación
+    // redirect() aceptaría una URL absoluta a otro dominio.
+    const redirectToRaw = form?.get('redirect')?.toString().trim() || '';
+    const redirectTo = redirectToRaw.startsWith('/') && !redirectToRaw.startsWith('//') ? redirectToRaw : '';
 
     const backupAdminSession = cookies.get('up_admin_session_backup')?.value;
     const currentSession = cookies.get('up_session')?.value || '';

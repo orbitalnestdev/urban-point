@@ -20,7 +20,10 @@ export const POST: APIRoute = async ({ cookies, redirect }) => {
             httpOnly: true,
             secure: import.meta.env.PROD,
             sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 7
+            // Mismo maxAge que el login (login.astro): antes eran 7 días acá
+            // contra 30 en el login, así que volver de impersonar recortaba
+            // la sesión "recordada" del admin sin ninguna razón.
+            maxAge: 60 * 60 * 24 * 30
         });
     }
 
