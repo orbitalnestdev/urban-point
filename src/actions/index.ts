@@ -10,6 +10,7 @@ import {
 	normalizarEstadoPedido,
 	esTransicionValida,
 	puedeEntregarse,
+	estaPago,
 	type EstadoPedido
 } from '../lib/orderStates';
 import { parseActiveNodeValue, NODE_COOKIE_NAME, REF_COOKIE_NAME } from '../lib/nodeSession';
@@ -19,7 +20,7 @@ import { otorgarAccesoAPedido } from '../lib/server/orderAccess';
 import { invalidateSessionCache } from '../middleware';
 
 
-import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, confirmarComisionesDeOrden, getCanillitaStats, revertirComisiones, restaurarStockDeOrden } from '../lib/commissions';
+import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, confirmarComisionesDeOrden, getCanillitaStats, revertirComisiones, restaurarStockDeOrden, descontarStock, restaurarStock } from '../lib/commissions';
 import { integrantesDeCombo } from '../lib/combos';
 import { crearSolicitud, solicitudAbierta, resolverSolicitud, cerrarSolicitudPorPago } from '../lib/server/payoutRequests';
 
@@ -1781,6 +1782,7 @@ export const server = {
 		accept: 'json',
 		input: z.object({
 			orderId: z.string(),
+			motivo: z.string().optional(),
 			items: z.array(z.object({
 				product_id: z.string().nullable().optional(),
 				cantidad: z.number().min(1),
@@ -1791,7 +1793,13 @@ export const server = {
 		}),
 		handler: async (input, ctx) => {
 			try {
-				requireRole(ctx, 'admin', 'gestion');
+				const actor = requireRole(ctx, 'admin', 'gestion');
+
+				const orderAntes = await db.getDocument('urbanpoint', 'orders', input.orderId);
+				// El stock ya se descontó al pagar (ver resolverComisiones): si se
+				// edita después, hay que ajustar la diferencia o el inventario queda
+				// mal para siempre (de más o de menos) apenas se cancele/reembolse.
+				const stockYaDescontado = estaPago(normalizarEstadoPedido(orderAntes.estado) || 'pendiente_pago');
 
 				// 1. Fetch current order items (sin Query.limit, Appwrite trae 25:
 				// un pedido más grande dejaba ítems huérfanos al recrear)
@@ -1800,6 +1808,13 @@ export const server = {
 					Query.limit(500)
 				]);
 
+				const cantidadPorProductoAntes = new Map<string, number>();
+				for (const item of currentItemsRes.documents) {
+					const pid = typeof item.product_id === 'string' ? item.product_id : item.product_id?.$id;
+					if (!pid) continue;
+					cantidadPorProductoAntes.set(pid, (cantidadPorProductoAntes.get(pid) || 0) + (item.cantidad || 0));
+				}
+
 				// 2. Delete all existing items for this order
 				await Promise.all(currentItemsRes.documents.map(item =>
 					db.deleteDocument('urbanpoint', 'order_items', item.$id)
@@ -1807,6 +1822,7 @@ export const server = {
 
 				// 3. Create new items and calculate total
 				let newSubtotal = 0;
+				const cantidadPorProductoDespues = new Map<string, number>();
 				for (const newItem of input.items) {
 					let prodSnapshot = { 
 						nombre: newItem.nombre_snapshot || 'Producto', 
@@ -1839,9 +1855,23 @@ export const server = {
 
 					if (cleanProdId) {
 						docPayload.product_id = cleanProdId;
+						cantidadPorProductoDespues.set(cleanProdId, (cantidadPorProductoDespues.get(cleanProdId) || 0) + newItem.cantidad);
 					}
 
 					await db.createDocument('urbanpoint', 'order_items', ID.unique(), docPayload);
+				}
+
+				// 3.b Ajustar stock por la diferencia, sólo si ya se había descontado
+				// al pagar — de lo contrario el checkout normal se encarga.
+				if (stockYaDescontado) {
+					const productosAfectados = new Set([...cantidadPorProductoAntes.keys(), ...cantidadPorProductoDespues.keys()]);
+					for (const productId of productosAfectados) {
+						const antes = cantidadPorProductoAntes.get(productId) || 0;
+						const despues = cantidadPorProductoDespues.get(productId) || 0;
+						const delta = despues - antes;
+						if (delta > 0) await descontarStock(productId, delta);
+						else if (delta < 0) await restaurarStock(productId, -delta);
+					}
 				}
 
 				// 4. Update order total
@@ -1854,6 +1884,9 @@ export const server = {
 					subtotal: newSubtotal,
 					total: Math.max(0, newTotal)
 				});
+
+				const estadoActualStr = normalizarEstadoPedido(orderAntes.estado) || 'pendiente_pago';
+				await registrarEventoOrden(input.orderId, estadoActualStr, estadoActualStr, actor.profileId, input.motivo || 'Edición de líneas del pedido');
 
 				return { success: true };
 			} catch (error: any) {
