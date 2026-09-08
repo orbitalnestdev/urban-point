@@ -1,6 +1,8 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { getSiteSettings, saveSiteSetting, getClavesConfiguradas } from '../../../lib/server/settings';
+import { createAdminClient } from '../../../lib/server/appwrite';
+import { Query } from 'node-appwrite';
 import { CheckCircle, AlertTriangle, Store, Phone, MessageSquare, Newspaper, Truck, CreditCard, Bell, Search } from 'lucide-react';
 
 export const prerender = false;
@@ -10,6 +12,19 @@ let errorMessage = '';
 
 const mpStatusParam = Astro.url.searchParams.get('mp');
 const mpErrorParam = Astro.url.searchParams.get('mp_error');
+// Códigos reales que genera api/auth/mercadopago/callback.ts. Interpolar
+// mp_error crudo mostraba cualquier texto de la URL tal cual dentro del
+// banner de error, sin validar que viniera del flujo OAuth real.
+const MP_ERRORES: Record<string, string> = {
+	cancelado: 'Autorización cancelada por el usuario.',
+	invalid_params: 'Faltaron parámetros en la respuesta de Mercado Pago.',
+	csrf: 'No se pudo verificar el origen de la solicitud (CSRF).',
+	state_invalid: 'El enlace de autorización venció o ya se usó. Probá conectar de nuevo.',
+	sesion_distinta: 'La sesión que inició la conexión no coincide con la actual.'
+};
+const mpErrorMensaje = mpErrorParam
+	? (MP_ERRORES[mpErrorParam] || 'No se pudo completar la conexión. Probá de nuevo en unos minutos.')
+	: '';
 
 if (Astro.request.method === 'POST') {
 	try {
@@ -25,12 +40,26 @@ if (Astro.request.method === 'POST') {
 		// El form manda ~32 claves: guardarlas una por una en serie eran ~64
 		// round-trips encadenados contra Appwrite (varios segundos por submit).
 		// Se juntan todas las escrituras y se esperan de una sola vez.
+		// Los inputs muestran pesos pero la base guarda centavos: si el name
+		// del input apuntara directo a la key en centavos, guardar "3500" (pesos)
+		// se grababa tal cual como 3500 centavos ($35), dividiendo el valor real
+		// por 100 en cada guardado.
+		const CAMPOS_ARS_A_CENTAVOS: Record<string, string> = {
+			shipping_cost_ars: 'shipping_cost_centavos',
+			free_shipping_threshold_ars: 'free_shipping_threshold_centavos'
+		};
+
 		const guardados: Promise<unknown>[] = [];
 		for (const [key, value] of formData.entries()) {
 			if (key && !key.startsWith('__') && !CHECKBOXES.includes(key)) {
 				const strVal = value.toString();
 				// No guardar/sobrescribir la contraseña SMTP si el input está vacío
 				if (key === 'smtp_pass' && !strVal.trim()) {
+					continue;
+				}
+				if (CAMPOS_ARS_A_CENTAVOS[key]) {
+					const centavos = Math.round((parseFloat(strVal) || 0) * 100);
+					guardados.push(saveSiteSetting(CAMPOS_ARS_A_CENTAVOS[key], String(centavos)));
 					continue;
 				}
 				guardados.push(saveSiteSetting(key, strVal));
@@ -43,8 +72,11 @@ if (Astro.request.method === 'POST') {
 
 		successMessage = 'Configuración guardada correctamente. Todos los cambios impactaron en la tienda.';
 	} catch (e: any) {
+		// El detalle real ya queda en el log del servidor: mostrárselo crudo al
+		// admin (mensajes internos de Appwrite, stack traces) no ayuda y se ve
+		// poco profesional.
 		console.error("Error saving settings:", e);
-		errorMessage = 'Ocurrió un error al guardar la configuración: ' + e.message;
+		errorMessage = 'Ocurrió un error al guardar la configuración. Volvé a intentarlo en unos segundos.';
 	}
 }
 
@@ -56,6 +88,18 @@ const [settings, clavesConfiguradas] = await Promise.all([
 	getClavesConfiguradas()
 ]);
 const settingsMap = settings as unknown as Record<string, any>;
+
+// getSiteSettings() no incluye mp_status/mp_user_id/mp_connected_at (ver el
+// comentario en lib/server/mercadopagoOAuth.ts): sin esta consulta puntual,
+// isMpConnected daba siempre false y el bloque de "Desconectar cuenta" nunca
+// se mostraba, aunque la cuenta estuviera realmente conectada.
+const { databases: dbConfig } = createAdminClient();
+const mpDocs = await dbConfig.listDocuments('urbanpoint', 'settings', [
+	Query.equal('key', ['mp_status', 'mp_user_id', 'mp_connected_at']),
+	Query.limit(10)
+]).catch(() => ({ documents: [] as any[] }));
+for (const doc of mpDocs.documents) settingsMap[doc.key] = doc.value;
+
 const isMpConnected = settingsMap.mp_status === 'conectado';
 const sinConfigurar = clavesConfiguradas.size === 0;
 ---
@@ -234,7 +278,7 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 
 					{/* 4.b. Precios Multinivel y Redondeo Global */}
 					<div id="sec-precios" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">Precios Multinivel (Defaults Globales) & Redondeo</h3>
+						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">5. Precios Multinivel (Defaults Globales) & Redondeo</h3>
 						<p class="text-xs text-slate-500 font-medium">
 							Estos porcentajes de markup actúan como fallback global cuando ni el producto ni la categoría definen porcentajes o precios fijos propios.
 						</p>
@@ -279,22 +323,22 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 
 					{/* 5. Envíos y Retiro */}
 					<div id="sec-envios" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">5. Envíos a Domicilio & Retiro en Punto</h3>
+						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">6. Envíos a Domicilio & Retiro en Punto</h3>
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
 							<div>
 								<label class="block font-bold text-slate-900 mb-1">Costo de Envío a Domicilio ($ ARS)</label>
-								<input type="number" name="shipping_cost_centavos" value={settings.shipping_cost_centavos / 100} class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+								<input type="number" name="shipping_cost_ars" value={settings.shipping_cost_centavos / 100} class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
 							</div>
 							<div>
 								<label class="block font-bold text-slate-900 mb-1">Monto Mínimo para Envío Gratis ($ ARS)</label>
-								<input type="number" name="free_shipping_threshold_centavos" value={settings.free_shipping_threshold_centavos / 100} class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+								<input type="number" name="free_shipping_threshold_ars" value={settings.free_shipping_threshold_centavos / 100} class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
 							</div>
 						</div>
 					</div>
 
 					{/* 6. Pagos & Mercado Pago (OAuth) */}
 					<div id="sec-pagos" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
-						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">6. Pagos & Integración Mercado Pago OAuth</h3>
+						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">7. Pagos & Integración Mercado Pago OAuth</h3>
 
 						{mpStatusParam === 'conectado' && (
 							<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl text-xs font-bold flex items-center gap-2">
@@ -306,7 +350,7 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 						{mpErrorParam && (
 							<div class="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl text-xs font-bold flex items-center gap-2">
 								<AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
-								<span>Error al conectar con Mercado Pago: {mpErrorParam === 'cancelado' ? 'Autorización cancelada por el usuario.' : mpErrorParam}</span>
+								<span>Error al conectar con Mercado Pago: {mpErrorMensaje}</span>
 							</div>
 						)}
 
@@ -394,7 +438,7 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 					{/* 7. Notificaciones & Emails SMTP */}
 					<div id="sec-notificaciones" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
 						<div class="flex items-center justify-between border-b border-slate-100 pb-3">
-							<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">7. Notificaciones por Email & Servidor SMTP</h3>
+							<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">8. Notificaciones por Email & Servidor SMTP</h3>
 							<span class="text-[11px] bg-emerald-50 text-emerald-700 font-bold px-2.5 py-1 rounded-full">Soporta Múltiples Correos Admin</span>
 						</div>
 
@@ -432,7 +476,10 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 
 							<div>
 								<label class="block font-bold text-slate-900 mb-1">Contraseña SMTP</label>
-								<input type="password" name="smtp_pass" value={settings.smtp_pass} placeholder="••••••••••••" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
+								{/* Sin value: type="password" sólo la enmascara visualmente, el valor
+								    real seguía quedando en el HTML servido. Vacío = "no cambiar" (el
+								    backend ya lo trata así). */}
+								<input type="password" name="smtp_pass" placeholder={settings.smtp_pass ? '•••••••• (dejar vacío para no modificar)' : ''} class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600" />
 							</div>
 
 							<div class="md:col-span-2">
@@ -447,9 +494,9 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 						</div>
 					</div>
 
-					{/* 8. SEO */}
+					{/* 9. SEO & Legales */}
 					<div id="sec-seo" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">8. SEO & Configuración de Buscadores</h3>
+						<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-3">9. SEO & Legales</h3>
 						<div class="grid grid-cols-1 gap-4 text-xs">
 							<div>
 								<label class="block font-bold text-slate-900 mb-1">Título SEO Principal</label>
@@ -458,6 +505,14 @@ const sinConfigurar = clavesConfiguradas.size === 0;
 							<div>
 								<label class="block font-bold text-slate-900 mb-1">Meta Descripción</label>
 								<textarea name="seo_meta_description" rows="2" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600">{settings.seo_meta_description}</textarea>
+							</div>
+							<div>
+								<label class="block font-bold text-slate-900 mb-1">Términos y Condiciones</label>
+								<textarea name="terms_and_conditions" rows="4" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600">{settings.terms_and_conditions}</textarea>
+							</div>
+							<div>
+								<label class="block font-bold text-slate-900 mb-1">Política de Privacidad</label>
+								<textarea name="privacy_policy" rows="4" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium outline-none focus:border-emerald-600">{settings.privacy_policy}</textarea>
 							</div>
 						</div>
 					</div>
