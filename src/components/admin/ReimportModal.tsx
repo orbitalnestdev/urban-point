@@ -244,14 +244,14 @@ export default function ReimportModal({}: Props) {
           {/* 1. Seleccionar Archivo */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-              1. Seleccionar Archivo (.csv / .xlsx / .txt)
+              1. Seleccionar Archivo (.csv / .txt)
             </label>
             <div className="flex items-center gap-3 p-3 border border-slate-200 rounded-2xl bg-slate-50">
               <label className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors shadow-xs shrink-0">
                 Seleccionar archivo
                 <input 
                   type="file" 
-                  accept=".csv,.xlsx,.txt" 
+                  accept=".csv,.txt"
                   onChange={(e) => handleFileSelect(e.target.files?.[0] || null)} 
                   className="hidden" 
                 />

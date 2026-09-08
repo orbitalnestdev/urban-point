@@ -199,8 +199,8 @@ if (product.galeria_urls) {
 								<label class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Estado</label>
 								<select id="input-estado" class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
 									<option value="activo" selected={product.estado === 'activo'}>Activo</option>
+									<option value="pausado" selected={product.estado === 'pausado'}>Pausado</option>
 									<option value="borrador" selected={product.estado === 'borrador'}>Borrador</option>
-									<option value="inactivo" selected={product.estado === 'inactivo'}>Inactivo</option>
 								</select>
 							</div>
 						</div>
@@ -719,6 +719,13 @@ if (product.galeria_urls) {
 									<label class="block text-sm font-bold text-slate-900 mb-1">Compra mínima</label>
 									<div class="relative">
 										<input type="number" id="input-compra-minima" placeholder="1" class="w-full pl-4 pr-12 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900" />
+										<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">u</span>
+									</div>
+								</div>
+								<div>
+									<label class="block text-sm font-bold text-slate-900 mb-1">Compra máxima</label>
+									<div class="relative">
+										<input type="number" id="input-compra-maxima" placeholder="Sin límite" class="w-full pl-4 pr-12 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900" />
 										<span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">u</span>
 									</div>
 								</div>
@@ -1302,15 +1309,6 @@ if (product.galeria_urls) {
 				orden: parseInt((document.getElementById('input-seo-orden') as HTMLInputElement)?.value || '0', 10)
 			};
 
-			const variantRows = document.querySelectorAll('.variant-row');
-			const updatedVariants: any[] = [];
-			variantRows.forEach(row => {
-				const opcion = (row.querySelector('.var-opcion') as HTMLInputElement)?.value || '';
-				const sku = (row.querySelector('.var-sku') as HTMLInputElement)?.value || '';
-				const vStock = parseInt((row.querySelector('.var-stock') as HTMLInputElement)?.value || '0', 10);
-				updatedVariants.push({ opcion, sku, stock: vStock });
-			});
-
 			if (!nombre) {
 				alert('El nombre es obligatorio.');
 				return;
@@ -1319,11 +1317,7 @@ if (product.galeria_urls) {
 			btn.disabled = true;
 			btn.innerText = 'Guardando...';
 
-			let finalStock = Math.max(0, stock);
-			if (updatedVariants.length > 0) {
-				const sumStock = updatedVariants.reduce((acc, curr) => acc + (curr.stock || 0), 0);
-				if (sumStock > 0) finalStock = sumStock;
-			}
+			const finalStock = Math.max(0, stock);
 
 			try {
 				const { data, error } = await actions.updateProduct({

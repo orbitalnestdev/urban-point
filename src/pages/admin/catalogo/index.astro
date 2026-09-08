@@ -63,7 +63,9 @@ for (const p of products) {
 		valorTotalCentavos += (p.precio || 0) * (p.stock || 0);
 	} else if (p.estado === 'pausado') pausados++;
 
-	if (p.stock === 0 && p.estado !== 'borrador') numSinStock++;
+	// La tarjeta linkea a ?estado=activo&stock=sin_stock: contar acá también
+	// los pausados hacía que el número no coincidiera con lo que se ve al clickear.
+	if (p.stock === 0 && p.estado === 'activo') numSinStock++;
 	if (!p.portada_url) numSinFoto++;
 	if ((!p.cost && !p.costo) || (p.cost <= 0 && p.costo <= 0)) numSinCosto++;
 }
@@ -999,17 +1001,22 @@ const paginationItems = filteredPages.map((p, index) => ({
 	};
 
 	// Bulk Actions Handlers
+	// Sin chequear el resultado, un error a mitad de camino (bulkUpdateProducts
+	// corta el loop entero ante la primera excepción) recargaba la página
+	// como si todo hubiera salido bien, dejando la acción aplicada a medias.
 	document.getElementById('btn-bulk-activar')?.addEventListener('click', async () => {
 		const ids = getSelectedIds();
 		if (ids.length === 0) return;
-		await actions.bulkUpdateProducts({ ids, accion: 'activar' });
+		const { data, error } = await actions.bulkUpdateProducts({ ids, accion: 'activar' });
+		if (error || !data?.success) { alert('Error: ' + (error?.message || data?.error || 'error desconocido')); return; }
 		window.location.reload();
 	});
 
 	document.getElementById('btn-bulk-pausar')?.addEventListener('click', async () => {
 		const ids = getSelectedIds();
 		if (ids.length === 0) return;
-		await actions.bulkUpdateProducts({ ids, accion: 'pausar' });
+		const { data, error } = await actions.bulkUpdateProducts({ ids, accion: 'pausar' });
+		if (error || !data?.success) { alert('Error: ' + (error?.message || data?.error || 'error desconocido')); return; }
 		window.location.reload();
 	});
 
@@ -1017,7 +1024,8 @@ const paginationItems = filteredPages.map((p, index) => ({
 		const ids = getSelectedIds();
 		if (ids.length === 0) return;
 		if (!confirm(`¿Estás seguro de eliminar ${ids.length} productos seleccionados?`)) return;
-		await actions.bulkUpdateProducts({ ids, accion: 'eliminar' });
+		const { data, error } = await actions.bulkUpdateProducts({ ids, accion: 'eliminar' });
+		if (error || !data?.success) { alert('Error: ' + (error?.message || data?.error || 'error desconocido')); return; }
 		window.location.reload();
 	});
 
@@ -1026,7 +1034,8 @@ const paginationItems = filteredPages.map((p, index) => ({
 		const catId = target.value;
 		const ids = getSelectedIds();
 		if (!catId || ids.length === 0) return;
-		await actions.bulkUpdateProducts({ ids, categoria_id: catId });
+		const { data, error } = await actions.bulkUpdateProducts({ ids, categoria_id: catId });
+		if (error || !data?.success) { alert('Error: ' + (error?.message || data?.error || 'error desconocido')); return; }
 		window.location.reload();
 	});
 

@@ -3015,10 +3015,11 @@ export const server = {
 					throw new Error('Sin permisos');
 				}
 				for (const item of input.items) {
-					await escribirDocumentoTolerante('categories', {
-						orden: item.orden,
-						parent_id: item.parent_id || null
-					}, item.id);
+					const payload: Record<string, any> = { orden: item.orden };
+					// Sin este guard, un caller que no mande parent_id desenganchaba
+					// la categoría de su padre (quedaba como raíz) en vez de dejarla intacta.
+					if (item.parent_id !== undefined) payload.parent_id = item.parent_id || null;
+					await escribirDocumentoTolerante('categories', payload, item.id);
 				}
 				invalidateCatalogCache();
 				return { success: true };

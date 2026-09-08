@@ -360,14 +360,14 @@ export default function ImportCsvModal({}: Props) {
               <label className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-3xl p-10 flex flex-col items-center justify-center cursor-pointer transition-all bg-slate-50/50 hover:bg-indigo-50/20 group text-center">
                 <input 
                   type="file" 
-                  accept=".csv,.xlsx,.txt" 
+                  accept=".csv,.txt"
                   onChange={handleFileChange}
-                  className="hidden" 
+                  className="hidden"
                 />
                 <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                   <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                 </div>
-                <h3 className="font-extrabold text-slate-900 text-lg mb-1">Click o arrastrá un archivo CSV o XLSX</h3>
+                <h3 className="font-extrabold text-slate-900 text-lg mb-1">Click o arrastrá un archivo CSV</h3>
                 <p className="text-xs text-slate-400 max-w-sm">
                   Se detectarán y mapearán las columnas automáticamente
                 </p>
