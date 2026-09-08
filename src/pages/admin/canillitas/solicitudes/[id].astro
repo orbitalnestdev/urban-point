@@ -17,6 +17,11 @@ if (!app) {
 	return Astro.redirect('/admin/canillitas/solicitudes');
 }
 
+// approveCanillita/rejectCanillita/suspendCanillita exigen admin estricto,
+// pero 'gestion' también entra a esta página según middleware.ts: sin este
+// guard veía los 3 botones y sólo se enteraba del rechazo al tocarlos.
+const esAdmin = Astro.locals.user?.role === 'admin';
+
 const getStatusBadge = (st: string) => {
 	switch (st) {
 		case 'aprobado': return '<span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full border border-emerald-200 uppercase">APROBADO</span>';
@@ -42,7 +47,10 @@ const getStatusBadge = (st: string) => {
 			</div>
 			
 			<div class="flex flex-wrap gap-3">
-				{app.estado === 'solicitado' && (
+				{!esAdmin && (app.estado === 'solicitado' || app.estado === 'aprobado') && (
+					<p class="text-xs text-slate-400 font-medium italic self-center">Sólo un Administrador puede procesar esta solicitud.</p>
+				)}
+				{esAdmin && app.estado === 'solicitado' && (
 					<>
 						<button id="btn-rechazar" class="px-5 py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-semibold rounded-xl transition-colors cursor-pointer">
 							Rechazar
@@ -53,7 +61,7 @@ const getStatusBadge = (st: string) => {
 						</button>
 					</>
 				)}
-				{app.estado === 'aprobado' && (
+				{esAdmin && app.estado === 'aprobado' && (
 					<button id="btn-suspender" class="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-md transition-all cursor-pointer">
 						Suspender Canillita
 					</button>

@@ -52,6 +52,11 @@ for (const r of referidos) {
 
 const searchQuery = Astro.url.searchParams.get('q') || '';
 const estadoFilter = Astro.url.searchParams.get('estado') || 'todos';
+// middleware.ts deja pasar a 'gestion' a /admin/canillitas/**, pero
+// savePickupPoint/deletePickupPoint/regenerateReferralCode/impersonate
+// exigen admin estricto: sin esto, 'gestion' veía botones que siempre
+// le devolvían un error (o, en el caso de "Probar", un 403 en texto plano).
+const esAdmin = Astro.locals.user?.role === 'admin';
 
 let allPuntos = puntos.map(p => {
 	const profId = typeof p.profile_id === 'string' ? p.profile_id : p.profile_id?.$id;
@@ -101,27 +106,29 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 				<a href="/admin/canillitas/solicitudes" class="px-4 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors text-sm">
 					Ver Solicitudes
 				</a>
-				<button id="btn-nuevo-punto" class="px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md flex items-center gap-2 cursor-pointer text-sm">
-					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-					Nuevo Punto de Retiro
-				</button>
+				{esAdmin && (
+					<button id="btn-nuevo-punto" class="px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md flex items-center gap-2 cursor-pointer text-sm">
+						<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+						Nuevo Punto de Retiro
+					</button>
+				)}
 			</div>
 		</header>
 
-		{/* Top Metric Cards */}
+		{/* Top Metric Cards — también funcionan como filtro de estado */}
 		<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+			<a href="?estado=activo" class={`bg-white border p-6 rounded-2xl shadow-sm transition-colors hover:border-emerald-300 ${estadoFilter === 'activo' ? 'border-emerald-400 ring-1 ring-emerald-200' : 'border-slate-200'}`}>
 				<h3 class="font-bold text-slate-400 text-xs uppercase tracking-wider mb-1">Puntos Activos</h3>
 				<p class="text-3xl font-extrabold text-emerald-600">{activeCount}</p>
-			</div>
-			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+			</a>
+			<a href="?estado=pendiente" class={`bg-white border p-6 rounded-2xl shadow-sm transition-colors hover:border-amber-300 ${estadoFilter === 'pendiente' ? 'border-amber-400 ring-1 ring-amber-200' : 'border-slate-200'}`}>
 				<h3 class="font-bold text-slate-400 text-xs uppercase tracking-wider mb-1">Pendientes de Activación</h3>
 				<p class="text-3xl font-extrabold text-amber-600">{pendingCount}</p>
-			</div>
-			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+			</a>
+			<a href="?estado=suspendido" class={`bg-white border p-6 rounded-2xl shadow-sm transition-colors hover:border-rose-300 ${estadoFilter === 'suspendido' ? 'border-rose-400 ring-1 ring-rose-200' : 'border-slate-200'}`}>
 				<h3 class="font-bold text-slate-400 text-xs uppercase tracking-wider mb-1">Suspendidos</h3>
 				<p class="text-3xl font-extrabold text-rose-600">{suspendedCount}</p>
-			</div>
+			</a>
 			<div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
 				<h3 class="font-bold text-slate-400 text-xs uppercase tracking-wider mb-1">Códigos de Referido</h3>
 				<p class="text-3xl font-extrabold text-indigo-600">{referidos.filter(r => r.activo).length}</p>
@@ -130,9 +137,25 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 
 		{/* ABM Table for Pickup Points */}
 		<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm mb-12">
-			<div class="p-6 border-b border-slate-200 flex items-center justify-between">
+			<div class="p-6 border-b border-slate-200 flex items-center justify-between gap-4 flex-wrap">
 				<h2 class="text-xl font-bold text-slate-900">Puntos de Retiro Registrados</h2>
-				<span class="text-xs text-slate-500 font-medium">Total: {puntos.length} puntos</span>
+				<div class="flex items-center gap-3 flex-wrap">
+					{estadoFilter !== 'todos' && (
+						<a href="?" class="text-xs font-bold text-slate-500 hover:text-slate-900">Quitar filtro &times;</a>
+					)}
+					<form method="GET" class="flex items-center gap-2">
+						{estadoFilter !== 'todos' && <input type="hidden" name="estado" value={estadoFilter} />}
+						<input
+							type="text"
+							name="q"
+							value={searchQuery}
+							placeholder="Buscar por nombre, dirección, barrio..."
+							class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:border-indigo-500 w-64"
+						/>
+						<button type="submit" class="px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800">Buscar</button>
+					</form>
+					<span class="text-xs text-slate-500 font-medium">Total: {totalFiltered} puntos</span>
+				</div>
 			</div>
 			<div class="overflow-x-auto">
 				<table class="w-full text-left border-collapse">
@@ -164,14 +187,18 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 										) : (
 											<p class="text-[11px] font-medium text-slate-400 mt-0.5 flex items-center gap-1">
 												<span>⚪ Solo Punto (Sin Usuario)</span>
-												&bull; 
-												<button 
-													type="button" 
-													class="btn-editar-punto text-indigo-600 font-bold hover:underline cursor-pointer"
-													data-punto={toSafeJson(punto)}
-												>
-													+ Crear Acceso
-												</button>
+												{esAdmin && (
+													<>
+														&bull;
+														<button
+															type="button"
+															class="btn-editar-punto text-indigo-600 font-bold hover:underline cursor-pointer"
+															data-punto={toSafeJson(punto)}
+														>
+															+ Crear Acceso
+														</button>
+													</>
+												)}
 											</p>
 										)}
 									</td>
@@ -233,7 +260,7 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 										)}
 									</td>
 									<td class="p-4 text-right space-x-2 whitespace-nowrap">
-										{puntoProfileId && (
+										{esAdmin && puntoProfileId && (
 											<form action="/api/admin/impersonate" method="POST" class="inline">
 												<input type="hidden" name="profile_id" value={puntoProfileId} />
 												<button
@@ -247,7 +274,7 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 											</form>
 										)}
 										{punto.slug && (
-											<button 
+											<button
 												class="btn-generar-qr px-2.5 py-1 bg-[#E2EFE4] hover:bg-[#D4E5D6] text-[#2D5A27] font-extrabold text-xs rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"
 												data-slug={punto.slug}
 												data-nombre={punto.nombre_comercial}
@@ -257,26 +284,30 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 												<QrCode className="w-3.5 h-3.5" /> Afiche QR
 											</button>
 										)}
-										<button 
-											class="btn-editar-punto text-indigo-600 hover:text-indigo-800 font-bold text-xs cursor-pointer"
-											data-punto={toSafeJson(punto)}
-										>
-											Editar
-										</button>
-										{refCode && (
-											<button 
+										{esAdmin && (
+											<button
+												class="btn-editar-punto text-indigo-600 hover:text-indigo-800 font-bold text-xs cursor-pointer"
+												data-punto={toSafeJson(punto)}
+											>
+												Editar
+											</button>
+										)}
+										{esAdmin && refCode && (
+											<button
 												class="btn-regenerar-code text-amber-600 hover:text-amber-800 font-bold text-xs cursor-pointer"
 												data-profile={puntoProfileId}
 											>
 												Regenerar REF
 											</button>
 										)}
-										<button 
-											class="btn-eliminar-punto text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
-											data-id={punto.$id}
-										>
-											Eliminar
-										</button>
+										{esAdmin && (
+											<button
+												class="btn-eliminar-punto text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
+												data-id={punto.$id}
+											>
+												Eliminar
+											</button>
+										)}
 									</td>
 								</tr>
 							);
@@ -616,10 +647,15 @@ const suspendedCount = allPuntos.filter(p => p.estado === 'suspendido').length;
 		});
 
 		document.getElementById('btn-gen-password')?.addEventListener('click', () => {
+			// Un prefijo fijo ('Urban2026!') compartido por todas las contraseñas
+			// generadas acá, con sólo 4 caracteres al azar después, reducía el
+			// espacio de fuerza bruta a ~62^4 por cuenta.
 			const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$';
-			let pass = 'Urban2026!';
-			for (let i = 0; i < 4; i++) {
-				pass += chars.charAt(Math.floor(Math.random() * chars.length));
+			const randomBytes = new Uint32Array(14);
+			crypto.getRandomValues(randomBytes);
+			let pass = '';
+			for (let i = 0; i < randomBytes.length; i++) {
+				pass += chars.charAt(randomBytes[i] % chars.length);
 			}
 			inputPassword.value = pass;
 			const btnCopy = document.getElementById('btn-copy-credentials');

@@ -384,6 +384,11 @@ export const server = {
 						owner_id: profile.$id,
 						activo: true
 					});
+
+					// canillita_applications no guardaba ningún backlink al profile
+					// creado: suspendCanillita, con sólo el applicationId, no tenía
+					// forma de encontrar (ni suspender) el punto de retiro real.
+					await escribirDocumentoTolerante('canillita_applications', { profile_id: profile.$id }, input.applicationId);
 				} catch (e: any) {
 					// El estado ya había quedado en 'aprobado' para achicar la
 					// ventana de carrera (ver arriba). Si algo de esto falla, se
@@ -456,10 +461,22 @@ export const server = {
 					throw new Error('No autorizado');
 				}
 
+				// El botón "Suspender Canillita" sólo manda applicationId: sin
+				// resolver el profile_id desde ahí, el punto de retiro real nunca
+				// se tocaba pese al mensaje de éxito ("Su punto de retiro quedará
+				// inactivo").
+				let profileId = input.profileId;
+
 				if (input.applicationId) {
 					await db.updateDocument('urbanpoint', 'canillita_applications', input.applicationId, {
 						estado: 'suspendido'
 					});
+					if (!profileId) {
+						const app = await db.getDocument('urbanpoint', 'canillita_applications', input.applicationId).catch(() => null);
+						if (app?.profile_id) {
+							profileId = typeof app.profile_id === 'string' ? app.profile_id : app.profile_id?.$id;
+						}
+					}
 				}
 
 				if (input.pickupPointId) {
@@ -468,9 +485,9 @@ export const server = {
 					});
 				}
 
-				if (input.profileId) {
+				if (profileId) {
 					const points = await db.listDocuments('urbanpoint', 'pickup_points', [
-						Query.equal('profile_id', input.profileId)
+						Query.equal('profile_id', profileId)
 					]);
 					for (const p of points.documents) {
 						await db.updateDocument('urbanpoint', 'pickup_points', p.$id, {
@@ -2835,6 +2852,15 @@ export const server = {
 
 					if (profileRes.documents.length > 0) {
 						const existingProf = profileRes.documents[0];
+						// Mismo guard que approveCanillita: un email que coincide con una
+						// cuenta de staff no se convierte en canillita en silencio,
+						// pisando su rol (y, si cargó contraseña, también su clave).
+						if (existingProf.role === 'admin' || existingProf.role === 'gestion') {
+							throw new Error(
+								`El email ${cleanEmail} ya pertenece a una cuenta de ${existingProf.role === 'admin' ? 'Administrador' : 'Gestión'}. ` +
+								'Resolvé el conflicto de email a mano antes de vincularlo a este punto.'
+							);
+						}
 						profileId = existingProf.$id;
 
 						const profUpdates: any = { role: 'canillita' };
