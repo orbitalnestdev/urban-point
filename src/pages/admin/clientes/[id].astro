@@ -22,19 +22,33 @@ let totalSpentCentavos = 0;
 let preferredPoint = null;
 let referringCanillita = null;
 
+// Trae TODOS los pedidos del cliente, paginando con cursor. Con un
+// Query.limit(100) fijo, un cliente con más actividad que eso subestimaba
+// en silencio "Total Compras" y "Total Acumulado Gastado", y el historial
+// de la tabla no traía los pedidos más viejos sin ningún aviso.
+async function fetchAllOrdersDeCliente(customerId: string) {
+	const out: any[] = [];
+	let cursor: string | null = null;
+	while (true) {
+		const q = [Query.equal('customer_id', customerId), Query.orderDesc('$createdAt'), Query.limit(500)];
+		if (cursor) q.push(Query.cursorAfter(cursor));
+		const page = await databases.listDocuments('urbanpoint', 'orders', q);
+		out.push(...page.documents);
+		if (page.documents.length < 500) break;
+		cursor = page.documents[page.documents.length - 1].$id;
+	}
+	return out;
+}
+
 try {
 	// Perfil y pedidos no dependen entre sí: en serie eran dos round-trips
 	// encadenados al pedo.
-	const [profileDoc, ordersRes] = await Promise.all([
+	const [profileDoc, ordersDocs] = await Promise.all([
 		databases.getDocument('urbanpoint', 'profiles', id as string),
-		databases.listDocuments('urbanpoint', 'orders', [
-			Query.equal('customer_id', id as string),
-			Query.orderDesc('$createdAt'),
-			Query.limit(100)
-		])
+		fetchAllOrdersDeCliente(id as string)
 	]);
 	profile = profileDoc;
-	orders = ordersRes.documents;
+	orders = ordersDocs;
 
 	totalSpentCentavos = orders
 		.filter(o => o.estado !== 'cancelado')
@@ -193,13 +207,17 @@ const getStatusLabel = (estado: string) => {
 				</div>
 				<div class="pt-3 border-t border-slate-100 space-y-2">
 					<label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">Asignar Rol de Usuario</label>
-					<select id="select-user-role" data-profile-id={profile.$id} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 cursor-pointer">
+					<select id="select-user-role" data-profile-id={profile.$id} disabled={!esAdmin} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
 						<option value="cliente" selected={profile.role === 'cliente'}>Cliente B2C</option>
 						<option value="canillita" selected={profile.role === 'canillita'}>Canillita Afiliado</option>
 						<option value="distribuidor" selected={profile.role === 'distribuidor'}>Distribuidor (Precio Mayorista)</option>
 						{esAdmin && <option value="admin" selected={profile.role === 'admin'}>Administrador</option>}
 					</select>
-					<p class="text-[10px] text-slate-400">El rol distribuidor se asigna directamente desde el panel sin flujo de alta público.</p>
+					<p class="text-[10px] text-slate-400">
+						{esAdmin
+							? 'El rol distribuidor se asigna directamente desde el panel sin flujo de alta público.'
+							: 'Sólo un Administrador puede cambiar el rol de un usuario.'}
+					</p>
 				</div>
 			</div>
 

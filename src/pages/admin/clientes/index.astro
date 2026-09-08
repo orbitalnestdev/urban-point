@@ -9,6 +9,11 @@ export const prerender = false;
 
 const roleFilter = Astro.url.searchParams.get('role') || 'todos';
 const searchQuery = Astro.url.searchParams.get('q') || '';
+// /api/admin/impersonate exige admin estricto: 'gestion' también entra a
+// esta página (el middleware sólo bloquea /admin/configuracion y
+// /admin/equipo para ese rol), y veía el botón "Probar" aunque siempre le
+// devolviera un 403 en texto plano al tocarlo.
+const esAdmin = Astro.locals.user?.role === 'admin';
 
 const { databases } = createAdminClient();
 let clientes = [];
@@ -129,8 +134,11 @@ try {
 	}
 
 	totalFiltered = filtered.length;
-	currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
 	totalPages = Math.ceil(totalFiltered / pageSize) || 1;
+	// Un `page` no numérico (NaN) o fuera de rango dejaba la lista vacía en
+	// vez de caer en una página válida.
+	const pageParsed = parseInt(Astro.url.searchParams.get('page') || '1', 10);
+	currentPage = Math.min(Math.max(1, Number.isFinite(pageParsed) ? pageParsed : 1), totalPages);
 	clientes = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
 } catch (e) {
@@ -293,7 +301,7 @@ const gastoPromedioCentavos = totalClientesCount > 0 ? Math.round(totalGastadoGe
 									{dateStr}
 								</td>
 								<td class="p-4 text-center space-x-1" onclick="event.stopPropagation()">
-									{c.role !== 'admin' && (
+									{esAdmin && c.role !== 'admin' && (
 										<form action="/api/admin/impersonate" method="POST" class="inline">
 											<input type="hidden" name="profile_id" value={c.$id} />
 											<button type="submit" title="Ingresar a la app impersonando a este usuario" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px] rounded-xl transition-colors border border-amber-200 inline-flex items-center gap-1 cursor-pointer">

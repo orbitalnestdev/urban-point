@@ -85,9 +85,13 @@ if (Astro.request.method === 'POST') {
         } else if (action === 'change_role') {
 
             const memberId = formData.get('member_id')?.toString();
-            const newRole = formData.get('new_role')?.toString();
+            const newRoleInput = formData.get('new_role')?.toString();
 
-            if (!memberId || !newRole) throw new Error("Parámetros inválidos.");
+            if (!memberId || !newRoleInput) throw new Error("Parámetros inválidos.");
+
+            // Mismo criterio que 'invite': un valor manipulado a mano cae al
+            // más restrictivo, nunca a un rol inexistente para el middleware.
+            const newRole = newRoleInput === 'admin' ? 'admin' : 'gestion';
 
             const memberDoc = await databases.getDocument('urbanpoint', 'profiles', memberId);
 

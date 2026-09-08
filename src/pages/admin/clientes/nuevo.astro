@@ -13,6 +13,8 @@ export const prerender = false;
 // todavía, así que sigue sin `name` y queda deshabilitado: es mejor no
 // enviarlo a que se envíe y se pierda en silencio.
 let errorMessage = '';
+let successMessage = '';
+let nuevoPerfilId = '';
 
 if (Astro.request.method === 'POST') {
 	try {
@@ -38,11 +40,12 @@ if (Astro.request.method === 'POST') {
 		}
 
 		let userId: string;
+		let tempPassword = '';
 		const existingUsers = await users.list([Query.equal('email', email)]);
 		if (existingUsers.users.length > 0) {
 			userId = existingUsers.users[0].$id;
 		} else {
-			const tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
+			tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
 			const newAuthUser = await users.create(ID.unique(), email, undefined, tempPassword, nombreCompleto);
 			userId = newAuthUser.$id;
 		}
@@ -57,7 +60,13 @@ if (Astro.request.method === 'POST') {
 			role: 'cliente'
 		});
 
-		return Astro.redirect(`/admin/clientes/${nuevoPerfil.$id}?creado=1`);
+		nuevoPerfilId = nuevoPerfil.$id;
+		// Sin mostrar la contraseña acá, el cliente quedaba sin forma de
+		// saberla — no hay flujo de "olvidé mi contraseña" en el sitio. No va
+		// en la URL de redirección para no dejarla en el historial del
+		// navegador ni en logs del servidor.
+		successMessage = `Cliente ${nombreCompleto} creado correctamente.` +
+			(tempPassword ? ` Contraseña inicial asignada: ${tempPassword}` : '');
 	} catch (e: any) {
 		errorMessage = e.message || 'No se pudo crear el cliente.';
 	}
@@ -78,6 +87,17 @@ if (Astro.request.method === 'POST') {
 		{errorMessage && (
 			<div class="mb-6 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm font-semibold">
 				{errorMessage}
+			</div>
+		)}
+
+		{successMessage && (
+			<div class="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-between gap-4 flex-wrap">
+				<span>{successMessage}</span>
+				{nuevoPerfilId && (
+					<a href={`/admin/clientes/${nuevoPerfilId}`} class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shrink-0">
+						Ver ficha del cliente &rarr;
+					</a>
+				)}
 			</div>
 		)}
 
@@ -237,7 +257,7 @@ if (Astro.request.method === 'POST') {
 	</main>
 
 	{/* Bottom Fixed Bar */}
-	<div class="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-slate-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40">
+	<div class="fixed bottom-0 left-0 md:left-64 right-0 bg-white border-t border-slate-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40">
 		<div class="max-w-[1200px] mx-auto flex items-center justify-between">
 			<a href="/admin/clientes" class="px-6 py-2 border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
 				Descartar
