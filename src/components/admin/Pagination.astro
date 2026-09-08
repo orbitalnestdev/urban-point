@@ -8,9 +8,14 @@ interface Props {
 	baseUrl: string;
 }
 
-const { currentPage, totalPages, totalItems, pageSize, searchParams, baseUrl } = Astro.props;
+const { currentPage: currentPageProp, totalPages, totalItems, pageSize, searchParams, baseUrl } = Astro.props;
 
 if (totalPages <= 1) return null;
+
+// Los callers sólo clampeaban el mínimo (Math.max(1, ...)), nunca el
+// máximo: un ?page= fuera de rango dejaba la tabla vacía mientras acá
+// abajo se seguía mostrando "Página 999 de 2", sin ninguna resaltada.
+const currentPage = Math.min(Math.max(1, currentPageProp), totalPages);
 
 const startItem = Math.min((currentPage - 1) * pageSize + 1, totalItems);
 const endItem = Math.min(currentPage * pageSize, totalItems);
