@@ -19,7 +19,8 @@ const { databases } = createAdminClient();
 const [rules, productsRes, canillitasRes] = await Promise.all([
   databases.listDocuments('urbanpoint', 'commission_rules', [
     Query.equal('activo', true),
-    Query.orderDesc('$createdAt')
+    Query.orderDesc('$createdAt'),
+    Query.limit(200)
   ]),
   databases.listDocuments('urbanpoint', 'products', [Query.limit(50)]),
   databases.listDocuments('urbanpoint', 'pickup_points', [

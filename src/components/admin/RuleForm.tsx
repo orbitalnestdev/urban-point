@@ -104,9 +104,10 @@ export default function RuleForm({ canillitas, categorias }: Props) {
           <label className="block text-sm font-semibold text-slate-700 mb-2">
             Valor {formData.tipo === 'porcentaje' ? '(Basis Points, ej: 1000 = 10%)' : '(Centavos, ej: 15000 = $150.00)'}
           </label>
-          <input 
+          <input
             type="number"
             required
+            min={1}
             value={formData.valor}
             onChange={e => setFormData({...formData, valor: Number(e.target.value)})}
             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-mono"

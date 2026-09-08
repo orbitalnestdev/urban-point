@@ -27,6 +27,11 @@ if (!user || user.role !== 'admin') {
   return Astro.redirect('/');
 }
 
+// Sin leer esto, un error de resolverSolicitud (ej. dos admins aprobando la
+// misma solicitud casi al mismo tiempo) no se veía en ningún lado: la
+// página simplemente recargaba sin indicar éxito ni falla.
+const resultadoSolicitud = Astro.getActionResult(actions.resolverSolicitudLiquidacion);
+
 const { databases } = createAdminClient();
 
 // URL Query Parameters
@@ -344,7 +349,18 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 
 <AdminLayout title="Gestión y Liquidación de Comisiones">
 	<main class="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-		
+
+		{resultadoSolicitud && !resultadoSolicitud.error && (
+			<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-sm font-semibold">
+				Solicitud actualizada correctamente.
+			</div>
+		)}
+		{resultadoSolicitud?.error && (
+			<div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm font-semibold">
+				No se pudo procesar la solicitud: {resultadoSolicitud.error.message}
+			</div>
+		)}
+
 		<!-- Header Principal -->
 		<header class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
 			<div>
@@ -430,6 +446,7 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 						<option value="pendiente" selected={estadoParam === 'pendiente'}>Por confirmar (pendiente)</option>
 						<option value="disponible" selected={estadoParam === 'disponible'}>Liquidable (disponible)</option>
 						<option value="liquidado" selected={estadoParam === 'liquidado'}>Liquidadas / Pagadas</option>
+						<option value="revertido" selected={estadoParam === 'revertido'}>Revertidas</option>
 					</select>
 				</div>
 
@@ -593,11 +610,23 @@ const selectedCanillitaStats = canillitaParam ? groupedByCanillitaMap[canillitaP
 									<form method="POST" action={actions.resolverSolicitudLiquidacion}>
 										<input type="hidden" name="solicitudId" value={sol.$id} />
 										<input type="hidden" name="estado" value="aprobada" />
+										<input type="hidden" name="canillita" value={canillitaParam} />
+										<input type="hidden" name="periodo" value={periodoParam} />
+										<input type="hidden" name="filtroEstado" value={estadoParam} />
+										<input type="hidden" name="q" value={qParam} />
+										<input type="hidden" name="tab" value={tabParam} />
+										<input type="hidden" name="page" value={currentPage} />
 										<button type="submit" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-xl transition-colors cursor-pointer">Aprobar</button>
 									</form>
 									<form method="POST" action={actions.resolverSolicitudLiquidacion}>
 										<input type="hidden" name="solicitudId" value={sol.$id} />
 										<input type="hidden" name="estado" value="rechazada" />
+										<input type="hidden" name="canillita" value={canillitaParam} />
+										<input type="hidden" name="periodo" value={periodoParam} />
+										<input type="hidden" name="filtroEstado" value={estadoParam} />
+										<input type="hidden" name="q" value={qParam} />
+										<input type="hidden" name="tab" value={tabParam} />
+										<input type="hidden" name="page" value={currentPage} />
 										<button type="submit" class="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-bold text-[11px] rounded-xl transition-colors cursor-pointer">Rechazar</button>
 									</form>
 								</div>

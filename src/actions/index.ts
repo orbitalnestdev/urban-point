@@ -1400,11 +1400,14 @@ export const server = {
 	}),
 
 	createCommissionRule: defineAction({
-		accept: 'form',
+		// RuleForm.tsx llama a esta action con un objeto plano (igual que
+		// createProduct), no con un FormData real: con accept:'form' el
+		// servidor rechazaba SIEMPRE la creación con "UNSUPPORTED_MEDIA_TYPE".
+		accept: 'json',
 		input: z.object({
 			alcance: z.enum(['default', 'canillita', 'categoria', 'canillita_categoria']),
 			tipo: z.enum(['porcentaje', 'monto_fijo']),
-			valor: z.number(),
+			valor: z.number().positive(),
 			canillita_id: z.string().optional(),
 			categoria_id: z.string().optional()
 		}),
