@@ -1,6 +1,8 @@
 export function generateCsvString(rows: Array<Record<string, any>>, headers?: string[]): string {
-	if (rows.length === 0) return '';
-	
+	// Sin encabezado explícito no hay forma de saber las columnas de un CSV
+	// vacío: se sigue devolviendo '' en ese caso, como antes.
+	if (rows.length === 0) return headers ? headers.join(',') : '';
+
 	const keys = headers || Object.keys(rows[0]);
 	const headerRow = keys.join(',');
 	

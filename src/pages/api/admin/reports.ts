@@ -100,6 +100,15 @@ export const GET: APIRoute = async ({ locals, url }) => {
 		Query.lessThanEqual('$createdAt', hasta.toISOString())
 	];
 
+	// Columnas fijas por tipo: sin esto, un rango sin resultados generaba un
+	// CSV de 0 bytes (sólo el BOM), indistinguible de un archivo roto.
+	const HEADERS_BY_TYPE: Record<TipoReporte, string[]> = {
+		ventas: ['numero', 'fecha', 'estado', 'fulfillment', 'subtotal', 'costo_envio', 'total'],
+		comisiones: ['fecha', 'tipo', 'estado', 'monto', 'motivo', 'profile_id', 'order_id'],
+		liquidaciones: ['fecha', 'profile_id', 'monto', 'medio_pago', 'referencia'],
+		inventario: ['sku', 'nombre', 'estado', 'stock', 'precio', 'costo']
+	};
+
 	try {
 		const { databases } = createAdminClient();
 		let rows: Array<Record<string, any>> = [];
@@ -160,7 +169,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
 			}));
 		}
 
-		const csv = generateCsvString(rows);
+		const csv = generateCsvString(rows, HEADERS_BY_TYPE[type]);
 		const fechaStr = new Date().toISOString().slice(0, 10);
 		const filename = `reporte_${type}_urbanpoint_${fechaStr}.csv`;
 

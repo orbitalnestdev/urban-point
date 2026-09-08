@@ -89,9 +89,10 @@ const salesMonthCentavos = orders
 
 // Actionable metrics
 const nuevosSinConfirmar = orders.filter(o => o.estado === 'pendiente_pago' || o.estado === 'pendiente').length;
-// 'listo' y 'preparado' no existen en el enum de orders: estas dos métricas
-// daban siempre 0. Los estados reales son 'en_punto' y 'preparando'.
-const esperandoRetiro = (o: any) => o.estado === 'en_punto' || o.estado === 'preparando';
+// Sólo pedidos de retiro en punto: 'preparando' sin filtrar por fulfillment
+// contaba también envíos a domicilio (que nunca pasan por un punto) como si
+// estuvieran "listos para retirar".
+const esperandoRetiro = (o: any) => o.fulfillment === 'retiro' && (o.estado === 'en_punto' || o.estado === 'despachado');
 const listosParaRetiro = orders.filter(esperandoRetiro).length;
 const sinRetirarStale = orders.filter(o => esperandoRetiro(o) && (now.getTime() - new Date(o.$createdAt).getTime()) > SEVEN_DAYS_MS).length;
 
@@ -189,12 +190,16 @@ const recentOrders = orders.slice(0, 8);
 				</div>
 			</a>
 
-			{/* La card cuenta en_punto+preparando: linkear al filtro de despachado mostraba otra cosa. */}
+			{/* La card cuenta en_punto+despachado de fulfillment='retiro': linkear al filtro de despachado mostraba otra cosa. */}
 			<a href="/admin/pedidos" class="bg-blue-50/60 border border-blue-200 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center justify-between">
 				<div>
 					<p class="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1">Listos Para Retiro</p>
 					<p class="text-3xl font-black text-blue-700">{listosParaRetiro}</p>
-					<p class="text-[10px] text-blue-600 font-bold mt-1">Esperando retiro &rarr;</p>
+					{sinRetirarStale > 0 ? (
+						<p class="text-[10px] text-rose-600 font-bold mt-1">⚠ {sinRetirarStale} hace más de 7 días</p>
+					) : (
+						<p class="text-[10px] text-blue-600 font-bold mt-1">Esperando retiro &rarr;</p>
+					)}
 				</div>
 				<div class="w-12 h-12 bg-blue-100 text-blue-700 rounded-2xl flex items-center justify-center">
 					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>

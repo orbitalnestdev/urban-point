@@ -1,9 +1,21 @@
 import type { APIRoute } from 'astro';
 import { generateCsvString } from '../../../lib/exports';
+import { requireRole } from '../../../lib/server/auth';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ locals, url }) => {
+	// La página protege la UI pero el endpoint tiene que verificar por su
+	// cuenta: sin esto, cualquiera sin sesión podía pegarle directo.
+	try {
+		requireRole({ locals }, 'admin', 'gestion');
+	} catch {
+		return new Response(JSON.stringify({ error: 'No autorizado' }), {
+			status: 403,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
 	const tipo = url.searchParams.get('tipo') || 'completa';
 
 	let rows: Array<Record<string, any>> = [];
