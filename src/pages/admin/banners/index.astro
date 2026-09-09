@@ -1,0 +1,339 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getAllBanners } from '../../../lib/server/banners';
+import { getSiteSettings } from '../../../lib/server/settings';
+import { getOptimizedImageUrl } from '../../../lib/server/catalogCache';
+import { toSafeJson } from '../../../lib/safeJson';
+import { Image, Plus, Edit2, Trash2, ArrowUp, ArrowDown, LayoutGrid, GalleryHorizontal } from 'lucide-react';
+
+export const prerender = false;
+
+// deleteBanner exige admin estricto; crear/editar/reordenar y el switch de
+// modo de vista los puede tocar 'gestion' también — mismo criterio que
+// categorías/canillitas en el resto del panel.
+const esAdmin = Astro.locals.user?.role === 'admin';
+
+let banners: any[] = [];
+let displayMode: 'grid' | 'carousel' = 'grid';
+try {
+	const [b, settings] = await Promise.all([getAllBanners(), getSiteSettings()]);
+	banners = b;
+	displayMode = settings.banners_display_mode || 'grid';
+} catch (e) {
+	console.error('Error cargando banners:', e);
+}
+---
+
+<AdminLayout title="Banners de Colecciones | UrbanPoint">
+	<div class="space-y-6 max-w-5xl mx-auto pb-12">
+
+		{/* Top Header */}
+		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+			<div>
+				<h1 class="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
+					<Image className="w-7 h-7 text-indigo-600" />
+					Banners de Colecciones
+				</h1>
+				<p class="text-slate-500 text-xs sm:text-sm mt-1">
+					Se muestran en la home de la tienda (y en las páginas de canillita). Sólo los "Activos" son visibles.
+				</p>
+			</div>
+
+			<button
+				id="btn-nuevo-banner"
+				class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all text-sm flex items-center gap-2 cursor-pointer hover:scale-[1.02]"
+			>
+				<Plus className="w-4 h-4" />
+				Nuevo Banner
+			</button>
+		</div>
+
+		{/* Modo de visualización */}
+		<div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+			<div>
+				<h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Cómo se muestra en la tienda</h3>
+				<p class="text-[11px] text-slate-400 mt-0.5">Afecta a todos los banners activos, en la home y en las páginas de canillita.</p>
+			</div>
+			<div class="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+				<button
+					id="btn-modo-grid"
+					data-mode="grid"
+					class:list={['btn-modo-vista', 'px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer', displayMode === 'grid' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700']}
+				>
+					<LayoutGrid className="w-3.5 h-3.5" /> Grilla
+				</button>
+				<button
+					id="btn-modo-carousel"
+					data-mode="carousel"
+					class:list={['btn-modo-vista', 'px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer', displayMode === 'carousel' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700']}
+				>
+					<GalleryHorizontal className="w-3.5 h-3.5" /> Carrusel
+				</button>
+			</div>
+		</div>
+
+		{/* Lista */}
+		<div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+			<div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+				<h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Banners ({banners.length})</h2>
+				<span class="text-xs text-slate-500 font-medium">Usá las flechas para cambiar el orden</span>
+			</div>
+
+			{banners.length === 0 ? (
+				<div class="p-10 text-center text-sm text-slate-400 font-medium">
+					Todavía no cargaste ningún banner. Tocá "Nuevo Banner" para empezar.
+				</div>
+			) : (
+				<div class="divide-y divide-slate-100">
+					{banners.map((b, idx) => (
+						<div class="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors">
+							<div class="flex flex-col items-center gap-0.5 shrink-0">
+								<button class="btn-reorder p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-900 transition-colors disabled:opacity-30 cursor-pointer" data-id={b.$id} data-dir="up" disabled={idx === 0} title="Subir orden">
+									<ArrowUp className="w-3.5 h-3.5" />
+								</button>
+								<button class="btn-reorder p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-900 transition-colors disabled:opacity-30 cursor-pointer" data-id={b.$id} data-dir="down" disabled={idx === banners.length - 1} title="Bajar orden">
+									<ArrowDown className="w-3.5 h-3.5" />
+								</button>
+							</div>
+
+							<div class="w-16 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+								{b.imagen_url ? (
+									<img src={getOptimizedImageUrl(b.imagen_url, 120, 90)} class="w-full h-full object-cover" alt={b.nombre} />
+								) : (
+									<Image className="w-5 h-5 text-slate-300" />
+								)}
+							</div>
+
+							<div class="min-w-0 flex-1">
+								<p class="font-bold text-slate-900 text-sm truncate">{b.nombre}</p>
+								<p class="text-xs text-slate-400 font-mono truncate">{b.link_url || 'Sin link cargado'}</p>
+							</div>
+
+							{b.activo === false && (
+								<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 shrink-0">Oculto</span>
+							)}
+
+							<div class="flex items-center gap-1 shrink-0">
+								<button class="btn-editar-banner p-2 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer" data-banner={toSafeJson(b)} title="Editar">
+									<Edit2 className="w-4 h-4" />
+								</button>
+								{esAdmin && (
+									<button class="btn-eliminar-banner p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer" data-id={b.$id} data-nombre={b.nombre} title="Eliminar">
+										<Trash2 className="w-4 h-4" />
+									</button>
+								)}
+							</div>
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	</div>
+
+	{/* Modal Crear/Editar */}
+	<div id="modal-banner" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+		<div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6">
+			<div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
+				<h3 id="modal-banner-title" class="text-xl font-bold text-slate-900">Nuevo Banner</h3>
+				<button id="btn-close-banner-modal" class="text-slate-400 hover:text-slate-600 text-2xl font-bold cursor-pointer">&times;</button>
+			</div>
+
+			<form id="form-banner" class="space-y-4">
+				<input type="hidden" id="banner-id" />
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Imagen</label>
+					<input type="file" id="input-file-banner" accept="image/*" class="hidden" />
+					<div id="btn-upload-banner" class="aspect-[16/9] rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-6 hover:bg-slate-50 hover:border-indigo-400 transition-colors cursor-pointer group relative overflow-hidden">
+						<img id="img-banner-preview" src="" class="absolute inset-0 w-full h-full object-cover hidden" />
+						<div id="banner-placeholder" class="flex flex-col items-center">
+							<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400 group-hover:text-indigo-500 mb-2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+							<span class="text-sm font-bold text-slate-600 group-hover:text-indigo-600">Subir imagen del banner</span>
+						</div>
+					</div>
+				</div>
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre de la colección</label>
+					<input type="text" id="banner-nombre" required placeholder="Ej: Colecciones Clarín" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600" />
+				</div>
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Link de destino</label>
+					<input type="text" id="banner-link" placeholder="/productos, o https://..." class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono outline-none focus:border-indigo-600" />
+					<p class="text-[10px] text-slate-400 mt-1">Una ruta del sitio (ej: /productos) o un link externo completo.</p>
+				</div>
+
+				<label class="flex items-center gap-2 cursor-pointer">
+					<input type="checkbox" id="banner-activo" checked class="w-4 h-4 text-indigo-600 rounded cursor-pointer" />
+					<span class="text-xs font-bold text-slate-700">Activo (visible en la tienda)</span>
+				</label>
+
+				<div class="flex justify-end gap-3 pt-4 border-t border-slate-200">
+					<button type="button" id="btn-cancel-banner-modal" class="px-5 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 text-sm cursor-pointer">Cancelar</button>
+					<button type="submit" id="btn-save-banner" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md text-sm cursor-pointer">Guardar Banner</button>
+				</div>
+			</form>
+		</div>
+	</div>
+
+	<script>
+		import { actions } from 'astro:actions';
+
+		const modal = document.getElementById('modal-banner');
+		const modalTitle = document.getElementById('modal-banner-title');
+		const formBanner = document.getElementById('form-banner') as HTMLFormElement;
+		const inputId = document.getElementById('banner-id') as HTMLInputElement;
+		const inputNombre = document.getElementById('banner-nombre') as HTMLInputElement;
+		const inputLink = document.getElementById('banner-link') as HTMLInputElement;
+		const inputActivo = document.getElementById('banner-activo') as HTMLInputElement;
+		const imgPreview = document.getElementById('img-banner-preview') as HTMLImageElement;
+		const placeholder = document.getElementById('banner-placeholder');
+		let currentImagenUrl = '';
+
+		function openModal(banner: any = null) {
+			formBanner.reset();
+			currentImagenUrl = banner?.imagen_url || '';
+			inputId.value = banner?.$id || '';
+			inputNombre.value = banner?.nombre || '';
+			inputLink.value = banner?.link_url || '';
+			inputActivo.checked = banner ? banner.activo !== false : true;
+			if (currentImagenUrl) {
+				imgPreview.src = currentImagenUrl;
+				imgPreview.classList.remove('hidden');
+				placeholder?.classList.add('hidden');
+			} else {
+				imgPreview.src = '';
+				imgPreview.classList.add('hidden');
+				placeholder?.classList.remove('hidden');
+			}
+			if (modalTitle) modalTitle.textContent = banner ? 'Editar Banner' : 'Nuevo Banner';
+			modal?.classList.remove('hidden');
+		}
+
+		function closeModal() {
+			modal?.classList.add('hidden');
+		}
+
+		document.getElementById('btn-nuevo-banner')?.addEventListener('click', () => openModal());
+		document.getElementById('btn-close-banner-modal')?.addEventListener('click', closeModal);
+		document.getElementById('btn-cancel-banner-modal')?.addEventListener('click', closeModal);
+
+		document.querySelectorAll('.btn-editar-banner').forEach(btn => {
+			btn.addEventListener('click', () => {
+				const raw = (btn as HTMLElement).dataset.banner;
+				if (raw) openModal(JSON.parse(raw));
+			});
+		});
+
+		// Subida de imagen: mismo endpoint /api/upload-image que ya usa el
+		// editor de productos — no hace falta infraestructura nueva.
+		const fileBanner = document.getElementById('input-file-banner') as HTMLInputElement;
+		const btnUploadBanner = document.getElementById('btn-upload-banner');
+		if (btnUploadBanner && fileBanner) {
+			btnUploadBanner.addEventListener('click', () => fileBanner.click());
+			fileBanner.addEventListener('change', async () => {
+				if (fileBanner.files && fileBanner.files[0]) {
+					const formData = new FormData();
+					formData.append('file', fileBanner.files[0]);
+					try {
+						const res = await fetch('/api/upload-image', { method: 'POST', body: formData });
+						const json = await res.json();
+						if (json.success && json.url) {
+							currentImagenUrl = json.url;
+							imgPreview.src = json.url;
+							imgPreview.classList.remove('hidden');
+							placeholder?.classList.add('hidden');
+						} else {
+							alert('Error subiendo imagen: ' + (json.error || 'Intentá de nuevo'));
+						}
+					} catch (e) {
+						alert('Error de conexión al subir la imagen');
+					}
+				}
+			});
+		}
+
+		formBanner?.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			const btnSave = document.getElementById('btn-save-banner') as HTMLButtonElement;
+			btnSave.disabled = true;
+			btnSave.textContent = 'Guardando...';
+			const { data, error } = await actions.saveBanner({
+				id: inputId.value || undefined,
+				nombre: inputNombre.value.trim(),
+				imagen_url: currentImagenUrl,
+				link_url: inputLink.value.trim(),
+				activo: inputActivo.checked
+			});
+			if (error || !data?.success) {
+				alert('Error al guardar: ' + (error?.message || data?.error || 'error desconocido'));
+				btnSave.disabled = false;
+				btnSave.textContent = 'Guardar Banner';
+				return;
+			}
+			window.location.reload();
+		});
+
+		document.querySelectorAll('.btn-eliminar-banner').forEach(btn => {
+			btn.addEventListener('click', async () => {
+				const id = (btn as HTMLElement).dataset.id;
+				const nombre = (btn as HTMLElement).dataset.nombre;
+				if (!id) return;
+				if (!confirm(`¿Eliminar el banner "${nombre}"? Esta acción no se puede deshacer.`)) return;
+				const { data, error } = await actions.deleteBanner({ id });
+				if (error || !data?.success) {
+					alert('Error al eliminar: ' + (error?.message || data?.error || 'error desconocido'));
+					return;
+				}
+				window.location.reload();
+			});
+		});
+
+		// Reordenar: lista plana, sin árbol — el vecino simplemente toma la
+		// posición que el elemento clickeado deja libre.
+		document.querySelectorAll('.btn-reorder').forEach(btn => {
+			btn.addEventListener('click', async (e) => {
+				const target = e.currentTarget as HTMLElement;
+				const id = target.dataset.id;
+				const dir = target.dataset.dir;
+				if (!id) return;
+				target.setAttribute('disabled', 'true');
+
+				const buttons = Array.from(document.querySelectorAll(`.btn-reorder[data-dir="${dir}"]`)) as HTMLElement[];
+				const idx = buttons.indexOf(target);
+				if (idx === -1) return;
+				const neighborIdx = dir === 'up' ? idx - 1 : idx + 1;
+				if (neighborIdx < 0 || neighborIdx >= buttons.length) return;
+				const otherId = buttons[neighborIdx].dataset.id;
+				if (!otherId) return;
+
+				const { data, error } = await actions.reorderBanners({
+					items: [
+						{ id, orden: dir === 'up' ? idx - 1 : idx + 1 },
+						{ id: otherId, orden: idx }
+					]
+				});
+				if (error || !data?.success) {
+					alert('Error reordenando banners');
+					target.removeAttribute('disabled');
+					return;
+				}
+				window.location.reload();
+			});
+		});
+
+		document.querySelectorAll('.btn-modo-vista').forEach(btn => {
+			btn.addEventListener('click', async () => {
+				const mode = (btn as HTMLElement).dataset.mode as 'grid' | 'carousel';
+				if (!mode) return;
+				const { data, error } = await actions.saveBannersDisplayMode({ mode });
+				if (error || !data?.success) {
+					alert('Error al cambiar el modo de visualización');
+					return;
+				}
+				window.location.reload();
+			});
+		});
+	</script>
+</AdminLayout>

@@ -22,6 +22,8 @@ export interface SiteSettings {
     whatsapp_schedule_start: string;
     whatsapp_schedule_end: string;
 
+    banners_display_mode: 'grid' | 'carousel';
+
     default_commission_pct: number;
     attribution_days: number;
     delivery_canillita_commission: boolean;
@@ -82,6 +84,8 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     whatsapp_position: 'right',
     whatsapp_schedule_start: '08:00',
     whatsapp_schedule_end: '20:00',
+
+    banners_display_mode: 'grid',
 
     default_commission_pct: 10.0,
     attribution_days: 30,
@@ -183,6 +187,8 @@ async function fetchSiteSettings(): Promise<SiteSettings> {
             whatsapp_position: (settingsMap.whatsapp_position as any) || DEFAULT_SETTINGS.whatsapp_position,
             whatsapp_schedule_start: settingsMap.whatsapp_schedule_start || DEFAULT_SETTINGS.whatsapp_schedule_start,
             whatsapp_schedule_end: settingsMap.whatsapp_schedule_end || DEFAULT_SETTINGS.whatsapp_schedule_end,
+
+            banners_display_mode: (settingsMap.banners_display_mode as any) || DEFAULT_SETTINGS.banners_display_mode,
 
             default_commission_pct: settingsMap.default_commission_pct ? parseFloat(settingsMap.default_commission_pct) : DEFAULT_SETTINGS.default_commission_pct,
             attribution_days: settingsMap.attribution_days ? parseInt(settingsMap.attribution_days, 10) : DEFAULT_SETTINGS.attribution_days,

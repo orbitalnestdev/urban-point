@@ -1,0 +1,141 @@
+---
+// Sección de banners de colecciones (grilla o carrusel, según lo que elija
+// la clienta en /admin/banners). Sin props a propósito: se importa igual en
+// index.astro y [slug].astro para que las dos home no se desincronicen.
+import { getActiveBanners } from '../lib/server/banners';
+import { getSiteSettings } from '../lib/server/settings';
+import { getOptimizedImageUrl } from '../lib/server/catalogCache';
+
+let banners: any[] = [];
+let mode: 'grid' | 'carousel' = 'grid';
+try {
+	const [b, settings] = await Promise.all([getActiveBanners(), getSiteSettings()]);
+	banners = b;
+	mode = settings.banners_display_mode || 'grid';
+} catch (e) {
+	console.error('Error cargando banners de colecciones:', e);
+}
+---
+
+{banners.length > 0 && (
+	<section class="py-20 bg-white">
+		<div class="max-w-7xl mx-auto px-6">
+			<div class="mb-8">
+				<div class="inline-flex items-center gap-2 text-[#2D5A27] font-semibold text-xs uppercase tracking-wider mb-2">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+					Nuestras Colecciones
+				</div>
+				<h2 class="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">
+					Elegí tu colección favorita
+				</h2>
+			</div>
+
+			{mode === 'grid' ? (
+				<div class="grid grid-cols-2 sm:grid-cols-3 gap-6">
+					{banners.map((b: any) => (
+						<a
+							href={b.link_url || '#'}
+							class="group block rounded-3xl border border-slate-200/70 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 overflow-hidden bg-white"
+						>
+							<div class="aspect-[4/3] bg-[#F2F7F3] overflow-hidden">
+								{b.imagen_url ? (
+									<img
+										src={getOptimizedImageUrl(b.imagen_url, 600, 450)}
+										alt={b.nombre}
+										loading="lazy"
+										class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+									/>
+								) : (
+									<div class="w-full h-full flex items-center justify-center text-[#2D5A27]/30">
+										<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+									</div>
+								)}
+							</div>
+							<div class="p-4 text-center">
+								<h3 class="font-bold text-slate-900 text-sm sm:text-base">{b.nombre}</h3>
+							</div>
+						</a>
+					))}
+				</div>
+			) : (
+				<div class="relative">
+					<div id="banners-carousel" class="flex gap-5 overflow-x-auto snap-x snap-mandatory pb-2 cursor-grab -mx-6 px-6 sm:mx-0 sm:px-0 no-scrollbar">
+						{banners.map((b: any) => (
+							<a
+								href={b.link_url || '#'}
+								class="group block rounded-3xl border border-slate-200/70 shadow-sm hover:shadow-2xl transition-all duration-300 overflow-hidden bg-white shrink-0 w-[220px] sm:w-[260px] snap-start"
+							>
+								<div class="aspect-[4/3] bg-[#F2F7F3] overflow-hidden">
+									{b.imagen_url ? (
+										<img
+											src={getOptimizedImageUrl(b.imagen_url, 500, 375)}
+											alt={b.nombre}
+											loading="lazy"
+											class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+										/>
+									) : (
+										<div class="w-full h-full flex items-center justify-center text-[#2D5A27]/30">
+											<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+										</div>
+									)}
+								</div>
+								<div class="p-3 text-center">
+									<h3 class="font-bold text-slate-900 text-sm">{b.nombre}</h3>
+								</div>
+							</a>
+						))}
+					</div>
+					{banners.length > 3 && (
+						<div class="hidden sm:flex items-center justify-end gap-2 mt-4">
+							<button id="banners-carousel-prev" class="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer" aria-label="Anterior">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+							</button>
+							<button id="banners-carousel-next" class="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer" aria-label="Siguiente">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+							</button>
+						</div>
+					)}
+				</div>
+			)}
+		</div>
+	</section>
+)}
+
+{mode === 'carousel' && (
+	<style>
+		.no-scrollbar::-webkit-scrollbar { display: none; }
+		.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+	</style>
+)}
+
+{mode === 'carousel' && banners.length > 0 && (
+	<script>
+		const track = document.getElementById('banners-carousel');
+		const btnPrev = document.getElementById('banners-carousel-prev');
+		const btnNext = document.getElementById('banners-carousel-next');
+
+		btnPrev?.addEventListener('click', () => track?.scrollBy({ left: -300, behavior: 'smooth' }));
+		btnNext?.addEventListener('click', () => track?.scrollBy({ left: 300, behavior: 'smooth' }));
+
+		// Arrastrar con mouse para desktop (touch ya funciona nativo por el scroll-snap).
+		if (track) {
+			let isDown = false;
+			let startX = 0;
+			let scrollLeftStart = 0;
+
+			track.addEventListener('mousedown', (e) => {
+				isDown = true;
+				startX = (e as MouseEvent).pageX - track.offsetLeft;
+				scrollLeftStart = track.scrollLeft;
+			});
+			track.addEventListener('mouseleave', () => { isDown = false; });
+			track.addEventListener('mouseup', () => { isDown = false; });
+			track.addEventListener('mousemove', (e) => {
+				if (!isDown) return;
+				e.preventDefault();
+				const x = (e as MouseEvent).pageX - track.offsetLeft;
+				track.scrollLeft = scrollLeftStart - (x - startX);
+			});
+		}
+	</script>
+)}

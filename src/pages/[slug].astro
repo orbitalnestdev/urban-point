@@ -13,6 +13,7 @@ import { precioDeVentaCentavos, precioListaCentavos } from '../lib/pricing';
 import { toSafeJson } from '../lib/safeJson';
 import { agruparVariantes } from '../lib/variantes';
 import { esSlugReservado } from '../lib/slugs';
+import CollectionBanners from '../components/CollectionBanners.astro';
 
 const rawSlug = Astro.params.slug || '';
 
@@ -293,6 +294,8 @@ const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency
 				</div>
 			</div>
 		</section>
+
+		<CollectionBanners />
 
 		<!-- Featured Products Section with Category Filters -->
 		<section id="catalogo-nodo" class="py-20 bg-slate-50 border-y border-slate-200/60">

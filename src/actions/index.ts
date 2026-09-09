@@ -26,6 +26,7 @@ import { crearSolicitud, solicitudAbierta, resolverSolicitud, cerrarSolicitudPor
 
 import { createAdminClient, escribirDocumentoTolerante } from '../lib/server/appwrite';
 import { invalidateCatalogCache } from '../lib/server/catalogCache';
+import { invalidateBannersCache } from '../lib/server/banners';
 import { 
 	sendOrderNotificationEmails, 
 	sendOrderStatusNotificationEmail, 
@@ -86,6 +87,27 @@ function urlDeImagenValida(url: string): boolean {
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Link de destino de un banner: acepta una ruta interna del sitio ("/productos")
+ * o una URL externa completa. Se excluye a propósito "//host" (protocol-relative):
+ * un admin que tipee eso pensando en una ruta interna en realidad está armando
+ * un link a otro dominio, porque el navegador lo resuelve con el protocolo actual.
+ */
+function urlDeEnlaceValida(url: string): boolean {
+	const v = (url || '').trim();
+	if (!v) return true;
+	if (v.startsWith('/') && !v.startsWith('//')) return true;
+	if (/^https?:\/\//i.test(v)) {
+		try {
+			new URL(v);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+	return false;
 }
 
 /**
@@ -3172,6 +3194,107 @@ export const server = {
 
 				await db.deleteDocument('urbanpoint', 'categories', input.id);
 				invalidateCatalogCache();
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
+			}
+		}
+	}),
+
+	saveBanner: defineAction({
+		accept: 'json',
+		input: z.object({
+			id: z.string().optional(),
+			nombre: z.string().min(2),
+			imagen_url: z.string().optional(),
+			link_url: z.string().optional(),
+			orden: z.number().optional(),
+			activo: z.boolean().optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || (ctx.locals.user.role !== 'admin' && ctx.locals.user.role !== 'gestion')) {
+					throw new Error('No tenés permisos para administrar banners');
+				}
+
+				const payload: Record<string, any> = {
+					nombre: input.nombre.trim(),
+					activo: input.activo !== undefined ? input.activo : true
+				};
+				if (input.orden !== undefined) payload.orden = input.orden;
+				// Una URL/link mal pegado no puede tumbar el guardado del nombre y la
+				// imagen: se descarta en silencio, igual que hace saveCategory con
+				// imagen_url — el mismo criterio ya probado en este archivo.
+				if (input.imagen_url !== undefined) {
+					payload.imagen_url = urlDeImagenValida(input.imagen_url) ? input.imagen_url.trim() : null;
+				}
+				if (input.link_url !== undefined) {
+					payload.link_url = urlDeEnlaceValida(input.link_url) ? input.link_url.trim() : null;
+				}
+
+				const doc = await escribirDocumentoTolerante('collection_banners', payload, input.id);
+				invalidateBannersCache();
+				return { success: true, id: doc.$id };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
+			}
+		}
+	}),
+
+	deleteBanner: defineAction({
+		accept: 'json',
+		input: z.object({
+			id: z.string()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo los administradores pueden eliminar banners');
+				}
+				await db.deleteDocument('urbanpoint', 'collection_banners', input.id);
+				invalidateBannersCache();
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
+			}
+		}
+	}),
+
+	reorderBanners: defineAction({
+		accept: 'json',
+		input: z.object({
+			items: z.array(z.object({
+				id: z.string(),
+				orden: z.number()
+			}))
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || (ctx.locals.user.role !== 'admin' && ctx.locals.user.role !== 'gestion')) {
+					throw new Error('No tenés permisos para administrar banners');
+				}
+				for (const item of input.items) {
+					await escribirDocumentoTolerante('collection_banners', { orden: item.orden }, item.id);
+				}
+				invalidateBannersCache();
+				return { success: true };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
+			}
+		}
+	}),
+
+	saveBannersDisplayMode: defineAction({
+		accept: 'json',
+		input: z.object({
+			mode: z.enum(['grid', 'carousel'])
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || (ctx.locals.user.role !== 'admin' && ctx.locals.user.role !== 'gestion')) {
+					throw new Error('No tenés permisos para administrar banners');
+				}
+				await saveSiteSetting('banners_display_mode', input.mode);
 				return { success: true };
 			} catch (error: any) {
 				return { success: false, error: mensajeParaCliente(error) };
