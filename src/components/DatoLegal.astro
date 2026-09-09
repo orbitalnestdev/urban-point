@@ -1,0 +1,9 @@
+---
+interface Props {
+	valor: string;
+}
+const { valor } = Astro.props;
+const pendiente = valor.startsWith('[COMPLETAR');
+---
+
+{pendiente ? <span class="pendiente">{valor}</span> : <span>{valor}</span>}

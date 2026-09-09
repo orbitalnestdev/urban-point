@@ -1,0 +1,151 @@
+---
+export const prerender = false;
+
+import LegalLayout from '../layouts/LegalLayout.astro';
+import DatoLegal from '../components/DatoLegal.astro';
+import { getSiteSettings } from '../lib/server/settings';
+import { DATOS_EMPRESA } from '../lib/legalData';
+
+const settings = await getSiteSettings();
+---
+
+<LegalLayout
+	title="Términos y Condiciones"
+	description="Términos y condiciones de uso y compra del sitio UrbanPoint."
+	updatedAt="9 de septiembre de 2026"
+>
+	<p>
+		Los presentes Términos y Condiciones regulan el uso del sitio web <strong>{settings.site_name}</strong>
+		(en adelante, "el Sitio") y la relación de consumo entre <DatoLegal valor={DATOS_EMPRESA.razonSocial} />
+		(en adelante, "UrbanPoint", "nosotros" o "la Empresa") y toda persona que ingrese, navegue o realice una
+		compra en el Sitio (en adelante, "el Usuario" o "el Cliente"). El acceso y uso del Sitio, así como la
+		concreción de cualquier compra, implican la aceptación plena de estos Términos y Condiciones, de la{' '}
+		<a href="/politica-de-privacidad">Política de Privacidad</a> y de la{' '}
+		<a href="/politica-de-cookies">Política de Cookies</a>. Esta relación se rige, principalmente, por la Ley
+		N.º 24.240 de Defensa del Consumidor, el Código Civil y Comercial de la Nación y demás normativa aplicable
+		al comercio electrónico en la República Argentina.
+	</p>
+
+	<h2 id="objeto">1. Objeto del sitio</h2>
+	<p>
+		UrbanPoint es una plataforma de comercio electrónico que permite a los usuarios comprar productos online
+		y elegir, entre otras opciones de entrega, el retiro sin cargo en un punto de la red de comercios de
+		cercanía ("Canillitas") afiliados a UrbanPoint. UrbanPoint actúa como vendedor de los productos ofrecidos
+		en el catálogo del Sitio; los puntos de retiro son comercios independientes que prestan un servicio de
+		recepción y entrega de pedidos, sin que ello implique una relación de dependencia laboral ni societaria
+		con UrbanPoint.
+	</p>
+
+	<h2 id="capacidad">2. Capacidad y registro</h2>
+	<p>
+		El uso del Sitio está reservado a personas que tengan capacidad legal para contratar conforme al Código
+		Civil y Comercial de la Nación. Los menores de edad podrán utilizar el Sitio únicamente con la
+		supervisión y consentimiento de sus padres, tutores o responsables legales, quienes serán tenedores de
+		las responsabilidades derivadas del uso del Sitio por parte de los menores a su cargo.
+	</p>
+	<p>
+		Es posible comprar en UrbanPoint creando una cuenta de usuario o como invitado, cargando en cada caso
+		datos de contacto veraces, exactos y actualizados (nombre, teléfono y, cuando corresponda, dirección de
+		entrega). El Usuario es responsable de la confidencialidad de sus credenciales de acceso y de toda
+		actividad realizada desde su cuenta.
+	</p>
+
+	<h2 id="productos-precios">3. Productos, precios y disponibilidad</h2>
+	<ul>
+		<li>
+			Los precios publicados en el Sitio están expresados en pesos argentinos ({settings.currency}), incluyen
+			los impuestos que correspondan según la condición fiscal de la Empresa, y son válidos únicamente para
+			compras realizadas a través del Sitio al momento de la confirmación del pedido.
+		</li>
+		<li>
+			UrbanPoint podrá modificar precios, promociones y condiciones de venta sin aviso previo, sin que ello
+			afecte a los pedidos ya confirmados y pagados.
+		</li>
+		<li>
+			En caso de error manifiesto de precio o de descripción de un producto (por ejemplo, por una falla
+			técnica o de carga), UrbanPoint podrá anular la operación, notificando al Cliente y reintegrando
+			cualquier importe abonado por el medio de pago original.
+		</li>
+		<li>
+			La disponibilidad de stock se actualiza de forma periódica; si un producto comprado no pudiera
+			entregarse por falta de stock, se ofrecerá al Cliente un producto equivalente, la espera hasta su
+			reposición o el reintegro total del importe abonado, a elección del Cliente.
+		</li>
+	</ul>
+
+	<h2 id="medios-de-pago">4. Medios de pago</h2>
+	<p>
+		UrbanPoint ofrece los medios de pago habilitados y visibles al momento de finalizar la compra (entre
+		ellos, Mercado Pago y transferencia bancaria, según disponibilidad). Los pagos con tarjeta y demás medios
+		procesados por Mercado Pago están sujetos, además, a los términos y condiciones y a las políticas de
+		seguridad de dicha plataforma. UrbanPoint no almacena números completos de tarjetas de crédito o débito.
+	</p>
+
+	<h2 id="envios-retiro">5. Envíos y retiro en puntos UrbanPoint</h2>
+	<p>
+		Al finalizar la compra, el Cliente podrá optar por el envío a domicilio (cuando esté disponible para su
+		zona) o por el retiro sin cargo en un punto de la red de Canillitas afiliados. Los plazos de entrega
+		informados en el Sitio son estimados y pueden variar por causas ajenas a UrbanPoint (demoras logísticas,
+		condiciones climáticas, casos fortuitos o de fuerza mayor). El Cliente será notificado del estado de su
+		pedido por los canales de contacto informados al momento de la compra.
+	</p>
+
+	<h2 id="garantia-legal">6. Garantía legal</h2>
+	<p>
+		Los productos comercializados por UrbanPoint cuentan con la garantía legal prevista en los artículos 11
+		a 18 de la Ley N.º 24.240, aplicable a bienes no consumibles, con un plazo mínimo de <strong>seis (6)
+		meses</strong> desde la entrega, sin perjuicio de la garantía adicional que pueda ofrecer el fabricante.
+		Ante cualquier defecto de fabricación, el Cliente podrá solicitar, a su elección, la reparación, el
+		reemplazo del producto, la devolución del importe abonado o una quita proporcional del precio, conforme
+		lo establece la normativa vigente. Para gestionar un reclamo por garantía, el Cliente debe contactarse
+		por los canales informados en <a href="/datos-de-la-empresa">Datos de la Empresa</a>.
+	</p>
+
+	<h2 id="arrepentimiento">7. Derecho de arrepentimiento</h2>
+	<p>
+		Por tratarse de una venta a distancia, el Cliente cuenta con el derecho de revocar su compra sin costo
+		ni necesidad de expresar motivo, dentro de los diez (10) días corridos de recibido el producto, conforme
+		al artículo 34 de la Ley N.º 24.240 y a la Resolución N.º 424/2020. El procedimiento completo está
+		detallado en <a href="/cambios-y-devoluciones">Cambios, Devoluciones y Botón de Arrepentimiento</a>.
+	</p>
+
+	<h2 id="propiedad-intelectual">8. Propiedad intelectual</h2>
+	<p>
+		Todos los contenidos del Sitio (textos, imágenes, marcas, logotipos, diseño, código fuente y demás
+		elementos) son de titularidad de UrbanPoint o de terceros que han autorizado su uso, y están protegidos
+		por la Ley N.º 11.723 de Propiedad Intelectual y demás normativa aplicable. Queda prohibida su
+		reproducción, distribución o uso total o parcial sin autorización previa y por escrito.
+	</p>
+
+	<h2 id="responsabilidad">9. Limitación de responsabilidad</h2>
+	<p>
+		UrbanPoint pondrá sus mejores esfuerzos para asegurar el correcto funcionamiento del Sitio, sin
+		garantizar su disponibilidad ininterrumpida ni la ausencia total de errores. UrbanPoint no será
+		responsable por daños derivados de causas ajenas a su control, incluyendo fallas de conectividad,
+		interrupciones del servicio de proveedores tecnológicos, o hechos de terceros que excedan su ámbito
+		razonable de control, sin perjuicio de las obligaciones irrenunciables que la Ley N.º 24.240 pone en
+		cabeza del proveedor frente al consumidor.
+	</p>
+
+	<h2 id="modificaciones">10. Modificaciones</h2>
+	<p>
+		UrbanPoint podrá modificar estos Términos y Condiciones en cualquier momento. Las modificaciones entrarán
+		en vigencia desde su publicación en el Sitio y se aplicarán a las compras realizadas con posterioridad a
+		dicha publicación. Se recomienda al Usuario revisar esta página periódicamente.
+	</p>
+
+	<h2 id="jurisdiccion">11. Ley aplicable y jurisdicción</h2>
+	<p>
+		Estos Términos y Condiciones se rigen por las leyes de la República Argentina. Ante cualquier
+		controversia, y sin perjuicio del derecho del consumidor a optar por el fuero de su domicilio conforme
+		al artículo 36 de la Ley N.º 24.240, serán competentes los tribunales ordinarios correspondientes al
+		domicilio del Cliente.
+	</p>
+
+	<h2 id="contacto">12. Contacto</h2>
+	<p>
+		Para cualquier consulta sobre estos Términos y Condiciones, escribinos a{' '}
+		<a href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a> o revisá los datos completos
+		de la empresa en <a href="/datos-de-la-empresa">Datos de la Empresa</a>.
+	</p>
+</LegalLayout>

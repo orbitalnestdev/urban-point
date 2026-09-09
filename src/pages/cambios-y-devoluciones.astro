@@ -1,0 +1,114 @@
+---
+export const prerender = false;
+
+import LegalLayout from '../layouts/LegalLayout.astro';
+import { getSiteSettings } from '../lib/server/settings';
+
+const settings = await getSiteSettings();
+---
+
+<LegalLayout
+	title="Cambios, Devoluciones y Botón de Arrepentimiento"
+	description="Cómo ejercer tu derecho de arrepentimiento y gestionar cambios o devoluciones en UrbanPoint."
+	updatedAt="9 de septiembre de 2026"
+>
+	<p>
+		En UrbanPoint queremos que tu compra sea simple y sin sorpresas. Esta página explica, en línea con la
+		Ley N.º 24.240 de Defensa del Consumidor y la Resolución N.º 424/2020 de la Secretaría de Comercio
+		Interior, cómo funciona el <strong>derecho de arrepentimiento</strong> (o "Botón de Arrepentimiento"), la
+		garantía legal por defectos y el procedimiento de cambios y devoluciones.
+	</p>
+
+	<div class="callout">
+		Todas las compras a distancia en Argentina tienen, por ley, <strong>10 días corridos</strong> desde la
+		recepción del producto para arrepentirse, sin costo y sin dar motivo.
+	</div>
+
+	<h2 id="arrepentimiento">1. Derecho de arrepentimiento (compra a distancia)</h2>
+	<p>
+		Conforme al artículo 34 de la Ley N.º 24.240, tenés derecho a revocar la aceptación de tu compra dentro
+		de los <strong>diez (10) días corridos</strong> contados a partir de la entrega del producto, sin
+		necesidad de expresar causa y sin ningún costo adicional.
+	</p>
+
+	<h3>¿Cómo ejercer el derecho de arrepentimiento?</h3>
+	<ol>
+		<li>
+			Escribinos dentro del plazo de 10 días corridos a{' '}
+			<a href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a> o por WhatsApp al{' '}
+			{settings.contact_phone}, indicando el número de pedido y el producto que querés devolver.
+		</li>
+		<li>Te confirmaremos la recepción de tu solicitud y te indicaremos cómo devolver el producto (por correo, en un punto de retiro UrbanPoint, o el medio que corresponda según tu caso).</li>
+		<li>
+			El producto debe devolverse en las mismas condiciones en que fue entregado, sin uso, con sus
+			etiquetas y embalaje original, salvo que la apertura del embalaje haya sido necesaria para verificar
+			su naturaleza, características o funcionamiento.
+		</li>
+		<li>
+			El costo del envío de devolución, cuando corresponda, es a cargo de UrbanPoint, tal como establece la
+			normativa vigente para el ejercicio del derecho de arrepentimiento.
+		</li>
+		<li>
+			Una vez recibido y verificado el producto, reintegraremos el importe total abonado (incluyendo el
+			costo de envío original, si lo hubo) utilizando el mismo medio de pago empleado en la compra, en un
+			plazo de hasta 10 días hábiles.
+		</li>
+	</ol>
+
+	<h3>Excepciones al derecho de arrepentimiento</h3>
+	<p>
+		Conforme a la normativa vigente, el derecho de arrepentimiento no aplica, por ejemplo, a productos
+		personalizados o confeccionados a pedido del Cliente, ni a productos que por razones de higiene o
+		protección de la salud no sean aptos para ser devueltos una vez abierto su envase. Si esta excepción
+		aplica a un producto en particular, se indicará en su ficha en el Sitio.
+	</p>
+
+	<h2 id="garantia">2. Garantía legal por defectos de fabricación</h2>
+	<p>
+		Todo producto no consumible comercializado por UrbanPoint cuenta con garantía legal de{' '}
+		<strong>seis (6) meses</strong> desde su entrega, conforme a los artículos 11 a 18 de la Ley N.º 24.240.
+		Si tu producto presenta un defecto de fabricación dentro de ese plazo, podés solicitar, a tu elección:
+	</p>
+	<ul>
+		<li>La reparación sin cargo del producto.</li>
+		<li>Su reemplazo por otro de idénticas características.</li>
+		<li>La devolución del importe abonado.</li>
+		<li>Una quita proporcional del precio.</li>
+	</ul>
+	<p>
+		Para gestionar un reclamo por garantía, escribinos a{' '}
+		<a href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a> con el número de pedido, una
+		descripción del defecto y, de ser posible, fotos o video del problema.
+	</p>
+
+	<h2 id="cambios-talle-color">3. Cambios por talle, color o preferencia</h2>
+	<p>
+		Además de tus derechos legales, UrbanPoint puede ofrecer cambios por talle, color u otra preferencia del
+		Cliente dentro de los 10 días corridos de recibido el producto, sujeto a disponibilidad de stock. En
+		estos casos —a diferencia del derecho de arrepentimiento— el costo del envío del cambio puede ser a
+		cargo del Cliente, según se informe al momento de gestionar el cambio.
+	</p>
+
+	<h2 id="retiro-en-punto">4. Devoluciones en un punto de retiro UrbanPoint</h2>
+	<p>
+		Si tu pedido fue retirado en un punto de la red UrbanPoint, podés iniciar la devolución o el cambio
+		contactándonos primero por los canales oficiales indicados arriba; te indicaremos si podés dejar el
+		producto en el mismo punto de retiro o si se coordina otro mecanismo. El plazo y las condiciones son los
+		mismos que para las compras con envío a domicilio.
+	</p>
+
+	<h2 id="reintegros">5. Plazos y medios de reintegro</h2>
+	<p>
+		Todo reintegro se realiza por el mismo medio de pago utilizado en la compra: si pagaste con Mercado
+		Pago, el reintegro se acredita a través de esa plataforma según sus propios plazos de procesamiento; si
+		pagaste por transferencia bancaria, el reintegro se realiza por transferencia a una cuenta a tu nombre.
+	</p>
+
+	<h2 id="consultas">6. ¿Tenés dudas?</h2>
+	<p>
+		Escribinos a <a href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a> o por WhatsApp al{' '}
+		{settings.contact_phone}. Si no llegamos a una solución satisfactoria, podés recurrir a los mecanismos de
+		reclamo detallados en <a href="/datos-de-la-empresa">Datos de la Empresa</a> (Libro de Quejas Online y
+		COPREC).
+	</p>
+</LegalLayout>

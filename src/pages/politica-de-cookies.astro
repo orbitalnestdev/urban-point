@@ -1,0 +1,88 @@
+---
+export const prerender = false;
+
+import LegalLayout from '../layouts/LegalLayout.astro';
+import { getSiteSettings } from '../lib/server/settings';
+
+const settings = await getSiteSettings();
+---
+
+<LegalLayout
+	title="Política de Cookies"
+	description="Qué cookies utiliza UrbanPoint y cómo podés administrarlas."
+	updatedAt="9 de septiembre de 2026"
+>
+	<p>
+		Este sitio utiliza cookies y tecnologías similares (almacenamiento local del navegador) para funcionar
+		correctamente, recordar tus preferencias y, cuando corresponda, analizar el uso del Sitio. Esta política
+		explica qué son las cookies, cuáles utilizamos y cómo podés administrarlas, en línea con los principios
+		de la Ley N.º 25.326 de Protección de Datos Personales.
+	</p>
+
+	<h2 id="que-son">1. ¿Qué son las cookies?</h2>
+	<p>
+		Las cookies son pequeños archivos de texto que un sitio web guarda en tu navegador cuando lo visitás.
+		Permiten que el sitio recuerde información sobre tu visita (como tu sesión iniciada o los productos en
+		tu carrito), lo que facilita tu próxima navegación y hace que el Sitio funcione de forma más eficiente.
+	</p>
+
+	<h2 id="tipos">2. Qué cookies usamos</h2>
+
+	<h3>Cookies estrictamente necesarias</h3>
+	<p>
+		Indispensables para que el Sitio funcione: mantener tu sesión iniciada, recordar el contenido de tu
+		carrito de compras, el punto de retiro que elegiste o el código de referido de un Canillita. Sin estas
+		cookies, funciones básicas del Sitio (como comprar) no estarían disponibles. No requieren consentimiento
+		previo por ser esenciales para el servicio solicitado.
+	</p>
+
+	<h3>Cookies de preferencias</h3>
+	<p>
+		Recuerdan opciones que elegiste, como el punto de retiro habitual o si ya cerraste un aviso del Sitio,
+		para no volver a mostrártelo en cada visita.
+	</p>
+
+	<h3>Cookies analíticas y de marketing</h3>
+	<p>
+		Si UrbanPoint tiene configurado algún píxel o herramienta de analítica (por ejemplo, para medir visitas
+		o la efectividad de campañas), estas cookies ayudan a entender cómo se usa el Sitio y a mejorar la
+		experiencia de compra. Solo se activan si la Empresa las tiene habilitadas, y podés bloquearlas desde la
+		configuración de tu navegador sin que eso impida comprar en el Sitio.
+	</p>
+
+	<h2 id="terceros">3. Cookies de terceros</h2>
+	<p>
+		Al pagar con Mercado Pago, ese servicio puede utilizar sus propias cookies durante el proceso de pago,
+		conforme a sus propias políticas de privacidad, ajenas al control de UrbanPoint.
+	</p>
+
+	<h2 id="administrar">4. Cómo administrar o eliminar las cookies</h2>
+	<p>
+		Podés permitir, bloquear o eliminar las cookies almacenadas en tu equipo desde la configuración de tu
+		navegador. Tené en cuenta que bloquear las cookies estrictamente necesarias puede impedir el
+		funcionamiento correcto del carrito de compras o del inicio de sesión.
+	</p>
+	<ul>
+		<li>
+			<strong>Google Chrome:</strong> Configuración → Privacidad y seguridad → Cookies y otros datos de sitios.
+		</li>
+		<li>
+			<strong>Safari:</strong> Preferencias → Privacidad.
+		</li>
+		<li>
+			<strong>Firefox:</strong> Opciones → Privacidad y seguridad.
+		</li>
+	</ul>
+
+	<h2 id="cambios">5. Cambios a esta política</h2>
+	<p>
+		Podemos actualizar esta Política de Cookies cuando incorporemos nuevas herramientas al Sitio. Te
+		recomendamos revisarla periódicamente.
+	</p>
+
+	<div class="callout">
+		Para más información sobre cómo tratamos tus datos personales, consultá la{' '}
+		<a href="/politica-de-privacidad">Política de Privacidad</a>. Consultas a{' '}
+		<a href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a>.
+	</div>
+</LegalLayout>

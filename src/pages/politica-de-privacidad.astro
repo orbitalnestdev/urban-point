@@ -1,0 +1,117 @@
+---
+export const prerender = false;
+
+import LegalLayout from '../layouts/LegalLayout.astro';
+import DatoLegal from '../components/DatoLegal.astro';
+import { getSiteSettings } from '../lib/server/settings';
+import { DATOS_EMPRESA } from '../lib/legalData';
+
+const settings = await getSiteSettings();
+---
+
+<LegalLayout
+	title="Política de Privacidad"
+	description="Cómo UrbanPoint recolecta, usa y protege los datos personales de sus usuarios."
+	updatedAt="9 de septiembre de 2026"
+>
+	<p>
+		Esta Política de Privacidad describe cómo <DatoLegal valor={DATOS_EMPRESA.razonSocial} /> (UrbanPoint)
+		recolecta, utiliza, almacena y protege los datos personales de quienes navegan y compran en{' '}
+		<strong>{settings.site_name}</strong>, en cumplimiento de la Ley N.º 25.326 de Protección de Datos
+		Personales y su Decreto Reglamentario N.º 1558/01, bajo el control de la Agencia de Acceso a la
+		Información Pública (AAIP).
+	</p>
+
+	<h2 id="datos-recolectados">1. Datos que recolectamos</h2>
+	<p>Según cómo interactúes con el Sitio, podemos recolectar:</p>
+	<ul>
+		<li><strong>Datos de contacto y cuenta:</strong> nombre, apellido, correo electrónico, teléfono y contraseña (almacenada de forma cifrada).</li>
+		<li><strong>Datos de compra y entrega:</strong> dirección de envío, punto de retiro elegido, historial de pedidos y productos comprados.</li>
+		<li><strong>Datos de pago:</strong> UrbanPoint no almacena datos completos de tarjetas; los pagos se procesan a través de Mercado Pago, que aplica sus propias políticas de seguridad y privacidad.</li>
+		<li><strong>Datos de navegación:</strong> dirección IP, tipo de dispositivo y navegador, páginas visitadas y cookies (ver <a href="/politica-de-cookies">Política de Cookies</a>).</li>
+		<li><strong>Comunicaciones:</strong> mensajes enviados por WhatsApp, correo electrónico u otros canales de contacto habilitados en el Sitio.</li>
+	</ul>
+
+	<h2 id="finalidad">2. Para qué usamos tus datos</h2>
+	<ul>
+		<li>Procesar y gestionar tus pedidos, pagos, envíos y retiros en puntos UrbanPoint.</li>
+		<li>Crear y administrar tu cuenta de usuario, cuando corresponda.</li>
+		<li>Comunicarnos con vos sobre el estado de tu pedido, cambios, garantías o reclamos.</li>
+		<li>Enviarte novedades, ofertas o comunicaciones comerciales, únicamente si diste tu consentimiento y con la posibilidad de darte de baja en cualquier momento.</li>
+		<li>Mejorar el funcionamiento del Sitio, prevenir fraudes y cumplir con obligaciones legales, impositivas y contables.</li>
+	</ul>
+
+	<h2 id="base-legal">3. Base legal y consentimiento</h2>
+	<p>
+		El tratamiento de tus datos personales se basa en la ejecución del contrato de compraventa que
+		celebrás con UrbanPoint al realizar un pedido, en el cumplimiento de obligaciones legales (impositivas,
+		de defensa del consumidor) y, en el caso de comunicaciones comerciales, en tu consentimiento previo,
+		libre, expreso e informado, el cual podés retirar en cualquier momento.
+	</p>
+
+	<h2 id="con-quien-compartimos">4. Con quién compartimos tus datos</h2>
+	<p>Tus datos pueden compartirse, únicamente en la medida necesaria, con:</p>
+	<ul>
+		<li>
+			Los <strong>puntos de retiro (Canillitas)</strong> de la red UrbanPoint, para la preparación y
+			entrega de tu pedido cuando elegís esa modalidad.
+		</li>
+		<li>
+			<strong>Mercado Pago</strong>, como procesador de pagos, para gestionar el cobro de tu compra.
+		</li>
+		<li>
+			Proveedores de <strong>infraestructura tecnológica y hosting</strong> que almacenan la base de datos
+			del Sitio, bajo compromisos de confidencialidad y seguridad.
+		</li>
+		<li>
+			Organismos públicos, cuando una ley o una orden judicial así lo requiera.
+		</li>
+	</ul>
+	<p>UrbanPoint no vende ni comercializa datos personales a terceros con fines publicitarios ajenos al Sitio.</p>
+
+	<h2 id="conservacion">5. Plazo de conservación</h2>
+	<p>
+		Conservamos tus datos personales durante el tiempo necesario para cumplir con las finalidades descriptas
+		en esta política y con los plazos de conservación exigidos por la normativa impositiva y de defensa del
+		consumidor aplicable (en general, hasta 10 años para documentación comercial y contable). Una vez
+		vencidos esos plazos, los datos se eliminan o anonimizan de forma segura.
+	</p>
+
+	<h2 id="derechos-arco">6. Tus derechos (Acceso, Rectificación, Actualización y Supresión)</h2>
+	<p>
+		De acuerdo con el artículo 14 de la Ley N.º 25.326, tenés derecho a acceder, rectificar, actualizar o
+		solicitar la supresión de tus datos personales de forma gratuita, en los plazos que fija la ley. Para
+		ejercer estos derechos, escribinos a{' '}
+		<a href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a> indicando tu nombre completo y
+		el dato sobre el que querés ejercer tu derecho. También podés dirigir tu reclamo directamente ante la{' '}
+		<strong>Agencia de Acceso a la Información Pública (AAIP)</strong>, órgano de control de la Ley N.º
+		25.326, en{' '}
+		<a href="https://www.argentina.gob.ar/aaip" target="_blank" rel="noopener noreferrer">
+			argentina.gob.ar/aaip
+		</a>.
+	</p>
+
+	<h2 id="seguridad">7. Seguridad de la información</h2>
+	<p>
+		UrbanPoint implementa medidas técnicas y organizativas razonables (cifrado de contraseñas, conexiones
+		seguras HTTPS, control de accesos) para proteger tus datos personales contra pérdida, uso indebido,
+		acceso no autorizado o alteración. Ningún sistema es 100% infalible, por lo que te recomendamos usar
+		contraseñas seguras y no compartirlas con terceros.
+	</p>
+
+	<h2 id="menores">8. Datos de menores de edad</h2>
+	<p>
+		El Sitio no está dirigido a menores de edad sin supervisión. Si detectamos que se cargaron datos de un
+		menor sin el consentimiento de su padre, madre o tutor, procederemos a eliminarlos.
+	</p>
+
+	<h2 id="cambios-politica">9. Cambios a esta política</h2>
+	<p>
+		Podemos actualizar esta Política de Privacidad para reflejar cambios normativos o en nuestras prácticas.
+		La fecha de "Última actualización" al inicio de esta página indica la versión vigente.
+	</p>
+
+	<div class="callout">
+		Más información societaria y de contacto en <a href="/datos-de-la-empresa">Datos de la Empresa</a>.
+	</div>
+</LegalLayout>

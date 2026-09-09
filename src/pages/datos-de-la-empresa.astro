@@ -1,0 +1,82 @@
+---
+export const prerender = false;
+
+import LegalLayout from '../layouts/LegalLayout.astro';
+import DatoLegal from '../components/DatoLegal.astro';
+import { getSiteSettings } from '../lib/server/settings';
+import { DATOS_EMPRESA } from '../lib/legalData';
+
+const settings = await getSiteSettings();
+---
+
+<LegalLayout
+	title="Datos de la Empresa"
+	description="Información societaria, fiscal y de contacto de la empresa responsable de UrbanPoint."
+	updatedAt="9 de septiembre de 2026"
+>
+	<p>
+		En cumplimiento de la Ley N.º 24.240 de Defensa del Consumidor, su Decreto Reglamentario N.º 1798/94
+		y la Resolución N.º 424/2020 de la Secretaría de Comercio Interior (que exige a todo proveedor que
+		comercialice a distancia informar de manera clara y accesible sus datos identificatorios), se detalla
+		a continuación la información de la empresa responsable del sitio <strong>{settings.site_name}</strong>.
+	</p>
+
+	<h2 id="identificacion">1. Identificación del responsable</h2>
+	<ul>
+		<li><strong>Nombre de fantasía:</strong> <DatoLegal valor={DATOS_EMPRESA.nombreFantasia} /></li>
+		<li><strong>Razón social:</strong> <DatoLegal valor={DATOS_EMPRESA.razonSocial} /></li>
+		<li><strong>CUIT:</strong> <DatoLegal valor={DATOS_EMPRESA.cuit} /></li>
+		<li><strong>Condición frente al IVA:</strong> <DatoLegal valor={DATOS_EMPRESA.condicionIVA} /></li>
+		<li><strong>Domicilio legal/fiscal:</strong> <DatoLegal valor={DATOS_EMPRESA.domicilioLegal} /></li>
+		{DATOS_EMPRESA.domicilioComercial && (
+			<li><strong>Domicilio comercial:</strong> {DATOS_EMPRESA.domicilioComercial}</li>
+		)}
+		<li><strong>Jurisdicción de inscripción:</strong> <DatoLegal valor={DATOS_EMPRESA.jurisdiccion} /></li>
+	</ul>
+
+	<h2 id="contacto">2. Canales de contacto</h2>
+	<ul>
+		<li><strong>Correo electrónico:</strong> <a href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a></li>
+		<li><strong>Teléfono / WhatsApp:</strong> {settings.contact_phone}</li>
+		<li><strong>Domicilio de atención:</strong> {settings.contact_address}</li>
+		<li><strong>Horario de atención:</strong> Lunes a viernes, horario comercial.</li>
+	</ul>
+
+	<h2 id="proteccion-datos">3. Registro de bases de datos personales</h2>
+	<p>
+		Conforme a la Ley N.º 25.326 de Protección de Datos Personales, el titular del presente sitio
+		{' '}<DatoLegal valor={DATOS_EMPRESA.inscripcionAAIP} /> ante la Agencia de Acceso a la Información
+		Pública (AAIP), organismo de control de dicha ley.
+	</p>
+
+	<h2 id="autoridad-aplicacion">4. Autoridad de aplicación y reclamos</h2>
+	<p>
+		Ante cualquier consulta, reclamo o controversia como consumidor, además de contactarnos directamente
+		por los canales indicados arriba, usted puede recurrir a:
+	</p>
+	<ul>
+		<li>
+			La <strong>Dirección de Defensa del Consumidor</strong> de la jurisdicción correspondiente al
+			domicilio legal de la empresa (<DatoLegal valor={DATOS_EMPRESA.jurisdiccion} />), o a la de su propio
+			domicilio.
+		</li>
+		<li>
+			El <strong>Libro de Quejas Online</strong> del Ministerio de Economía de la Nación, disponible en{' '}
+			<a href="https://www.argentina.gob.ar/produccion/consumidor/libro-de-quejas" target="_blank" rel="noopener noreferrer">
+				argentina.gob.ar/produccion/consumidor/libro-de-quejas
+			</a> (Resolución N.º 212/2018), plataforma oficial e independiente para dejar constancia de un
+			reclamo de consumo.
+		</li>
+		<li>
+			El sistema de resolución de conflictos <strong>COPREC</strong> (Ley N.º 26.993), para reclamos de
+			hasta el monto que fija la normativa vigente, sin necesidad de patrocinio letrado.
+		</li>
+	</ul>
+
+	<div class="callout">
+		Esta página se referencia desde <a href="/terminos-y-condiciones">Términos y Condiciones</a>,{' '}
+		<a href="/politica-de-privacidad">Política de Privacidad</a> y{' '}
+		<a href="/cambios-y-devoluciones">Cambios y Devoluciones</a>. Los campos marcados en amarillo son datos
+		pendientes de completar por la empresa titular.
+	</div>
+</LegalLayout>
