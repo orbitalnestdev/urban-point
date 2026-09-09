@@ -125,16 +125,22 @@ try {
 
 	// Relacionados de la MISMA categoría: la sección promete "te puede
 	// interesar", no cuatro productos al azar.
+	//
+	// Excluir sólo product.$id no alcanza: las otras variantes del mismo
+	// grupo (mismo termo, otro color) son documentos con $id propio, así que
+	// pasaban el filtro y terminaban recomendando el mismo producto que ya se
+	// está viendo. `hermanas` ya tiene exactamente ese grupo calculado.
+	const idsDelMismoGrupo = new Set(hermanas.map((h: any) => h.$id));
 	relatedProducts = catId
 		? (vista.porCategoria.get(catId) || [])
-				.filter((p: any) => p.$id !== product.$id)
+				.filter((p: any) => !idsDelMismoGrupo.has(p.$id))
 				.slice(0, 4)
 		: [];
 
 	// Fallback: si la categoría no tiene suficientes, se completa con recientes.
 	// El catálogo ya viene ordenado por $createdAt descendente.
 	if (relatedProducts.length < 4) {
-		const yaUsados = new Set([product.$id, ...relatedProducts.map((p: any) => p.$id)]);
+		const yaUsados = new Set([...idsDelMismoGrupo, ...relatedProducts.map((p: any) => p.$id)]);
 		for (const p of catalogo) {
 			if (relatedProducts.length >= 4) break;
 			if (!yaUsados.has(p.$id)) {
