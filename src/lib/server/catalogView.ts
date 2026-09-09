@@ -60,12 +60,17 @@ const idPadre = (c: any): string =>
 	(typeof c?.parent_id === 'string' ? c.parent_id : c?.parent_id?.$id) || '';
 
 /**
- * Productos por categoría, sumando a cada padre lo de sus hijas.
+ * Productos por categoría, sumando a cada padre lo de todos sus descendientes
+ * (a cualquier profundidad — desde la migración a grupos temáticos hay ramas
+ * de 3 niveles reales, p. ej. "Pastelería y Desayuno" > "Desayuno" >
+ * "Macarons").
  *
  * Antes era un producto cartesiano: por cada categoría se recorría el catálogo
  * entero, y para las padre se recorría otra vez con un `includes()` adentro del
  * filtro. Con 199 categorías y 6.185 productos daba ~1,2 M de comparaciones y
- * 29 ms. Esto son dos pasadas y da el mismo resultado en 0,36 ms.
+ * 29 ms. Esto sigue siendo lineal: una pasada arma el árbol de hijas directas,
+ * y una segunda (con memoización) resuelve cada rama una sola vez incluso si
+ * se le pregunta por ella más de una vez.
  */
 export function contarProductosPorCategoria(products: any[], categories: any[]): any[] {
 	const directo = new Map<string, number>();
@@ -74,18 +79,31 @@ export function contarProductosPorCategoria(products: any[], categories: any[]):
 		if (id) directo.set(id, (directo.get(id) || 0) + 1);
 	}
 
-	const total = new Map<string, number>();
-	for (const c of categories) total.set(c.$id, directo.get(c.$id) || 0);
-
-	// Cada hija suma en su padre. Un solo nivel, igual que la versión anterior.
+	const hijasPorId = new Map<string, string[]>();
 	for (const c of categories) {
 		const padre = idPadre(c);
-		if (padre && total.has(padre)) {
-			total.set(padre, (total.get(padre) || 0) + (directo.get(c.$id) || 0));
-		}
+		if (!padre) continue;
+		const lista = hijasPorId.get(padre);
+		if (lista) lista.push(c.$id);
+		else hijasPorId.set(padre, [c.$id]);
 	}
 
-	return categories.map((c: any) => ({ ...c, productCount: total.get(c.$id) || 0 }));
+	const memo = new Map<string, number>();
+	const enCurso = new Set<string>();
+	function totalDe(id: string): number {
+		if (memo.has(id)) return memo.get(id)!;
+		// Corte defensivo: saveCategory ya evita crear un ciclo al guardar, pero
+		// si uno se coló por otra vía, cortar acá es mejor que recursión infinita.
+		if (enCurso.has(id)) return 0;
+		enCurso.add(id);
+		let total = directo.get(id) || 0;
+		for (const hijoId of hijasPorId.get(id) || []) total += totalDe(hijoId);
+		enCurso.delete(id);
+		memo.set(id, total);
+		return total;
+	}
+
+	return categories.map((c: any) => ({ ...c, productCount: totalDe(c.$id) }));
 }
 
 /** Entrada compacta del catálogo que viaja al navegador como JSON. */
@@ -147,9 +165,26 @@ function construirVista(cache: any, tier: PricingLevel): VistaCatalogo {
 		if (lista) lista.push(c.$id);
 		else hijasPorPadre.set(padre, [c.$id]);
 	}
+
+	// Familia = la categoría + TODOS sus descendientes, no sólo hijas directas
+	// — si no, filtrar por "Pastelería y Desayuno" se perdía los productos de
+	// "Macarons" (nieta, vía "Desayuno"). Memoizado por la misma razón que
+	// contarProductosPorCategoria: cada rama se resuelve una sola vez.
+	const familiaMemo = new Map<string, string[]>();
+	const familiaEnCurso = new Set<string>();
+	function descendientesDe(id: string): string[] {
+		if (familiaMemo.has(id)) return familiaMemo.get(id)!;
+		if (familiaEnCurso.has(id)) return [];
+		familiaEnCurso.add(id);
+		let ids = [id];
+		for (const hijoId of hijasPorPadre.get(id) || []) ids = ids.concat(descendientesDe(hijoId));
+		familiaEnCurso.delete(id);
+		familiaMemo.set(id, ids);
+		return ids;
+	}
 	const familiaPorPadre = new Map<string, string>();
 	for (const c of categorias) {
-		familiaPorPadre.set(c.$id, [c.$id, ...(hijasPorPadre.get(c.$id) || [])].join(','));
+		familiaPorPadre.set(c.$id, descendientesDe(c.$id).join(','));
 	}
 
 	// Índice por id: lo necesita el stock de los combos, que no tienen stock

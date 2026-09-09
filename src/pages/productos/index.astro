@@ -90,6 +90,17 @@ const categoriasPadre = vista.categoriasPadre;
 const idsDeFamilia = (parent: any) => vista.familiaPorPadre.get(parent.$id) || parent.$id;
 
 const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
+
+// Cuántas hijas (directas, con productos) tiene cada categoría — sólo para
+// mostrar un indicador "tiene subcategorías" en el panel de filtros. Antes
+// no había ninguna pista de que un padre tuviera hijas: había que hacer
+// clic a ciegas para enterarse.
+const cantidadHijasPorPadre = new Map<string, number>();
+for (const c of categories) {
+	const pid = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id;
+	if (!pid || c.productCount <= 0) continue;
+	cantidadHijasPorPadre.set(pid, (cantidadHijasPorPadre.get(pid) || 0) + 1);
+}
 ---
 
 <Layout title="Tienda Minorista | UrbanPoint">
@@ -206,25 +217,42 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 									<span class="text-[10px] font-extrabold shrink-0 opacity-70">{grupos.length}</span>
 								</button>
 
-								{categoriasPadre.map((parent) => (
-									<button
-										class="cat-item w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#2D5A27] transition-colors cursor-pointer flex items-center justify-between gap-2"
-										data-category={idsDeFamilia(parent)}
-										data-parent-id={parent.$id}
-										data-nombre={parent.nombre.toLowerCase()}
-										title={parent.nombre}
-									>
-										<span class="truncate">{parent.nombre}</span>
-										<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-extrabold shrink-0">{parent.productCount}</span>
-									</button>
-								))}
+								{categoriasPadre.map((parent) => {
+									const cantidadHijas = cantidadHijasPorPadre.get(parent.$id) || 0;
+									return (
+										<button
+											class="cat-item w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#2D5A27] transition-colors cursor-pointer flex items-center justify-between gap-2"
+											data-category={idsDeFamilia(parent)}
+											data-parent-id={parent.$id}
+											data-nombre={parent.nombre.toLowerCase()}
+											data-nombre-display={parent.nombre}
+											title={cantidadHijas > 0 ? `${parent.nombre} (tiene subcategorías)` : parent.nombre}
+										>
+											<span class="truncate flex items-center gap-1.5">
+												{parent.nombre}
+												{cantidadHijas > 0 && (
+													<span
+														class="inline-flex items-center gap-0.5 text-[9px] font-bold text-[#2D5A27]/70 bg-[#2D5A27]/10 rounded-full px-1.5 py-0.5 shrink-0"
+														title={`${cantidadHijas} subcategoría${cantidadHijas === 1 ? '' : 's'}`}
+													>
+														<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+														{cantidadHijas}
+													</span>
+												)}
+											</span>
+											<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-extrabold shrink-0">{parent.productCount}</span>
+										</button>
+									);
+								})}
 							</div>
 
 							<p id="sin-categorias" class="hidden text-xs text-slate-500 font-medium py-3">No hay categorías que coincidan.</p>
 
-							<!-- Subcategorías del padre activo, si tiene. -->
-							<div id="sub-categorias" class="hidden mt-3 pt-3 border-t border-slate-100">
-								<h3 class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Subcategorías</h3>
+							<!-- Subcategorías del padre activo, si tiene. Caja propia (no sólo un
+							     separador) para que se note que es contenido nuevo, no una
+							     continuación de la lista de arriba. -->
+							<div id="sub-categorias" class="hidden mt-3 p-2.5 rounded-xl bg-[#F2F7F3]/60 border border-[#2D5A27]/10">
+								<h3 id="sub-categorias-titulo" class="text-[10px] font-bold uppercase tracking-wider text-[#2D5A27]/80 mb-2 px-1">Subcategorías</h3>
 								<div id="sub-lista" class="space-y-0.5"></div>
 							</div>
 						</div>
@@ -429,6 +457,7 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 			const listaCategorias = $('lista-categorias');
 			const subRow = $('sub-categorias');
 			const subContainer = $('sub-lista');
+			const subTitulo = $('sub-categorias-titulo');
 			const btnFiltros = $('btn-filtros');
 			const sidebar = $('sidebar-filtros');
 			const pagArriba = $('paginacion-arriba');
@@ -700,14 +729,23 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 					: [];
 
 				if (hijas.length > 0 && subRow && subContainer) {
+					if (subTitulo) subTitulo.textContent = etiqueta ? 'Subcategorías de ' + etiqueta : 'Subcategorías';
 					subContainer.innerHTML =
-						'<button class="sub-item w-full text-left px-3 py-1.5 rounded-lg text-xs font-bold bg-[#F2F7F3] text-[#2D5A27] cursor-pointer" data-category="' + esc(valor) + '">Todas las de ' + esc(etiqueta) + '</button>' +
-						hijas.map((c: any) =>
-							'<button class="sub-item w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-[#2D5A27] cursor-pointer flex items-center justify-between gap-2" data-category="' + esc(c.$id) + '">' +
-							'<span class="truncate">' + esc(c.nombre) + '</span>' +
-							'<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-extrabold shrink-0">' + c.productCount + '</span></button>'
-						).join('');
+						'<button class="sub-item w-full text-left px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-[#2D5A27] shadow-2xs cursor-pointer" data-category="' + esc(valor) + '">Todas las de ' + esc(etiqueta) + '</button>' +
+						hijas.map((c: any) => {
+							// Familia = la subcategoría + sus propias hijas (si las tiene),
+							// no sólo su $id: si no, elegir "Desayuno" se perdía los
+							// productos de "Macarons", su propia hija.
+							const familiaHija = idsDeFamiliaCliente(c.$id);
+							return '<button class="sub-item w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-white hover:text-[#2D5A27] cursor-pointer flex items-center justify-between gap-2" data-category="' + esc(familiaHija) + '">' +
+								'<span class="truncate">' + esc(c.nombre) + '</span>' +
+								'<span class="text-[10px] bg-white text-slate-500 px-1.5 py-0.5 rounded-full font-extrabold shrink-0 border border-slate-100">' + c.productCount + '</span></button>';
+						}).join('');
 					subRow.classList.remove('hidden');
+					// El panel puede quedar fuera de la vista si la lista de arriba
+					// scrolleó — sin esto, elegir un padre no daba ninguna pista de
+					// que aparecieron subcategorías más abajo.
+					subRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 				} else {
 					subRow?.classList.add('hidden');
 				}
@@ -730,7 +768,7 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 				activarCategoria(
 					item.getAttribute('data-category') || 'all',
 					item.getAttribute('data-parent-id'),
-					item.dataset.nombre || ''
+					item.dataset.nombreDisplay || item.dataset.nombre || ''
 				);
 			});
 
@@ -814,12 +852,15 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 				const pid = typeof cat.parent_id === 'string' ? cat.parent_id : cat.parent_id?.$id;
 				if (pid) {
 					// Es una subcategoría: activar la familia del padre (para que se
-					// pinte el panel de "Subcategorías") y dejar seleccionada sólo ésta.
+					// pinte el panel de "Subcategorías") y dejar seleccionada sólo ésta
+					// — con SU propia familia, no sólo su $id, por si esta subcategoría
+					// tiene a su vez hijas (p. ej. "Desayuno" > "Macarons").
 					const padre = allCategories.find((c: any) => c.$id === pid);
-					activarCategoria(idsDeFamiliaCliente(pid), pid, (padre?.nombre || '').toLowerCase(), false);
-					activeCategory = cat.$id;
+					const familiaDeCat = idsDeFamiliaCliente(cat.$id);
+					activarCategoria(idsDeFamiliaCliente(pid), pid, padre?.nombre || '', false);
+					activeCategory = familiaDeCat;
 					subContainer?.querySelectorAll('.sub-item').forEach((sb) => {
-						const suyo = sb.getAttribute('data-category') === cat.$id;
+						const suyo = sb.getAttribute('data-category') === familiaDeCat;
 						sb.classList.toggle('bg-[#F2F7F3]', suyo);
 						sb.classList.toggle('text-[#2D5A27]', suyo);
 						sb.classList.toggle('font-bold', suyo);
@@ -828,7 +869,7 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 					});
 					aplicarFiltros();
 				} else {
-					activarCategoria(idsDeFamiliaCliente(cat.$id), cat.$id, (cat.nombre || '').toLowerCase(), false);
+					activarCategoria(idsDeFamiliaCliente(cat.$id), cat.$id, cat.nombre || '', false);
 				}
 			}
 

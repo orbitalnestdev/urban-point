@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { contarProductosPorCategoria } from '../../src/lib/server/catalogView';
+import { contarProductosPorCategoria, getVistaCatalogo } from '../../src/lib/server/catalogView';
 import { agruparVariantes, claveDeGrupo, grupoDeProducto } from '../../src/lib/variantes';
 
 /**
@@ -102,6 +102,44 @@ describe('contarProductosPorCategoria', () => {
 		for (const esperado of anterior) {
 			expect(cuenta(nuevo, esperado.$id)).toBe(esperado.productCount);
 		}
+	});
+
+	it('rollup a 3 niveles: la abuela suma también lo de la nieta (caso real "Pastelería y Desayuno > Desayuno > Macarons")', () => {
+		const cats3 = [
+			{ $id: 'grupo', parent_id: null },
+			{ $id: 'desayuno', parent_id: 'grupo' },
+			{ $id: 'macarons', parent_id: 'desayuno' }
+		];
+		const res = contarProductosPorCategoria([{ categoria_id: 'macarons' }, { categoria_id: 'macarons' }], cats3);
+		expect(cuenta(res, 'macarons')).toBe(2);
+		expect(cuenta(res, 'desayuno')).toBe(2);
+		expect(cuenta(res, 'grupo')).toBe(2);
+	});
+
+	it('no se cuelga si hay un ciclo en parent_id (defensivo)', () => {
+		const catsCiclo = [
+			{ $id: 'a', parent_id: 'b' },
+			{ $id: 'b', parent_id: 'a' }
+		];
+		expect(() => contarProductosPorCategoria([{ categoria_id: 'a' }], catsCiclo)).not.toThrow();
+	});
+});
+
+describe('getVistaCatalogo: familiaPorPadre incluye descendientes a cualquier profundidad', () => {
+	it('la familia del grupo incluye a la nieta, no sólo a la hija directa', () => {
+		const cache = {
+			products: [
+				{ $id: 'prod-macaron', categoria_id: 'macarons', $createdAt: '2024-01-01' }
+			],
+			categories: [
+				{ $id: 'grupo', nombre: 'Pastelería y Desayuno', parent_id: null },
+				{ $id: 'desayuno', nombre: 'Desayuno', parent_id: 'grupo' },
+				{ $id: 'macarons', nombre: 'Macarons', parent_id: 'desayuno' }
+			]
+		};
+		const vista = getVistaCatalogo(cache);
+		const familiaDelGrupo = vista.familiaPorPadre.get('grupo') || '';
+		expect(familiaDelGrupo.split(',')).toEqual(expect.arrayContaining(['grupo', 'desayuno', 'macarons']));
 	});
 });
 
