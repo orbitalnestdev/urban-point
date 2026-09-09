@@ -11,10 +11,10 @@
 export const DATOS_EMPRESA = {
 	razonSocial: '[COMPLETAR: Razón social / nombre completo del titular]',
 	nombreFantasia: 'UrbanPoint',
-	cuit: '[COMPLETAR: CUIT]',
-	condicionIVA: '[COMPLETAR: Responsable Inscripto / Monotributista / etc.]',
-	domicilioLegal: '[COMPLETAR: domicilio legal/fiscal completo]',
-	domicilioComercial: '', // dejar vacío si es el mismo que el legal
-	jurisdiccion: '[COMPLETAR: CABA / provincia donde está inscripta la empresa — define la autoridad de defensa del consumidor competente]',
+	cuit: '30-71953367-8',
+	condicionIVA: 'Responsable Inscripto',
+	domicilioLegal: 'Lavalleja 152, CABA',
+	domicilioComercial: 'Arribeños 1408, piso 2, CABA',
+	jurisdiccion: 'CABA',
 	inscripcionAAIP: '[COMPLETAR: si la base de datos de clientes está inscripta ante la AAIP (Ley 25.326), número de inscripción; si no está inscripta, dejar indicado]'
 };
