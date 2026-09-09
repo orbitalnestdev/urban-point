@@ -4,7 +4,9 @@ import CartDrawer from './shop/CartDrawer';
 import CategoryIcon from './CategoryIcon.astro';
 import { getCachedCatalog } from '../lib/server/catalogCache';
 import { getVistaCatalogo } from '../lib/server/catalogView';
-import { agruparCategorias } from '../lib/categoryGroups';
+import { GRUPOS } from '../lib/categoryGroups';
+
+const ICONO_POR_NOMBRE_DE_GRUPO = new Map(GRUPOS.map((g) => [g.nombre, g.icono]));
 
 interface Props {
   activePage?: string;
@@ -20,6 +22,14 @@ const accountText = user?.role === 'canillita' ? 'Panel Canillita' : (user?.role
 // Árbol de categorías para el menú lateral. Se apoya en el mismo caché de
 // catálogo (TTL de 5 min) que ya usan /productos y las home: no es una
 // consulta nueva a Appwrite, es la misma que ya se comparte entre requests.
+//
+// Estructura real en Appwrite (desde scripts/migrate_category_groups.ts):
+// las ~90 categorías de catálogo (nombres de colecciones sueltas: "Blue
+// Note", "Autos Alemanes"...) cuelgan de 13 categorías "grupo" de primer
+// nivel (Vehículos y Motores, Música e Ídolos, etc., + "Otras categorías"
+// como red de contención). categoriasPadre son esos 13 grupos; hijasPorPadre
+// es genérico por parent_id, así que también resuelve el único caso de 3
+// niveles real (Pastelería y Desayuno > Desayuno > Macarons).
 let categoriasPadre: any[] = [];
 const hijasPorPadre = new Map<string, any[]>();
 try {
@@ -36,12 +46,6 @@ try {
 } catch (e) {
   console.error('No se pudo cargar el árbol de categorías del menú lateral:', e);
 }
-
-// Con ~90 categorías, casi todas de primer nivel (nombres de colecciones
-// sueltas, sin jerarquía real detrás), listarlas todas en fila era
-// ilegible. agruparCategorias las junta por temática sólo para exhibición
-// acá — no toca la estructura real en Appwrite. Ver src/lib/categoryGroups.ts.
-const gruposDeCategorias = agruparCategorias(categoriasPadre);
 ---
 
 <header class="sticky top-0 z-50 w-full transition-all duration-300">
@@ -203,10 +207,12 @@ const gruposDeCategorias = agruparCategorias(categoriasPadre);
         </a>
       </div>
 
-      <!-- Categorías agrupadas por temática (ver src/lib/categoryGroups.ts):
-           con ~90 categorías casi todas de primer nivel, listarlas todas en
-           fila era ilegible. Buscador + acordeones colapsados por defecto
-           para que el panel se lea de un vistazo. -->
+      <!-- Categorías agrupadas por temática: categoriasPadre son ahora las
+           13 categorías "grupo" reales (ver scripts/migrate_category_groups.ts
+           y /admin/categorías — la clienta las administra desde ahí, alta,
+           edición y a qué grupo pertenece cada categoría, como cualquier
+           categoría con subcategorías). Buscador + acordeones colapsados por
+           defecto para que el panel se lea de un vistazo. -->
       <h2 class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-2 px-1">Categorías</h2>
 
       <div class="relative mb-3">
@@ -226,18 +232,18 @@ const gruposDeCategorias = agruparCategorias(categoriasPadre);
         <Fragment>
           <p id="sin-resultados-categoria-menu" hidden class="text-xs text-slate-400 font-medium px-1 py-3">No encontramos categorías con ese nombre.</p>
           <nav id="lista-grupos-categorias" class="flex flex-col gap-1.5">
-            {gruposDeCategorias.map(({ grupo, categorias }) => (
+            {categoriasPadre.map((grupo: any) => (
               <details class="grupo-categoria group/grupo rounded-2xl border border-transparent open:border-slate-100 open:bg-slate-50/60 transition-colors">
                 <summary class="list-none flex items-center gap-3 px-2.5 py-2.5 rounded-2xl hover:bg-slate-50 cursor-pointer transition-colors">
                   <span class="w-8 h-8 rounded-xl bg-[#F2F7F3] text-[#2D5A27] flex items-center justify-center shrink-0">
-                    <CategoryIcon icono={grupo.icono} class="w-4 h-4" />
+                    <CategoryIcon icono={ICONO_POR_NOMBRE_DE_GRUPO.get(grupo.nombre) || 'grid'} class="w-4 h-4" />
                   </span>
-                  <span class="flex-1 text-[13px] font-extrabold text-slate-800 tracking-tight truncate">{grupo.nombre}</span>
-                  <span class="text-[10px] font-bold text-slate-400 shrink-0">{categorias.length}</span>
+                  <a href={`/productos?categoria=${grupo.$id}`} class="flex-1 text-[13px] font-extrabold text-slate-800 tracking-tight truncate hover:text-[#2D5A27]">{grupo.nombre}</a>
+                  <span class="text-[10px] font-bold text-slate-400 shrink-0">{grupo.productCount}</span>
                   <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400 shrink-0 transition-transform group-open/grupo:rotate-180"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </summary>
                 <div class="px-2 pb-2 pt-0.5 flex flex-col gap-0.5">
-                  {categorias.map((parent: any) => {
+                  {(hijasPorPadre.get(grupo.$id) || []).map((parent: any) => {
                     const hijas = hijasPorPadre.get(parent.$id) || [];
                     return hijas.length > 0 ? (
                       <details class="cat-fila group/sub" data-nombre={parent.nombre.toLowerCase()}>

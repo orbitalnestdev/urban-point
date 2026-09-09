@@ -1,17 +1,22 @@
 /**
- * Agrupación temática de las categorías del catálogo, sólo para exhibición
- * (menú lateral / futuros paneles). No toca la estructura real en Appwrite:
- * las ~90 categorías del catálogo son, salvo una, todas de primer nivel
- * (parent_id vacío) — nombres de colecciones sueltas ("Blue Note", "Autos
- * Alemanes", "Rock de Acá"...) sin un árbol real detrás. Mostrarlas todas
- * juntas y en fila era ilegible; acá se las junta por temática para que el
- * menú se navegue de un vistazo.
+ * Agrupación temática de las categorías del catálogo. GRUPOS es la fuente de
+ * verdad para dos cosas separadas:
  *
- * Es un mapa explícito por nombre (no heurística por palabras clave):
- * con nombres de colecciones tan variados, adivinar por keyword arriesgaba
- * clasificar mal ("Hola" podría matchear cualquier cosa). Una categoría
- * nueva que no esté en el mapa cae en "Otras categorías" — nunca desaparece,
- * sólo hay que sumarla acá cuando se detecte.
+ *  1. El ícono de cada grupo en el menú lateral (Header.astro busca por
+ *     nombre — los 13 grupos ya existen como categorías reales en Appwrite,
+ *     creadas y asignadas una única vez por scripts/migrate_category_groups.ts).
+ *  2. Ese mismo script, si hace falta volver a correrlo (por ejemplo, para
+ *     clasificar en bloque categorías nuevas que todavía no tengan grupo).
+ *
+ * La clienta administra el árbol real desde /admin/categorías (crear/editar
+ * categorías, moverlas de padre) — esto ya no controla qué se ve en el menú,
+ * sólo aporta el ícono y sirve de mapa de referencia para el script.
+ *
+ * Es un mapa explícito por nombre (no heurística por palabras clave): con
+ * nombres de colecciones tan variados, adivinar por keyword arriesgaba
+ * clasificar mal ("Hola" podría matchear cualquier cosa). Una categoría que
+ * no esté en el mapa cae en "Otras categorías" al correr el script — nunca
+ * desaparece, sólo hay que sumarla acá cuando se detecte.
  */
 
 export interface GrupoCategoria {
@@ -154,23 +159,7 @@ const ASIGNACION: Record<string, string> = {
 	'Indumentaria': 'cuidado'
 };
 
-function idDeGrupo(nombreCategoria: string): string {
+/** categoría -> id de grupo, usado por scripts/migrate_category_groups.ts. */
+export function idDeGrupo(nombreCategoria: string): string {
 	return ASIGNACION[(nombreCategoria || '').trim()] || 'otras';
-}
-
-export interface CategoriaAgrupada<T> {
-	grupo: GrupoCategoria;
-	categorias: T[];
-}
-
-/** Agrupa categorías (con `nombre`) manteniendo el orden recibido dentro de cada grupo. */
-export function agruparCategorias<T extends { nombre: string }>(categorias: T[]): CategoriaAgrupada<T>[] {
-	const porGrupo = new Map<string, T[]>();
-	for (const c of categorias) {
-		const id = idDeGrupo(c.nombre);
-		const lista = porGrupo.get(id);
-		if (lista) lista.push(c);
-		else porGrupo.set(id, [c]);
-	}
-	return GRUPOS.map((g) => ({ grupo: g, categorias: porGrupo.get(g.id) || [] })).filter((x) => x.categorias.length > 0);
 }
