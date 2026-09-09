@@ -3,7 +3,7 @@ import { idDeGrupo, GRUPOS } from '../../src/lib/categoryGroups';
 
 describe('idDeGrupo', () => {
 	it('resuelve categorías conocidas a su grupo temático', () => {
-		expect(idDeGrupo('Autos Alemanes')).toBe('vehiculos');
+		expect(idDeGrupo('Autos Alemanes')).toBe('infantil');
 		expect(idDeGrupo('Rock de Acá')).toBe('musica');
 		expect(idDeGrupo('Hogar')).toBe('hogar');
 	});

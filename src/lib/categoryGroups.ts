@@ -27,7 +27,6 @@ export interface GrupoCategoria {
 }
 
 export const GRUPOS: GrupoCategoria[] = [
-	{ id: 'vehiculos', nombre: 'Vehículos y Motores', icono: 'auto' },
 	{ id: 'musica', nombre: 'Música e Ídolos', icono: 'musica' },
 	{ id: 'pop', nombre: 'Pop Culture y Comics', icono: 'pop' },
 	{ id: 'cocina', nombre: 'Cocina y Bazar', icono: 'cocina' },
@@ -46,19 +45,21 @@ const GRUPO_POR_ID = new Map(GRUPOS.map((g) => [g.id, g]));
 
 /** nombre de categoría (tal cual está en Appwrite) -> id de grupo. */
 const ASIGNACION: Record<string, string> = {
-	// Vehículos y Motores
-	'Autos Alemanes': 'vehiculos',
-	'Autos americanos': 'vehiculos',
-	'Autos Clásicos Descapotables': 'vehiculos',
-	'Autos Clasicos y Descapotables': 'vehiculos',
-	'Autos deportivos de lujo': 'vehiculos',
-	'Batimóviles': 'vehiculos',
-	'Construye tu F1': 'vehiculos',
-	'Monster Truck': 'vehiculos',
-	'Motos Clásicas': 'vehiculos',
-	'Pick Ups Americanas': 'vehiculos',
-	'Objetos de Coleccion - Vehiculos de Coleccion - Autos': 'vehiculos',
-	'Objetos de Coleccion - Vehiculos de Coleccion - Barcos': 'vehiculos',
+	// Autos de juguete, no vehículos "reales": van a Infantil. Los que
+	// llevan el prefijo "Objetos de Coleccion" van con el resto de esa
+	// familia. No hay grupo "Vehículos y Motores" — se dio de baja.
+	'Autos Alemanes': 'infantil',
+	'Autos americanos': 'infantil',
+	'Autos Clásicos Descapotables': 'infantil',
+	'Autos Clasicos y Descapotables': 'infantil',
+	'Autos deportivos de lujo': 'infantil',
+	'Batimóviles': 'infantil',
+	'Construye tu F1': 'infantil',
+	'Monster Truck': 'infantil',
+	'Motos Clásicas': 'infantil',
+	'Pick Ups Americanas': 'infantil',
+	'Objetos de Coleccion - Vehiculos de Coleccion - Autos': 'coleccion',
+	'Objetos de Coleccion - Vehiculos de Coleccion - Barcos': 'coleccion',
 
 	// Música e Ídolos
 	'Blue Note': 'musica',
