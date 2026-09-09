@@ -1,6 +1,8 @@
 ---
 import Logo from './Logo.astro';
 import CartDrawer from './shop/CartDrawer';
+import { getCachedCatalog } from '../lib/server/catalogCache';
+import { getVistaCatalogo } from '../lib/server/catalogView';
 
 interface Props {
   activePage?: string;
@@ -12,6 +14,26 @@ const user = Astro.locals.user;
 const isLoggedIn = !!user;
 const accountHref = user?.role === 'canillita' ? '/canillita' : (user?.role === 'admin' ? '/admin' : '/mi-cuenta');
 const accountText = user?.role === 'canillita' ? 'Panel Canillita' : (user?.role === 'admin' ? 'Panel Admin' : 'Mi Cuenta');
+
+// Árbol de categorías para el menú lateral. Se apoya en el mismo caché de
+// catálogo (TTL de 5 min) que ya usan /productos y las home: no es una
+// consulta nueva a Appwrite, es la misma que ya se comparte entre requests.
+let categoriasPadre: any[] = [];
+const hijasPorPadre = new Map<string, any[]>();
+try {
+  const cache = await getCachedCatalog();
+  const vista = getVistaCatalogo(cache, user?.role);
+  categoriasPadre = vista.categoriasPadre;
+  for (const c of vista.categorias) {
+    const pid = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id;
+    if (!pid || c.productCount <= 0) continue;
+    const lista = hijasPorPadre.get(pid);
+    if (lista) lista.push(c);
+    else hijasPorPadre.set(pid, [c]);
+  }
+} catch (e) {
+  console.error('No se pudo cargar el árbol de categorías del menú lateral:', e);
+}
 ---
 
 <header class="sticky top-0 z-50 w-full transition-all duration-300">
@@ -43,8 +65,18 @@ const accountText = user?.role === 'canillita' ? 'Panel Canillita' : (user?.role
   <div class="pt-3 pb-1 px-4 sm:px-6">
     <div class="max-w-7xl mx-auto bg-white/95 backdrop-blur-md rounded-full shadow-xl shadow-slate-900/10 border border-slate-200/80 px-4 sm:px-6 py-2.5 flex items-center justify-between transition-all duration-300">
       
-      <!-- Brand Logo -->
-      <div class="flex items-center gap-3">
+      <!-- Brand Logo + Menú lateral -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button
+          id="btn-open-side-menu"
+          type="button"
+          aria-label="Abrir menú"
+          aria-expanded="false"
+          aria-controls="side-menu-panel"
+          class="p-2 text-slate-700 hover:text-[#2D5A27] hover:bg-slate-100 rounded-full transition-colors shrink-0 cursor-pointer"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
         <Logo height={38} />
       </div>
 
@@ -122,6 +154,97 @@ const accountText = user?.role === 'canillita' ? 'Panel Canillita' : (user?.role
     </div>
   </div>
 
+  <!-- Menú lateral: mismo panel y comportamiento en mobile y escritorio,
+       sin recargar la página (overlay + panel con display:none por
+       defecto, sin dependencia de React). -->
+  <div id="side-menu-overlay" hidden class="fixed inset-0 bg-slate-900/50 z-[70] transition-opacity opacity-0"></div>
+  <aside
+    id="side-menu-panel"
+    hidden
+    aria-hidden="true"
+    class="fixed top-0 left-0 h-full w-[85vw] max-w-sm bg-white z-[80] shadow-2xl -translate-x-full transition-transform duration-300 flex flex-col"
+  >
+    <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 shrink-0">
+      <Logo height={30} />
+      <button
+        id="btn-close-side-menu"
+        type="button"
+        aria-label="Cerrar menú"
+        class="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+
+    <div class="overflow-y-auto flex-1 px-5 py-5">
+      <!-- Accesos directos -->
+      <div class="flex flex-col gap-2 mb-6">
+        <a
+          href={accountHref}
+          class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#F2F7F3] text-[#2D5A27] font-bold text-sm hover:bg-[#E4EFE6] transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          {isLoggedIn ? accountText : 'Mi Cuenta'}
+        </a>
+        <a
+          href="/puntos-de-retiro"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 text-slate-700 font-bold text-sm hover:bg-slate-100 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          Puntos de Retiro
+        </a>
+      </div>
+
+      <!-- Árbol de categorías -->
+      <h2 class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-2 px-1">Categorías</h2>
+      {categoriasPadre.length === 0 ? (
+        <p class="text-xs text-slate-400 font-medium px-1 py-2">No hay categorías disponibles por el momento.</p>
+      ) : (
+        <nav class="flex flex-col gap-0.5">
+          {categoriasPadre.map((parent) => {
+            const hijas = hijasPorPadre.get(parent.$id) || [];
+            return hijas.length > 0 ? (
+              <details class="group">
+                <summary class="list-none flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors">
+                  <a href={`/productos?categoria=${parent.$id}`} class="flex-1 text-sm font-semibold text-slate-700 hover:text-[#2D5A27] truncate">
+                    {parent.nombre}
+                  </a>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400 shrink-0 transition-transform group-open:rotate-180"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </summary>
+                <div class="pl-4 flex flex-col gap-0.5 pb-1">
+                  {hijas.map((child: any) => (
+                    <a
+                      href={`/productos?categoria=${child.$id}`}
+                      class="px-3 py-2 rounded-lg text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-[#2D5A27] transition-colors truncate"
+                    >
+                      {child.nombre}
+                    </a>
+                  ))}
+                </div>
+              </details>
+            ) : (
+              <a
+                href={`/productos?categoria=${parent.$id}`}
+                class="px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#2D5A27] transition-colors truncate"
+              >
+                {parent.nombre}
+              </a>
+            );
+          })}
+        </nav>
+      )}
+
+      <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col gap-0.5">
+        <a href="/productos" class="px-3 py-2.5 rounded-xl text-sm font-bold text-[#2D5A27] hover:bg-[#F2F7F3] transition-colors">
+          Ver todo el catálogo
+        </a>
+        <a href="/#como-funciona" class="px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+          Cómo funciona
+        </a>
+      </div>
+    </div>
+  </aside>
+
   <!-- Cart Drawer Component Mounted Globally.
        client:only: el contenido del drawer sale de cartItems, un store
        persistido en localStorage. Renderizarlo en el servidor lo pintaba
@@ -134,6 +257,48 @@ const accountText = user?.role === 'canillita' ? 'Panel Canillita' : (user?.role
 </header>
 
 <script>
+  // Menú lateral (categorías + accesos directos): mismo panel para mobile y
+  // escritorio, abre/cierra sin recargar la página.
+  const btnOpenSideMenu = document.getElementById('btn-open-side-menu');
+  const btnCloseSideMenu = document.getElementById('btn-close-side-menu');
+  const sideMenuOverlay = document.getElementById('side-menu-overlay');
+  const sideMenuPanel = document.getElementById('side-menu-panel');
+
+  function abrirMenuLateral() {
+    if (!sideMenuOverlay || !sideMenuPanel) return;
+    sideMenuOverlay.hidden = false;
+    sideMenuPanel.hidden = false;
+    // requestAnimationFrame para que el navegador registre "hidden" removido
+    // antes de animar la transición de opacidad/transform.
+    requestAnimationFrame(() => {
+      sideMenuOverlay.classList.remove('opacity-0');
+      sideMenuPanel.classList.remove('-translate-x-full');
+    });
+    sideMenuPanel.setAttribute('aria-hidden', 'false');
+    btnOpenSideMenu?.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('overflow-hidden');
+  }
+
+  function cerrarMenuLateral() {
+    if (!sideMenuOverlay || !sideMenuPanel) return;
+    sideMenuOverlay.classList.add('opacity-0');
+    sideMenuPanel.classList.add('-translate-x-full');
+    sideMenuPanel.setAttribute('aria-hidden', 'true');
+    btnOpenSideMenu?.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('overflow-hidden');
+    window.setTimeout(() => {
+      sideMenuOverlay.hidden = true;
+      sideMenuPanel.hidden = true;
+    }, 300);
+  }
+
+  btnOpenSideMenu?.addEventListener('click', abrirMenuLateral);
+  btnCloseSideMenu?.addEventListener('click', cerrarMenuLateral);
+  sideMenuOverlay?.addEventListener('click', cerrarMenuLateral);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') cerrarMenuLateral();
+  });
+
   // Open Cart drawer event
   // El drawer es client:only, así que no existe hasta que React lo monta. Un
   // "agregar al carrito" en ese intervalo disparaba cart:open sin oyente y el

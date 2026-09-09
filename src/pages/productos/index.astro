@@ -792,6 +792,47 @@ const categoriasDestacadas = categoriasPadre.slice(0, CATEGORIAS_A_LA_VISTA);
 			btnReset?.addEventListener('click', limpiarTodo);
 			btnLimpiar?.addEventListener('click', limpiarTodo);
 
+			// Deep-link desde el menú lateral y los banners de colecciones
+			// (/productos?categoria=<id>): preselecciona esa categoría o
+			// subcategoría al cargar, en vez de arrancar siempre en "Todos".
+			function idsDeFamiliaCliente(id: string): string {
+				const hijas = allCategories
+					.filter((c: any) => {
+						const pid = typeof c.parent_id === 'string' ? c.parent_id : c.parent_id?.$id;
+						return pid === id;
+					})
+					.map((c: any) => c.$id);
+				return [id, ...hijas].join(',');
+			}
+
+			function activarDesdeUrl() {
+				const catParam = new URLSearchParams(window.location.search).get('categoria');
+				if (!catParam) return;
+				const cat = allCategories.find((c: any) => c.$id === catParam);
+				if (!cat) return;
+
+				const pid = typeof cat.parent_id === 'string' ? cat.parent_id : cat.parent_id?.$id;
+				if (pid) {
+					// Es una subcategoría: activar la familia del padre (para que se
+					// pinte el panel de "Subcategorías") y dejar seleccionada sólo ésta.
+					const padre = allCategories.find((c: any) => c.$id === pid);
+					activarCategoria(idsDeFamiliaCliente(pid), pid, (padre?.nombre || '').toLowerCase(), false);
+					activeCategory = cat.$id;
+					subContainer?.querySelectorAll('.sub-item').forEach((sb) => {
+						const suyo = sb.getAttribute('data-category') === cat.$id;
+						sb.classList.toggle('bg-[#F2F7F3]', suyo);
+						sb.classList.toggle('text-[#2D5A27]', suyo);
+						sb.classList.toggle('font-bold', suyo);
+						sb.classList.toggle('text-slate-600', !suyo);
+						sb.classList.toggle('font-semibold', !suyo);
+					});
+					aplicarFiltros();
+				} else {
+					activarCategoria(idsDeFamiliaCliente(cat.$id), cat.$id, (cat.nombre || '').toLowerCase(), false);
+				}
+			}
+
+			activarDesdeUrl();
 			pintarPaginacion();
 			actualizarContadores();
 		});
