@@ -2992,6 +2992,33 @@ export const server = {
 		}
 	}),
 
+	bulkUpdatePickupPointsStatus: defineAction({
+		accept: 'json',
+		input: z.object({
+			ids: z.array(z.string()).min(1),
+			estado: z.enum(['activo', 'suspendido'])
+		}),
+		handler: async (input, ctx) => {
+			try {
+				if (!ctx.locals.user || ctx.locals.user.role !== 'admin') {
+					throw new Error('Solo los administradores pueden gestionar puntos de retiro');
+				}
+				let actualizados = 0;
+				for (const id of input.ids) {
+					try {
+						await db.updateDocument('urbanpoint', 'pickup_points', id, { estado: input.estado });
+						actualizados++;
+					} catch (e) {
+						console.error(`No se pudo actualizar el punto ${id}:`, e);
+					}
+				}
+				return { success: true, actualizados, total: input.ids.length };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
+			}
+		}
+	}),
+
 	deletePickupPoint: defineAction({
 		accept: 'json',
 		input: z.object({
