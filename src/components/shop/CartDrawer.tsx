@@ -147,8 +147,8 @@ export default function CartDrawer(_props?: { pickupPoints?: any[] }) {
 
             {/* Action Buttons: Finalizar Compra + Ver Carrito Completo */}
             <div className="space-y-2">
-              <a 
-                href="/checkout/retiro"
+              <a
+                href="/checkout/pago"
                 className="w-full bg-[#2D5A27] hover:bg-[#23471F] text-white font-extrabold py-3.5 px-6 rounded-xl shadow-lg shadow-[#2D5A27]/20 transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
               >
                 Continuar Compra

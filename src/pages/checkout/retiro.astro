@@ -8,6 +8,12 @@ import { getCachedCatalog } from '../../lib/server/catalogCache';
 import { parseActiveNodeCookie } from '../../lib/nodeSession';
 import { toSafeJson } from '../../lib/safeJson';
 
+// La clienta decidió que el cliente no elija punto de retiro: la entrega se
+// coordina con él después de la compra ("a convenir"). El checkout va del
+// carrito directo a /checkout/pago. Se deja la pantalla entera abajo, sin
+// tocar, para poder reactivarla borrando este redirect.
+return Astro.redirect('/checkout/pago');
+
 let pickupPoints: any[] = [];
 let barrios: string[] = [];
 let activeNodeSession: any = null;

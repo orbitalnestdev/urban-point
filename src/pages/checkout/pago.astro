@@ -59,11 +59,9 @@ const envioConfig = {
         <div class="max-w-7xl mx-auto flex items-center justify-between">
             <Logo height={32} />
             <div class="hidden sm:flex items-center gap-4 text-sm font-bold text-slate-400">
-                <a href="/checkout/retiro" class="flex items-center gap-1 hover:text-[#2D5A27]"><span class="w-5 h-5 rounded-full bg-[#2D5A27] text-white flex items-center justify-center text-xs">1</span> Retiro</a>
-                <span class="h-px w-8 bg-slate-200"></span>
-                <span class="flex items-center gap-1 text-[#2D5A27]"><span class="w-5 h-5 rounded-full bg-[#2D5A27] text-white flex items-center justify-center text-xs">2</span> Pago</span>
+                <span class="flex items-center gap-1 text-[#2D5A27]"><span class="w-5 h-5 rounded-full bg-[#2D5A27] text-white flex items-center justify-center text-xs">1</span> Pago</span>
             </div>
-            <a href="/checkout/retiro" class="text-sm font-bold text-slate-500 hover:text-[#2D5A27]">Volver</a>
+            <a href="/carrito" class="text-sm font-bold text-slate-500 hover:text-[#2D5A27]">Volver</a>
         </div>
     </header>
 
@@ -104,17 +102,13 @@ const envioConfig = {
                     <div class="p-2 bg-emerald-50 text-[#2D5A27] rounded-xl border border-emerald-100">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                     </div>
-                    Punto de Retiro Elegido
+                    Entrega
                 </h2>
-                {activeNodeSession ? (
+                {activeNodeSession && (
                     <span class="text-xs font-extrabold text-[#2D5A27] bg-[#F2F7F3] px-3 py-1.5 rounded-lg border border-[#D4E5D6] flex items-center gap-1.5">
                         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                         Punto Asignado
                     </span>
-                ) : (
-                    <a href="/checkout/retiro" class="text-sm font-bold text-[#2D5A27] hover:text-[#1e3d1a] hover:underline bg-[#F2F7F3] px-3 py-1.5 rounded-lg transition-colors">
-                        Cambiar punto
-                    </a>
                 )}
             </div>
             <div id="selected-point-details" class="p-5 bg-white border-2 border-[#F2F7F3] rounded-2xl flex items-start gap-4 shadow-sm hover:border-[#D4E5D6] transition-colors">
@@ -333,34 +327,48 @@ const envioConfig = {
                 } catch (e) {}
             }
 
+            // Sin punto asignado, la entrega se coordina con el cliente después
+            // de la compra ("a convenir"): ya no se lo manda a elegir un punto.
+            // El teléfono que se pide más abajo es justamente para eso. Ojo: acá
+            // NO se puede cortar con un return — abajo se calcula el total y se
+            // cablean los métodos de pago.
             if (!currentCheckout.pickupPointId) {
-                window.location.href = '/checkout/retiro';
-                return;
-            }
-
-            try {
-                // Se consulta al backend propio, que devuelve solo campos públicos.
-                // La colección pickup_points no se expone al SDK del navegador
-                // porque contiene CBU, condición fiscal y profile_id.
-                const res = await fetch(`/api/pickup-points?id=${encodeURIComponent(currentCheckout.pickupPointId)}`);
-                if (!res.ok) throw new Error('Punto de retiro no disponible');
-                const point = await res.json();
-
                 if (pointDetailsEl) {
                     pointDetailsEl.innerHTML = `
                         <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-[#2D5A27] shrink-0 border border-[#D4E5D6] shadow-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                         </div>
                         <div>
-                            <p class="font-extrabold text-slate-900">${esc(point.nombre_comercial)}</p>
-                            <p class="text-xs text-slate-600 mt-0.5">${esc(point.direccion)}, ${esc(point.localidad)}</p>
-                            <p class="text-xs font-semibold text-[#2D5A27] mt-1">Retiro GRATIS</p>
+                            <p class="font-extrabold text-slate-900">Entrega a convenir</p>
+                            <p class="text-xs text-slate-600 mt-0.5">Nos comunicamos con vos para coordinar cómo y dónde recibís tu pedido.</p>
                         </div>
                     `;
                 }
-            } catch (e) {
-                console.error(e);
-                if (pointDetailsEl) pointDetailsEl.innerHTML = `<p class="text-red-500 font-bold text-sm">Error al cargar el punto de retiro.</p>`;
+            } else {
+                try {
+                    // Se consulta al backend propio, que devuelve solo campos públicos.
+                    // La colección pickup_points no se expone al SDK del navegador
+                    // porque contiene CBU, condición fiscal y profile_id.
+                    const res = await fetch(`/api/pickup-points?id=${encodeURIComponent(currentCheckout.pickupPointId)}`);
+                    if (!res.ok) throw new Error('Punto de retiro no disponible');
+                    const point = await res.json();
+
+                    if (pointDetailsEl) {
+                        pointDetailsEl.innerHTML = `
+                            <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-[#2D5A27] shrink-0 border border-[#D4E5D6] shadow-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            </div>
+                            <div>
+                                <p class="font-extrabold text-slate-900">${esc(point.nombre_comercial)}</p>
+                                <p class="text-xs text-slate-600 mt-0.5">${esc(point.direccion)}, ${esc(point.localidad)}</p>
+                                <p class="text-xs font-semibold text-[#2D5A27] mt-1">Retiro GRATIS</p>
+                            </div>
+                        `;
+                    }
+                } catch (e) {
+                    console.error(e);
+                    if (pointDetailsEl) pointDetailsEl.innerHTML = `<p class="text-red-500 font-bold text-sm">Error al cargar el punto de retiro.</p>`;
+                }
             }
         }
 
