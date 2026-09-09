@@ -195,7 +195,9 @@ try {
         </a>
       </div>
 
-      <!-- Árbol de categorías -->
+      <!-- Árbol de categorías: orden alfabético (padres e hijas) desde
+           catalogView.ts, un ícono de carpeta por fila y la cantidad de
+           productos como badge, para que se lea de un vistazo. -->
       <h2 class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-2 px-1">Categorías</h2>
       {categoriasPadre.length === 0 ? (
         <p class="text-xs text-slate-400 font-medium px-1 py-2">No hay categorías disponibles por el momento.</p>
@@ -205,19 +207,22 @@ try {
             const hijas = hijasPorPadre.get(parent.$id) || [];
             return hijas.length > 0 ? (
               <details class="group">
-                <summary class="list-none flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors">
-                  <a href={`/productos?categoria=${parent.$id}`} class="flex-1 text-sm font-semibold text-slate-700 hover:text-[#2D5A27] truncate">
+                <summary class="list-none flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[#2D5A27]/70 shrink-0"><path d="M3 7a2 2 0 0 1 2-2h3.5l1.5 2H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg>
+                  <a href={`/productos?categoria=${parent.$id}`} class="flex-1 text-sm font-bold text-slate-800 hover:text-[#2D5A27] truncate">
                     {parent.nombre}
                   </a>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400 shrink-0 transition-transform group-open:rotate-180"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  <span class="text-[10px] font-extrabold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5 shrink-0">{parent.productCount}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400 shrink-0 transition-transform group-open:rotate-180"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </summary>
-                <div class="pl-4 flex flex-col gap-0.5 pb-1">
+                <div class="ml-[1.55rem] pl-3.5 border-l-2 border-slate-100 flex flex-col gap-0.5 py-1 mb-1">
                   {hijas.map((child: any) => (
                     <a
                       href={`/productos?categoria=${child.$id}`}
-                      class="px-3 py-2 rounded-lg text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-[#2D5A27] transition-colors truncate"
+                      class="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-[#2D5A27] transition-colors"
                     >
-                      {child.nombre}
+                      <span class="truncate">{child.nombre}</span>
+                      <span class="text-[10px] font-bold text-slate-400 shrink-0">{child.productCount}</span>
                     </a>
                   ))}
                 </div>
@@ -225,9 +230,11 @@ try {
             ) : (
               <a
                 href={`/productos?categoria=${parent.$id}`}
-                class="px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#2D5A27] transition-colors truncate"
+                class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-slate-50 hover:text-[#2D5A27] transition-colors"
               >
-                {parent.nombre}
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[#2D5A27]/70 shrink-0"><path d="M3 7a2 2 0 0 1 2-2h3.5l1.5 2H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg>
+                <span class="flex-1 truncate">{parent.nombre}</span>
+                <span class="text-[10px] font-extrabold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5 shrink-0">{parent.productCount}</span>
               </a>
             );
           })}

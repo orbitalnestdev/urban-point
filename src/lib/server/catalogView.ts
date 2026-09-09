@@ -120,11 +120,23 @@ function construirVista(cache: any, tier: PricingLevel): VistaCatalogo {
 	const products: any[] = cache?.products || [];
 	const categoriasCrudas: any[] = cache?.categories || [];
 
-	const categorias = contarProductosPorCategoria(products, categoriasCrudas);
+	const grupos = agruparVariantes(products);
 
-	const categoriasPadre = categorias
-		.filter((c: any) => !c.parent_id && c.productCount > 0)
-		.sort((a: any, b: any) => (b.productCount || 0) - (a.productCount || 0));
+	// `productCount` cuenta TARJETAS (grupos de variantes), no documentos
+	// crudos: contarProductosPorCategoria recibe un producto "representante"
+	// por grupo (grupo.principal), en vez de la lista completa de productos.
+	// Antes contaba cada variante suelta, así que la suma de categorías (p. ej.
+	// 2261, una por cada color/fascículo) no coincidía con el total de tarjetas
+	// que realmente se ven en la grilla (432) — mismo criterio que usa el
+	// contador de arriba de la página y el filtro cliente en productos/index.
+	// Orden alfabético único, acá arriba: como el resto del árbol (padres en
+	// categoriasPadre, hijas en hijasPorPadre en Header y en productos/index)
+	// sale de filtrar este mismo array, el .filter() conserva el orden y no
+	// hace falta reordenar cada grupo de hijas por separado.
+	const categorias = contarProductosPorCategoria(grupos.map((g) => g.principal), categoriasCrudas)
+		.sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' }));
+
+	const categoriasPadre = categorias.filter((c: any) => !c.parent_id && c.productCount > 0);
 
 	// Una pasada por categorías en vez de un filtro por cada padre renderizado.
 	const hijasPorPadre = new Map<string, string[]>();
@@ -143,8 +155,6 @@ function construirVista(cache: any, tier: PricingLevel): VistaCatalogo {
 	// Índice por id: lo necesita el stock de los combos, que no tienen stock
 	// propio sino el que permitan sus integrantes.
 	const productoPorId = new Map<string, any>(products.map((p: any) => [p.$id, p]));
-
-	const grupos = agruparVariantes(products);
 
 	const compacto: EntradaVitrina[] = grupos.map((grupo) => {
 		const principal: any = grupo.principal;
