@@ -24,6 +24,13 @@ import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, c
 import { integrantesDeCombo } from '../lib/combos';
 import { crearSolicitud, solicitudAbierta, resolverSolicitud, cerrarSolicitudPorPago } from '../lib/server/payoutRequests';
 import { reservarParaOrden, confirmarReserva, liberarReserva, saldoDisponible, emitirCredito, ajustarSaldo } from '../lib/server/creditos';
+import {
+	crearDevolucion,
+	resolverDevolucion,
+	devolucionAbiertaDePedido,
+	dentroDelPlazoDeArrepentimiento,
+	ESTADOS_PEDIDO_DEVOLVIBLE
+} from '../lib/server/devoluciones';
 
 import { createAdminClient, escribirDocumentoTolerante } from '../lib/server/appwrite';
 import { invalidateCatalogCache } from '../lib/server/catalogCache';
@@ -1821,6 +1828,143 @@ export const server = {
 					});
 
 				return { success: true, id: movimiento.$id, saldo: await saldoDisponible(input.profileId) };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
+			}
+		}
+	}),
+
+	/**
+	 * El cliente pide devolver un pedido suyo.
+	 *
+	 * El monto y el plazo salen del pedido real, no del formulario: son datos
+	 * del servidor. El plazo vencido no bloquea la solicitud —la clienta puede
+	 * querer aceptarla igual— pero queda registrado para que decida sabiendo.
+	 */
+	solicitarDevolucion: defineAction({
+		accept: 'json',
+		input: z.object({
+			orderId: z.string().min(1),
+			motivo: z.enum(['arrepentimiento', 'garantia', 'cambio_preferencia']),
+			detalle: z.string().trim().max(1000).optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				const profile = await getClientProfile(ctx);
+				if (!profile) {
+					return { success: false, error: 'Iniciá sesión para pedir una devolución.' };
+				}
+
+				const order: any = await db.getDocument('urbanpoint', 'orders', input.orderId).catch(() => null);
+				if (!order) return { success: false, error: 'No encontramos ese pedido.' };
+
+				// Deny by default: el pedido tiene que ser de quien lo pide.
+				const dueño = typeof order.customer_id === 'string' ? order.customer_id : order.customer_id?.$id;
+				if (dueño !== profile.$id) {
+					return { success: false, error: 'Ese pedido no es tuyo.' };
+				}
+
+				const estadoPedido = normalizarEstadoPedido(order.estado);
+				if (!estadoPedido || !ESTADOS_PEDIDO_DEVOLVIBLE.includes(estadoPedido as any)) {
+					return {
+						success: false,
+						error: 'Sólo se pueden devolver pedidos ya entregados o retirados.'
+					};
+				}
+
+				if (await devolucionAbiertaDePedido(input.orderId)) {
+					return { success: false, error: 'Ya tenés una devolución en curso para este pedido.' };
+				}
+
+				const dentroDePlazo = dentroDelPlazoDeArrepentimiento(order.entregado_at || order.$updatedAt);
+
+				const devolucion = await crearDevolucion({
+					orderId: input.orderId,
+					profileId: profile.$id,
+					motivo: input.motivo,
+					montoCentavos: order.total || 0,
+					dentroDePlazo,
+					detalle: input.detalle
+				});
+
+				return { success: true, id: devolucion.$id, dentroDePlazo };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
+			}
+		}
+	}),
+
+	/**
+	 * La administración aprueba o rechaza una devolución.
+	 *
+	 * Aprobar con `saldo_a_favor` acredita el crédito; con `reintegro` mueve el
+	 * pedido a `reembolsado` por el camino que ya existía (revierte comisiones y
+	 * restaura stock). La plata de vuelta por Mercado Pago la hace la clienta
+	 * desde el panel de MP: acá queda el registro.
+	 *
+	 * El movimiento de plata va DESPUÉS de marcar la solicitud como resuelta,
+	 * porque resolverDevolucion es lo que impide resolverla dos veces — si se
+	 * acreditara primero, un doble clic podría acreditar dos veces.
+	 */
+	resolverSolicitudDevolucion: defineAction({
+		accept: 'json',
+		input: z.object({
+			devolucionId: z.string().min(1),
+			estado: z.enum(['aprobada', 'rechazada']),
+			resolucion: z.enum(['reintegro', 'saldo_a_favor']).optional(),
+			montoCentavos: z.number().int().min(0).optional(),
+			notaAdmin: z.string().trim().max(500).optional()
+		}),
+		handler: async (input, ctx) => {
+			try {
+				const actor = requireRole(ctx, 'admin', 'gestion');
+
+				const devolucion = await resolverDevolucion({
+					devolucionId: input.devolucionId,
+					estado: input.estado,
+					resolucion: input.resolucion,
+					montoCentavos: input.montoCentavos,
+					actorProfileId: actor.profileId,
+					notaAdmin: input.notaAdmin
+				});
+
+				if (input.estado !== 'aprobada') {
+					return { success: true, id: devolucion.$id };
+				}
+
+				if (devolucion.resolucion === 'saldo_a_favor') {
+					await emitirCredito({
+						profileId: devolucion.profile_id,
+						montoCentavos: devolucion.monto_centavos,
+						motivo: `Devolución del pedido ${devolucion.order_id}`,
+						returnId: devolucion.$id,
+						creadoPor: actor.profileId
+					});
+					return { success: true, id: devolucion.$id, acreditado: devolucion.monto_centavos };
+				}
+
+				// Reintegro: se marca el pedido como reembolsado por el mismo camino
+				// que el reembolso manual, que ya revierte comisiones y stock. Si el
+				// pedido no admite la transición (por ejemplo ya estaba reembolsado)
+				// no se hace fallar la resolución: la devolución ya quedó decidida.
+				try {
+					const order: any = await db.getDocument('urbanpoint', 'orders', devolucion.order_id);
+					const estadoActual = normalizarEstadoPedido(order.estado);
+					if (estadoActual && esTransicionValida(estadoActual, 'reembolsado')) {
+						await revertirComisiones(
+							devolucion.order_id,
+							`Reversa por devolución ${devolucion.$id} (admin ${actor.profileId})`
+						);
+						await restaurarStockDeOrden(devolucion.order_id);
+						await db.updateDocument('urbanpoint', 'orders', devolucion.order_id, {
+							estado: 'reembolsado'
+						});
+					}
+				} catch (e) {
+					console.error('Devolución aprobada, pero no se pudo reembolsar el pedido:', e);
+				}
+
+				return { success: true, id: devolucion.$id };
 			} catch (error: any) {
 				return { success: false, error: mensajeParaCliente(error) };
 			}

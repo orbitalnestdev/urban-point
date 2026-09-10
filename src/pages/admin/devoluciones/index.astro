@@ -1,0 +1,295 @@
+---
+export const prerender = false;
+
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { createAdminClient } from '../../../lib/server/appwrite';
+import { Query } from 'node-appwrite';
+import { RotateCcw } from 'lucide-react';
+import { toSafeJson } from '../../../lib/safeJson';
+import {
+	devolucionesParaPanel,
+	devolucionesDisponibles,
+	resolucionSugerida,
+	ESTADOS_ABIERTOS,
+	DIAS_ARREPENTIMIENTO
+} from '../../../lib/server/devoluciones';
+import { formatearCentavos } from '../../../lib/pricing';
+
+const { databases } = createAdminClient();
+
+const hayColeccion = await devolucionesDisponibles();
+const devoluciones = hayColeccion ? await devolucionesParaPanel() : [];
+
+// Datos de contexto: sin el pedido y el cliente, la pantalla obliga a abrir
+// otra pestaña para poder decidir.
+const idsPedidos = [...new Set(devoluciones.map((d) => d.order_id).filter(Boolean))];
+const idsPerfiles = [...new Set(devoluciones.map((d) => d.profile_id).filter(Boolean))];
+
+const pedidos = new Map<string, any>();
+const perfiles = new Map<string, any>();
+
+await Promise.all([
+	...idsPedidos.map(async (id) => {
+		const doc = await databases.getDocument('urbanpoint', 'orders', id).catch(() => null);
+		if (doc) pedidos.set(id, doc);
+	}),
+	...idsPerfiles.map(async (id) => {
+		const doc = await databases.getDocument('urbanpoint', 'profiles', id).catch(() => null);
+		if (doc) perfiles.set(id, doc);
+	})
+]);
+
+const ETIQUETA_MOTIVO: Record<string, string> = {
+	arrepentimiento: 'Se arrepintió',
+	garantia: 'Falla / garantía',
+	cambio_preferencia: 'Cambio por preferencia'
+};
+
+const pendientes = devoluciones.filter((d) => ESTADOS_ABIERTOS.includes(d.estado));
+const formatoFecha = new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+---
+
+<AdminLayout title="Devoluciones | UrbanPoint">
+	<div class="space-y-6 max-w-6xl mx-auto pb-12">
+		<!-- Header -->
+		<div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-3.5">
+			<div class="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center shrink-0">
+				<RotateCcw className="w-5 h-5" />
+			</div>
+			<div>
+				<h1 class="text-xl font-black text-slate-900 tracking-tight">Devoluciones</h1>
+				<p class="text-xs text-slate-500 font-medium">
+					{pendientes.length} pendiente{pendientes.length === 1 ? '' : 's'} de resolver.
+				</p>
+			</div>
+		</div>
+
+		{!hayColeccion && (
+			<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+				<p class="font-bold text-amber-900 text-sm">Falta crear la colección de devoluciones.</p>
+				<p class="text-xs text-amber-800 mt-1 font-mono">
+					APPWRITE_API_KEY=... npx tsx scripts/setup_return_requests.ts --apply
+				</p>
+			</div>
+		)}
+
+		{hayColeccion && devoluciones.length === 0 && (
+			<div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-12 text-center">
+				<p class="font-semibold text-slate-700">Todavía no hay devoluciones.</p>
+				<p class="text-xs text-slate-400 mt-1">Cuando un cliente pida una desde su cuenta, aparece acá.</p>
+			</div>
+		)}
+
+		<div class="space-y-4">
+			{devoluciones.map((d) => {
+				const pedido = pedidos.get(d.order_id);
+				const cliente = perfiles.get(d.profile_id);
+				const abierta = ESTADOS_ABIERTOS.includes(d.estado);
+				return (
+					<div class={`bg-white rounded-3xl border shadow-xs overflow-hidden ${abierta ? 'border-amber-300' : 'border-slate-200/80'}`}>
+						<div class="p-5 flex items-start justify-between gap-4 flex-wrap">
+							<div class="min-w-0 space-y-1">
+								<div class="flex items-center gap-2 flex-wrap">
+									<span class="font-black text-slate-900">
+										Pedido #{pedido?.numero || d.order_id.slice(-6)}
+									</span>
+									<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+										{ETIQUETA_MOTIVO[d.motivo] || d.motivo}
+									</span>
+									{d.estado === 'solicitada' && (
+										<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">Pendiente</span>
+									)}
+									{d.estado === 'aprobada' && (
+										<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+											Aprobada · {d.resolucion === 'saldo_a_favor' ? 'saldo a favor' : 'reintegro'}
+										</span>
+									)}
+									{d.estado === 'rechazada' && (
+										<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">Rechazada</span>
+									)}
+									{d.motivo === 'arrepentimiento' && !d.dentro_de_plazo && (
+										<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
+											Fuera de los {DIAS_ARREPENTIMIENTO} días
+										</span>
+									)}
+								</div>
+								<p class="text-xs text-slate-500">
+									{cliente?.nombre || 'Cliente'} · {cliente?.email || 'sin email'} · pedida el {formatoFecha.format(new Date(d.solicitado_at))}
+								</p>
+								{d.detalle && <p class="text-sm text-slate-700 mt-2 bg-slate-50 rounded-xl p-3">“{d.detalle}”</p>}
+								{d.nota_admin && <p class="text-xs text-slate-500 mt-2">Nota interna: {d.nota_admin}</p>}
+							</div>
+
+							<div class="flex items-center gap-3 shrink-0">
+								<span class="font-black text-slate-900">{formatearCentavos(d.monto_centavos)}</span>
+								{abierta && (
+									<button
+										class="btn-resolver px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
+										data-devolucion={toSafeJson({
+											id: d.$id,
+											motivo: d.motivo,
+											monto: d.monto_centavos,
+											sugerida: resolucionSugerida(d.motivo)
+										})}
+									>
+										Resolver
+									</button>
+								)}
+							</div>
+						</div>
+					</div>
+				);
+			})}
+		</div>
+	</div>
+
+	<!-- Modal de resolución -->
+	<div id="modal-resolver" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+		<div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6">
+			<div class="flex items-center justify-between mb-5 pb-4 border-b border-slate-200">
+				<h3 class="text-lg font-bold text-slate-900">Resolver devolución</h3>
+				<button id="btn-close-resolver" class="text-slate-400 hover:text-slate-600 text-2xl font-bold cursor-pointer">&times;</button>
+			</div>
+
+			<form id="form-resolver" class="space-y-4">
+				<input type="hidden" id="resolver-id" />
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Cómo se resuelve</label>
+					<div class="space-y-2">
+						<label class="flex items-start gap-3 p-3 border-2 border-slate-200 rounded-xl cursor-pointer">
+							<input type="radio" name="resolucion" value="reintegro" class="mt-0.5 accent-indigo-600" />
+							<span>
+								<span class="block font-bold text-sm text-slate-900">Devolver la plata</span>
+								<span class="block text-xs text-slate-500">El pedido pasa a "reembolsado" (revierte comisiones y stock). El reintegro por Mercado Pago lo hacés desde el panel de MP.</span>
+							</span>
+						</label>
+						<label class="flex items-start gap-3 p-3 border-2 border-slate-200 rounded-xl cursor-pointer">
+							<input type="radio" name="resolucion" value="saldo_a_favor" class="mt-0.5 accent-indigo-600" />
+							<span>
+								<span class="block font-bold text-sm text-slate-900">Acreditar saldo a favor</span>
+								<span class="block text-xs text-slate-500">Le queda como crédito para su próxima compra.</span>
+							</span>
+						</label>
+					</div>
+					<div id="aviso-consentimiento" class="hidden mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+						<p class="text-xs text-amber-900 font-semibold">
+							Ojo: en un arrepentimiento la ley obliga a devolver el dinero al mismo medio de pago.
+							El saldo a favor sólo vale si el cliente lo aceptó expresamente.
+						</p>
+					</div>
+				</div>
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Monto a devolver (pesos)</label>
+					<input
+						type="number"
+						id="resolver-monto"
+						step="0.01"
+						min="0"
+						class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600"
+					/>
+					<p class="text-[11px] text-slate-500 mt-1">
+						Viene con el total del pedido. Bajalo si se devuelve sólo una parte; no puede superarlo.
+					</p>
+				</div>
+
+				<div>
+					<label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nota interna (opcional)</label>
+					<input
+						type="text"
+						id="resolver-nota"
+						maxlength="500"
+						class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-600"
+					/>
+				</div>
+
+				<div class="flex justify-between gap-3 pt-4 border-t border-slate-200">
+					<button type="button" id="btn-rechazar" class="px-5 py-2.5 bg-rose-50 text-rose-700 font-bold rounded-xl hover:bg-rose-100 text-sm cursor-pointer">Rechazar</button>
+					<div class="flex gap-3">
+						<button type="button" id="btn-cancel-resolver" class="px-5 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 text-sm cursor-pointer">Cancelar</button>
+						<button type="submit" id="btn-aprobar" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md text-sm cursor-pointer">Aprobar</button>
+					</div>
+				</div>
+			</form>
+		</div>
+	</div>
+
+	<script>
+		import { actions } from 'astro:actions';
+
+		const modal = document.getElementById('modal-resolver');
+		const inputId = document.getElementById('resolver-id') as HTMLInputElement;
+		const inputMonto = document.getElementById('resolver-monto') as HTMLInputElement;
+		const inputNota = document.getElementById('resolver-nota') as HTMLInputElement;
+		const aviso = document.getElementById('aviso-consentimiento');
+		let motivoActual = '';
+
+		function radios() {
+			return document.querySelectorAll('input[name="resolucion"]') as NodeListOf<HTMLInputElement>;
+		}
+
+		function actualizarAviso() {
+			const elegida = [...radios()].find((r) => r.checked)?.value;
+			// La misma regla que requiereConsentimiento() en el servidor.
+			const haceFalta = motivoActual === 'arrepentimiento' && elegida === 'saldo_a_favor';
+			aviso?.classList.toggle('hidden', !haceFalta);
+		}
+
+		document.querySelectorAll('.btn-resolver').forEach((btn) => {
+			btn.addEventListener('click', (e) => {
+				const datos = JSON.parse((e.currentTarget as HTMLElement).dataset.devolucion || '{}');
+				inputId.value = datos.id;
+				inputMonto.value = ((datos.monto || 0) / 100).toFixed(2);
+				inputNota.value = '';
+				motivoActual = datos.motivo;
+				// Preseleccionada según el motivo: para un arrepentimiento, plata.
+				radios().forEach((r) => { r.checked = r.value === datos.sugerida; });
+				actualizarAviso();
+				modal?.classList.remove('hidden');
+			});
+		});
+
+		radios().forEach((r) => r.addEventListener('change', actualizarAviso));
+
+		const cerrar = () => modal?.classList.add('hidden');
+		document.getElementById('btn-close-resolver')?.addEventListener('click', cerrar);
+		document.getElementById('btn-cancel-resolver')?.addEventListener('click', cerrar);
+
+		async function enviar(estado: 'aprobada' | 'rechazada') {
+			const btn = document.getElementById(estado === 'aprobada' ? 'btn-aprobar' : 'btn-rechazar') as HTMLButtonElement;
+			const etiqueta = btn.textContent;
+			btn.disabled = true;
+			btn.textContent = 'Guardando...';
+
+			const pesos = Number(inputMonto.value);
+			const { data, error } = await actions.resolverSolicitudDevolucion({
+				devolucionId: inputId.value,
+				estado,
+				resolucion: estado === 'aprobada'
+					? ([...radios()].find((r) => r.checked)?.value as 'reintegro' | 'saldo_a_favor')
+					: undefined,
+				montoCentavos: Number.isFinite(pesos) ? Math.round(pesos * 100) : undefined,
+				notaAdmin: inputNota.value || undefined
+			});
+
+			if (error || !data?.success) {
+				alert(data?.error || error?.message || 'No se pudo resolver la devolución.');
+				btn.disabled = false;
+				btn.textContent = etiqueta;
+				return;
+			}
+
+			window.location.reload();
+		}
+
+		document.getElementById('form-resolver')?.addEventListener('submit', (e) => {
+			e.preventDefault();
+			enviar('aprobada');
+		});
+
+		document.getElementById('btn-rechazar')?.addEventListener('click', () => {
+			if (confirm('¿Rechazar esta devolución?')) enviar('rechazada');
+		});
+	</script>
+</AdminLayout>
