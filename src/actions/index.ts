@@ -23,6 +23,7 @@ import { invalidateSessionCache } from '../middleware';
 import { resolverComisiones, cancelarOrdenYRestaurarStock, liquidarComisiones, confirmarComisionesDeOrden, getCanillitaStats, revertirComisiones, restaurarStockDeOrden, descontarStock, restaurarStock } from '../lib/commissions';
 import { integrantesDeCombo } from '../lib/combos';
 import { crearSolicitud, solicitudAbierta, resolverSolicitud, cerrarSolicitudPorPago } from '../lib/server/payoutRequests';
+import { reservarParaOrden, confirmarReserva, liberarReserva, saldoDisponible, emitirCredito, ajustarSaldo } from '../lib/server/creditos';
 
 import { createAdminClient, escribirDocumentoTolerante } from '../lib/server/appwrite';
 import { invalidateCatalogCache } from '../lib/server/catalogCache';
@@ -818,10 +819,14 @@ export const server = {
 			pickupPointId: z.string().optional(),
 			fulfillment: z.enum(['retiro', 'envio']).optional(),
 			direccionEnvio: z.string().optional(),
-			costoEnvio: z.number().optional(),
-			// referralCode se quitó a propósito: la atribución se resuelve en el
-			// servidor desde la cookie, no con lo que informe el cliente.
+			// referralCode y costoEnvio se quitaron a propósito: la atribución se
+			// resuelve en el servidor desde la cookie, y el envío desde settings,
+			// no con lo que informe el cliente.
 			paymentMethod: z.string().optional(),
+			// Booleano, NO un monto: cuánto saldo se aplica lo decide el servidor
+			// leyendo el ledger. Un campo numérico acá sería un descuento que
+			// elige el comprador.
+			usarSaldo: z.boolean().optional(),
 			// Sólo se usan (y se exigen) cuando la compra es sin cuenta — ver
 			// más abajo. Con cuenta, el nombre/mail salen del profile.
 			guestName: z.string().trim().max(255).optional(),
@@ -1118,11 +1123,80 @@ export const server = {
 					})
 				));
 
+				// --- Saldo a favor ---
+				//
+				// Se reserva DESPUÉS de crear la orden porque el asiento se ata al
+				// orderId, y ANTES de armar el cobro. El monto no viene del cliente:
+				// se calcula acá contra el ledger, con tope en el total del pedido.
+				//
+				// El total de la orden tiene que quedar con el descuento ya
+				// aplicado: el webhook rechaza como "monto insuficiente" cualquier
+				// pago por debajo de order.total (ver mercadopago.ts), así que si el
+				// crédito no se refleja acá, ningún pago con saldo se acreditaría.
+				let saldoAplicado = 0;
+				let netoACobrar = grandTotal;
+				if (input.usarSaldo && profileId) {
+					saldoAplicado = await reservarParaOrden({
+						profileId,
+						orderId: orderDoc.$id,
+						hastaCentavos: grandTotal
+					});
+
+					if (saldoAplicado > 0) {
+						try {
+							netoACobrar = grandTotal - saldoAplicado;
+							await escribirDocumentoTolerante('orders', {
+								descuento: saldoAplicado,
+								total: netoACobrar
+							}, orderDoc.$id);
+
+							// MP no acepta unit_price negativo, y prorratear el descuento
+							// entre las líneas deja errores de redondeo que pueden dejar el
+							// cobro por debajo de order.total. Con saldo aplicado se manda
+							// una sola línea por el neto exacto; el desglose real vive en
+							// nuestra propia orden.
+							prefItems.length = 0;
+							prefItems.push({
+								id: orderDoc.$id,
+								title: `Pedido #${orderPayload.numero}`,
+								quantity: 1,
+								unit_price: netoACobrar / 100,
+								currency_id: 'ARS'
+							});
+						} catch (e) {
+							// Si el descuento no se pudo grabar en la orden, el cliente
+							// quedaría con el saldo retenido Y pagando el total. Se
+							// devuelve el saldo y el pedido sigue sin descuento: cobrar de
+							// más es peor que no aplicar el crédito.
+							console.error('No se pudo aplicar el saldo al pedido, se devuelve:', e);
+							await liberarReserva(orderDoc.$id, 'no se pudo grabar el descuento en el pedido');
+							saldoAplicado = 0;
+							netoACobrar = grandTotal;
+						}
+					}
+				}
+
+				// Saldo que cubre todo: no hay nada que cobrar por MP. El crédito ya
+				// es plata cobrada, así que la orden nace pagada y se le resuelven
+				// las comisiones igual que a cualquier pago acreditado.
+				const cubiertoConSaldo = saldoAplicado > 0 && netoACobrar === 0;
+				if (cubiertoConSaldo) {
+					await escribirDocumentoTolerante('orders', { estado: 'pagado' }, orderDoc.$id);
+					await confirmarReserva(orderDoc.$id);
+					try {
+						await resolverComisiones(orderDoc.$id);
+					} catch (e) {
+						console.error('No se pudieron resolver las comisiones del pedido pagado con saldo:', e);
+					}
+				}
+
 				// Resolve names & emails for SMTP notifications.
-				// Sólo para pedidos "a convenir": los pagados por MP se notifican
-				// desde el webhook al acreditarse; mandar acá también generaba un
-				// mail duplicado que encima decía "Pagado" sobre un pendiente_pago.
-				if (input.paymentMethod === 'a_convenir') (async () => {
+				// Los pagados por MP se notifican desde el webhook al acreditarse;
+				// mandar acá también generaba un mail duplicado que encima decía
+				// "Pagado" sobre un pendiente_pago. Los que no pasan por MP —"a
+				// convenir" y los cubiertos con saldo— no tienen webhook que los
+				// avise, así que se notifican desde acá.
+				if (input.paymentMethod === 'a_convenir' || cubiertoConSaldo) (async () => {
 					try {
 						let customerName = orderPayload.guest_name || '';
 						let customerEmail = orderPayload.guest_email || '';
@@ -1164,7 +1238,7 @@ export const server = {
 
 						await sendOrderNotificationEmails({
 							...orderDoc,
-							total: grandTotal,
+							total: netoACobrar,
 							customerName,
 							customerEmail,
 							customerPhone,
@@ -1179,12 +1253,18 @@ export const server = {
 				})();
 
 
+				// Sin nada que cobrar no hay preferencia de MP que crear.
+				if (cubiertoConSaldo) {
+					return { success: true, init_point: `/checkout/success?order_id=${orderDoc.$id}` };
+				}
+
 				if (input.paymentMethod === 'a_convenir') {
 					// La UI oculta esta opción cuando está deshabilitada, pero la
 					// action es un POST público: hay que validar acá también.
 					const settingsPago = await getSiteSettings();
 					if (!settingsPago.transferencia_enabled) {
 						await escribirDocumentoTolerante('orders', { estado: 'cancelado' }, orderDoc.$id).catch(() => {});
+						await liberarReserva(orderDoc.$id, 'pago a convenir deshabilitado');
 						return { success: false, error: 'El pago a convenir no está habilitado.' };
 					}
 					return { success: true, init_point: `/checkout/success?order_id=${orderDoc.$id}` };
@@ -1198,6 +1278,8 @@ export const server = {
 				if (!mpAccessToken) {
 					// Antes se devolvía un link de sandbox falso con success: true y
 					// el cliente creía que iba a pagar. Mejor decir la verdad.
+					// El saldo reservado vuelve: este pedido no se va a poder pagar.
+					await liberarReserva(orderDoc.$id, 'Mercado Pago no configurado');
 					return {
 						success: false,
 						error: 'Mercado Pago no está configurado. Elegí otro medio de pago o contactanos.'
@@ -1702,6 +1784,49 @@ export const server = {
 		}
 	}),
 
+	/**
+	 * Acredita o descuenta saldo a favor a mano.
+	 *
+	 * Sólo admin: es plata que sale del bolsillo de la clienta, no una tarea de
+	 * gestión de tienda. Un monto negativo es un ajuste (corregir una carga mal
+	 * hecha) y por eso exige motivo sí o sí.
+	 */
+	moverSaldoCliente: defineAction({
+		accept: 'json',
+		input: z.object({
+			profileId: z.string().min(1),
+			montoCentavos: z.number().int(),
+			motivo: z.string().trim().min(1).max(500)
+		}),
+		handler: async (input, ctx) => {
+			try {
+				const actor = requireRole(ctx, 'admin');
+
+				if (input.montoCentavos === 0) {
+					return { success: false, error: 'El monto no puede ser cero.' };
+				}
+
+				const movimiento = input.montoCentavos > 0
+					? await emitirCredito({
+						profileId: input.profileId,
+						montoCentavos: input.montoCentavos,
+						motivo: input.motivo,
+						creadoPor: actor.profileId
+					})
+					: await ajustarSaldo({
+						profileId: input.profileId,
+						montoCentavos: input.montoCentavos,
+						motivo: input.motivo,
+						creadoPor: actor.profileId
+					});
+
+				return { success: true, id: movimiento.$id, saldo: await saldoDisponible(input.profileId) };
+			} catch (error: any) {
+				return { success: false, error: mensajeParaCliente(error) };
+			}
+		}
+	}),
+
 	updateOrderStatus: defineAction({
 		accept: 'json',
 		input: z.object({
@@ -1735,12 +1860,17 @@ export const server = {
 
 				if (targetState === 'cancelado') {
 					await cancelarOrdenYRestaurarStock(input.orderId);
+					// El saldo a favor que se había reservado vuelve al cliente.
+					await liberarReserva(input.orderId, `pedido cancelado por admin ${actor.profileId}`);
 				} else if (targetState === 'pagado') {
 					await db.updateDocument('urbanpoint', 'orders', input.orderId, {
 						estado: 'pagado',
 						paid_at: new Date().toISOString()
 					});
 					await resolverComisiones(input.orderId);
+					// Cobrado por fuera de MP (transferencia, efectivo): el saldo
+					// aplicado a este pedido ya se gastó.
+					await confirmarReserva(input.orderId);
 				} else if (targetState === 'reembolsado') {
 					// Mismo tratamiento que el reembolso/contracargo del webhook de MP
 					// (mercadopago.ts): antes esta rama sólo cambiaba el campo `estado`

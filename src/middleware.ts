@@ -220,9 +220,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
 				return context.redirect('/');
 			}
 
-			// Rol "gestion" NO tiene acceso a /admin/configuracion ni /admin/equipo
+			// Rol "gestion" NO tiene acceso a /admin/configuracion, /admin/equipo
+			// ni /admin/saldos (acreditar saldo a favor es mover plata, no
+			// gestionar la tienda; la action moverSaldoCliente también exige admin).
 			if (profile.role === 'gestion') {
-				if (pathname.startsWith('/admin/configuracion') || pathname.startsWith('/admin/equipo')) {
+				if (
+					pathname.startsWith('/admin/configuracion') ||
+					pathname.startsWith('/admin/equipo') ||
+					pathname.startsWith('/admin/saldos')
+				) {
 					return new Response(
 						`<!DOCTYPE html>
 						<html lang="es">

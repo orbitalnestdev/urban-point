@@ -1,0 +1,82 @@
+---
+export const prerender = false;
+
+import ClientLayout from '../../layouts/ClientLayout.astro';
+import { getClientProfile } from '../../lib/server/auth';
+import { saldoDisponible, movimientosDe } from '../../lib/server/creditos';
+import { formatearCentavos } from '../../lib/pricing';
+
+const profile = await getClientProfile(Astro);
+// ClientLayout hace el guard y redirige; acá sólo se evita consultar sin perfil.
+const saldoCentavos = profile ? await saldoDisponible(profile.$id) : 0;
+const movimientos = profile ? await movimientosDe(profile.$id) : [];
+
+/** Cómo se le explica al cliente cada movimiento. */
+function etiquetaDe(m: any): { texto: string; detalle: string } {
+	if (m.tipo === 'emision') return { texto: 'Saldo acreditado', detalle: m.motivo || '' };
+	if (m.tipo === 'ajuste') {
+		return {
+			texto: m.monto_centavos > 0 ? 'Ajuste a favor' : 'Ajuste',
+			detalle: m.motivo || ''
+		};
+	}
+	// reserva
+	if (m.estado === 'liberado') return { texto: 'Saldo devuelto', detalle: 'El pedido no se completó' };
+	if (m.estado === 'reservado') return { texto: 'Saldo reservado', detalle: 'Pedido en curso' };
+	return { texto: 'Saldo usado', detalle: m.motivo || '' };
+}
+
+const formatoFecha = new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+---
+
+<ClientLayout title="Mi Saldo | UrbanPoint" activeTab="saldo">
+	<div class="space-y-6">
+		<!-- Saldo disponible -->
+		<div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
+			<p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Saldo a favor disponible</p>
+			<p class="text-4xl font-black text-[#2D5A27] tracking-tight">{formatearCentavos(saldoCentavos)}</p>
+			{saldoCentavos > 0 ? (
+				<p class="text-sm text-slate-600 mt-3">
+					Se descuenta solo de tu próxima compra: vas a poder aplicarlo al finalizar el pedido.
+				</p>
+			) : (
+				<p class="text-sm text-slate-500 mt-3">
+					Todavía no tenés saldo a favor. Si te acreditamos uno por una devolución, lo vas a ver acá.
+				</p>
+			)}
+		</div>
+
+		<!-- Movimientos -->
+		<div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+			<div class="px-6 py-4 border-b border-slate-100">
+				<h2 class="font-bold text-slate-900">Movimientos</h2>
+			</div>
+
+			{movimientos.length === 0 ? (
+				<p class="px-6 py-10 text-center text-sm text-slate-500">Todavía no hay movimientos.</p>
+			) : (
+				<div class="divide-y divide-slate-100">
+					{movimientos.map((m: any) => {
+						const { texto, detalle } = etiquetaDe(m);
+						const suma = m.monto_centavos > 0;
+						const anulado = m.estado === 'liberado';
+						return (
+							<div class="px-6 py-4 flex items-center justify-between gap-4">
+								<div class="min-w-0">
+									<p class={`font-bold text-sm ${anulado ? 'text-slate-400' : 'text-slate-900'}`}>{texto}</p>
+									{detalle && <p class="text-xs text-slate-500 mt-0.5 truncate">{detalle}</p>}
+									<p class="text-[11px] text-slate-400 mt-0.5">
+										{formatoFecha.format(new Date(m.created_at))}
+									</p>
+								</div>
+								<span class={`font-black text-sm shrink-0 ${anulado ? 'text-slate-300 line-through' : suma ? 'text-[#2D5A27]' : 'text-slate-700'}`}>
+									{suma ? '+' : '−'}{formatearCentavos(Math.abs(m.monto_centavos))}
+								</span>
+							</div>
+						);
+					})}
+				</div>
+			)}
+		</div>
+	</div>
+</ClientLayout>

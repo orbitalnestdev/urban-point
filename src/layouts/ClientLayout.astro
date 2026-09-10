@@ -3,12 +3,14 @@ import Layout from './Layout.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import { getClientProfile } from '../lib/server/auth';
+import { saldoDisponible } from '../lib/server/creditos';
+import { formatearCentavos } from '../lib/pricing';
 
 export const prerender = false;
 
 export interface Props {
 	title: string;
-	activeTab?: 'dashboard' | 'pedidos' | 'perfil';
+	activeTab?: 'dashboard' | 'pedidos' | 'perfil' | 'saldo';
 }
 
 const { title, activeTab = 'dashboard' } = Astro.props;
@@ -32,6 +34,10 @@ if (!profile) {
 	// las cookies inválidas.
 	return Astro.redirect('/login');
 }
+
+// Devuelve 0 mientras la colección del ledger no exista (ver creditos.ts), así
+// que el panel del cliente sigue funcionando antes de correr la migración.
+const saldoCentavos = await saldoDisponible(profile.$id);
 ---
 
 <Layout title={title}>
@@ -44,8 +50,14 @@ if (!profile) {
 				<div>
 					<h1 class="text-3xl font-extrabold mb-1">¡Hola, {profile.nombre.split(' ')[0]}!</h1>
 					<p class="text-emerald-100/80 text-sm">Gestioná tus pedidos y datos desde acá.</p>
+					{saldoCentavos > 0 && (
+						<a href="/mi-cuenta/saldo" class="inline-flex items-center gap-2 mt-3 px-3 py-1.5 bg-white/15 hover:bg-white/25 border border-white/20 rounded-xl text-sm font-bold transition-colors">
+							<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/></svg>
+							Saldo a favor: {formatearCentavos(saldoCentavos)}
+						</a>
+					)}
 				</div>
-				
+
 				<div class="mt-4 md:mt-0 flex gap-3">
 					<a href="/productos" class="px-5 py-2.5 bg-white text-[#2D5A27] font-bold text-sm rounded-xl hover:bg-slate-100 transition-colors shadow-sm">
 						Nuevo Pedido
@@ -69,6 +81,10 @@ if (!profile) {
 						<a href="/mi-cuenta/pedidos" class={`flex items-center gap-3 px-5 py-4 font-bold text-sm border-l-4 border-t border-t-slate-100 transition-all ${activeTab === 'pedidos' ? 'border-l-[#2D5A27] text-[#2D5A27] bg-[#F2F7F3]' : 'border-l-transparent text-slate-600 hover:bg-slate-50'}`}>
 							<svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
 							Mis Pedidos
+						</a>
+						<a href="/mi-cuenta/saldo" class={`flex items-center gap-3 px-5 py-4 font-bold text-sm border-l-4 border-t border-t-slate-100 transition-all ${activeTab === 'saldo' ? 'border-l-[#2D5A27] text-[#2D5A27] bg-[#F2F7F3]' : 'border-l-transparent text-slate-600 hover:bg-slate-50'}`}>
+							<svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/></svg>
+							Mi Saldo
 						</a>
 						<a href="/mi-cuenta/perfil" class={`flex items-center gap-3 px-5 py-4 font-bold text-sm border-l-4 border-t border-t-slate-100 transition-all ${activeTab === 'perfil' ? 'border-l-[#2D5A27] text-[#2D5A27] bg-[#F2F7F3]' : 'border-l-transparent text-slate-600 hover:bg-slate-50'}`}>
 							<svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>

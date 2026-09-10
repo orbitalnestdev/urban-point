@@ -6,8 +6,17 @@ import { getSiteSettings } from '../../lib/server/settings';
 import { parseActiveNodeCookie } from '../../lib/nodeSession';
 import { toSafeJson } from '../../lib/safeJson';
 import { createAdminClient } from '../../lib/server/appwrite';
+import { saldoDisponible } from '../../lib/server/creditos';
+import { formatearCentavos } from '../../lib/pricing';
 
 const esInvitado = !Astro.locals.user;
+
+// El saldo a favor es de la cuenta: quien compra como invitado no tiene.
+// Devuelve 0 mientras el ledger no exista, así que el checkout no depende de
+// que la migración ya esté corrida.
+const saldoCentavos = Astro.locals.user?.profileId
+	? await saldoDisponible(Astro.locals.user.profileId)
+	: 0;
 
 // La clienta quiere el teléfono de contacto SIEMPRE, no sólo para
 // invitados: con cuenta, hoy sólo está si la persona lo cargó a mano en
@@ -155,6 +164,22 @@ const envioConfig = {
         )}
 
         <!-- Payment Method Section -->
+        {saldoCentavos > 0 && (
+            <div class="relative z-10">
+                <label class="flex items-start gap-3 p-5 bg-[#F2F7F3] border-2 border-[#2D5A27]/20 rounded-2xl cursor-pointer hover:border-[#2D5A27]/40 transition-colors">
+                    <input type="checkbox" id="usar-saldo" checked class="mt-0.5 w-5 h-5 accent-[#2D5A27] cursor-pointer shrink-0" />
+                    <span>
+                        <span class="block font-extrabold text-slate-900">
+                            Usar mi saldo a favor ({formatearCentavos(saldoCentavos)})
+                        </span>
+                        <span class="block text-xs text-slate-600 mt-0.5">
+                            Se descuenta del total. Si no alcanza a cubrirlo, pagás la diferencia con el medio que elijas.
+                        </span>
+                    </span>
+                </label>
+            </div>
+        )}
+
         <div class="relative z-10">
             <h2 class="text-xl font-bold text-slate-900 mb-6 flex items-center gap-3">
                 <div class="p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
@@ -461,6 +486,9 @@ const envioConfig = {
                         pickupPointId: finalCheckout.pickupPointId,
                         direccionEnvio: finalCheckout.direccionEnvio,
                         paymentMethod: finalCheckout.paymentMethod,
+                        // Sólo el sí/no: cuánto saldo se aplica lo decide el
+                        // servidor leyendo el ledger.
+                        usarSaldo: !!(document.getElementById('usar-saldo') as HTMLInputElement)?.checked,
                         guestName: guestNameEl?.value,
                         guestPhone: guestPhoneEl?.value,
                         guestEmail: guestEmailEl?.value

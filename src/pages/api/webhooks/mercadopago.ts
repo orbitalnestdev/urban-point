@@ -12,6 +12,7 @@ import {
 	restaurarStockDeOrden
 } from '../../../lib/commissions';
 import { obtenerTokenPlataformaValido } from '../../../lib/server/mercadopagoOAuth';
+import { confirmarReserva, liberarReserva } from '../../../lib/server/creditos';
 
 
 export const prerender = false;
@@ -167,6 +168,9 @@ export async function aplicarEstadoDePago(
 				mp_payment_id: paymentId,
 				mp_status: mpStatus
 			});
+			// El saldo a favor que se había reservado al crear la orden ya se
+			// gastó: se confirma para que no vuelva a estar disponible.
+			await confirmarReserva(orderId);
 			// resolverComisiones ya es idempotente por order_id.
 			await resolverComisiones(orderId);
 
@@ -257,6 +261,10 @@ export async function aplicarEstadoDePago(
 			if (order.estado === 'reembolsado') return;
 			// La comisión se devengó contra un cobro que ya no existe.
 			await revertirComisiones(orderId, `Reversa por reembolso del pago ${paymentId}`);
+			// Si el saldo aplicado seguía reservado (el pago nunca llegó a
+			// acreditarse), vuelve. Si ya estaba confirmado no se toca: devolverlo
+			// es una decisión de la devolución, no del webhook.
+			await liberarReserva(orderId, `reembolso del pago ${paymentId}`);
 			// El stock descontado al acreditarse el pago también tiene que volver.
 			await restaurarStockDeOrden(orderId);
 			await db.updateDocument('urbanpoint', 'orders', orderId, {
@@ -271,6 +279,8 @@ export async function aplicarEstadoDePago(
 		case 'rejected': {
 			if (order.estado === 'cancelado' || order.estado !== 'pendiente_pago') return;
 			await cancelarOrdenYRestaurarStock(orderId);
+			// El pago no prosperó: el saldo reservado vuelve a estar disponible.
+			await liberarReserva(orderId, `pago ${mpStatus}`);
 			return;
 		}
 
