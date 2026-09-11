@@ -73,7 +73,7 @@ const titulo = accesoDenegado
 const subtitulo = accesoDenegado
 	? 'No pudimos verificar este pedido desde este dispositivo. Si la compra es tuya, ingresá a tu cuenta para ver el detalle.'
 	: esPagoAConvenir
-		? 'Registramos tu pedido. El pago lo coordinás directamente al momento del retiro (efectivo o transferencia).'
+		? 'Registramos tu pedido. El pago lo coordinás directamente al momento de la entrega (efectivo o transferencia).'
 		: 'Tu pedido ha sido procesado correctamente y ya está siendo preparado.';
 ---
 
@@ -98,7 +98,14 @@ const subtitulo = accesoDenegado
 			{subtitulo}
 		</p>
 		
-		{order && order.pickup_code_hash && (
+		{order && order.fulfillment === 'a_convenir' && (
+			<div class="bg-[#F2F7F3] border-2 border-[#D4E5D6] p-8 rounded-3xl shadow-sm text-center max-w-md w-full mb-8">
+				<h3 class="text-lg font-semibold text-[#2D5A27] mb-2">Entrega a convenir</h3>
+				<p class="text-sm text-[#23471F]">Nos comunicamos con vos para coordinar cómo y dónde recibís tu pedido.</p>
+			</div>
+		)}
+
+		{order && order.fulfillment !== 'a_convenir' && order.pickup_code_hash && (
 			<div class="bg-[#F2F7F3] border-2 border-[#D4E5D6] p-8 rounded-3xl shadow-sm text-center max-w-md w-full mb-8 transform hover:scale-[1.02] transition-transform">
 				<h3 class="text-lg font-semibold text-[#2D5A27] mb-2">Código de Retiro</h3>
 				<p class="text-sm text-[#23471F] mb-6">Mostrale este código al canillita para retirar tu pedido.</p>

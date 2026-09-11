@@ -378,6 +378,8 @@ const getStatusClass = (estado: string) => {
 												<p class="font-bold text-slate-900">{o.canillitaProfile.nombre}</p>
 												<p class="text-[10px] text-slate-400">Canillita Atribuidor</p>
 											</div>
+										) : o.fulfillment === 'a_convenir' ? (
+											<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">A convenir</span>
 										) : (
 											<span class="text-slate-400 italic">Directo</span>
 										)}

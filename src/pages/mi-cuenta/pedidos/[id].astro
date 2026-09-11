@@ -159,24 +159,34 @@ const getStatusBadge = (status: string) => {
 				</div>
 			)}
 			
-			<div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
-				<h3 class="font-bold text-slate-900 mb-4 flex items-center gap-2">
-					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-					Punto de Retiro
-				</h3>
-				{pickupPoint && (
-					<div>
-						<p class="font-bold text-slate-900 text-sm mb-1">{pickupPoint.nombre_comercial || pickupPoint.nombre}</p>
-						<p class="text-sm text-slate-600 mb-4">{pickupPoint.direccion}</p>
-						
-						{pickupPoint.map_url && (
-							<a href={pickupPoint.map_url} target="_blank" class="text-xs font-bold text-[#2D5A27] hover:underline flex items-center gap-1">
-								Ver en Google Maps
-								<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-							</a>
-						)}
-					</div>
-				)}
+			{order.fulfillment === 'a_convenir' && (
+				<div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
+					<h3 class="font-bold text-slate-900 mb-2 flex items-center gap-2">
+						<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+						Entrega a convenir
+					</h3>
+					<p class="text-sm text-slate-600">
+						Nos comunicamos con vos para coordinar cómo y dónde recibís tu pedido.
+					</p>
+				</div>
+			)}
+
+			{pickupPoint && (
+				<div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
+					<h3 class="font-bold text-slate-900 mb-4 flex items-center gap-2">
+						<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+						Punto de Retiro
+					</h3>
+					<p class="font-bold text-slate-900 text-sm mb-1">{pickupPoint.nombre_comercial || pickupPoint.nombre}</p>
+					<p class="text-sm text-slate-600 mb-4">{pickupPoint.direccion}</p>
+					{pickupPoint.map_url && (
+						<a href={pickupPoint.map_url} target="_blank" class="text-xs font-bold text-[#2D5A27] hover:underline flex items-center gap-1">
+							Ver en Google Maps
+							<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+						</a>
+					)}
+				</div>
+			)}
 
 				{sePuedeDevolver && (
 					<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
@@ -203,7 +213,6 @@ const getStatusBadge = (status: string) => {
 						)}
 					</div>
 				)}
-			</div>
 		</div>
 	</div>
 

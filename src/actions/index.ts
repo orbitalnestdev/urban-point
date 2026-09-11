@@ -1077,6 +1077,13 @@ export const server = {
 				if (finalPickupPointId) {
 					orderPayload.pickup_point_id = finalPickupPointId;
 					orderPayload.pickup_node_id = finalPickupPointId;
+				} else if (orderPayload.fulfillment === 'retiro') {
+					// Retiro sin punto = entrega a convenir: se coordina con el
+					// cliente después de la compra. Con su propio valor, el resto del
+					// sistema (QR de retiro, botonera del panel, mails) sabe que no hay
+					// ningún canillita al que ir — antes se guardaba como "retiro" y el
+					// cliente recibía un código para mostrarle a nadie.
+					orderPayload.fulfillment = 'a_convenir';
 				}
 
 				// Cobro directo del canillita: si el punto tiene su propia cuenta de

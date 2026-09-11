@@ -225,13 +225,19 @@ export async function sendOrderNotificationEmails(
     if (order.customerEmail) {
       const customerSubject = `🎉 ¡Tu pedido #${orderNum} fue recibido en UrbanPoint!`;
       const isRetiro = order.fulfillment === 'retiro';
+      const isAConvenir = order.fulfillment === 'a_convenir';
 
       const customerContent = `
         <p style="color: #334155; font-size: 15px; line-height: 1.6; margin-top: 0;">
           ¡Hola <strong>${order.customerName || 'Cliente'}</strong>! Muchas gracias por comprar en UrbanPoint. Registramos tu pedido <strong>#${orderNum}</strong> con éxito.
         </p>
 
-        ${isRetiro ? `
+        ${isAConvenir ? `
+          <div style="background-color: #ECFDF5; border: 1.5px solid #A7F3D0; padding: 20px; border-radius: 14px; margin: 20px 0;">
+            <p style="margin: 0 0 6px 0; color: #065F46; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;">💬 ENTREGA A CONVENIR</p>
+            <p style="margin: 0; color: #047857; font-size: 14px; font-weight: 600;">Nos comunicamos con vos para coordinar cómo y dónde recibís tu pedido.</p>
+          </div>
+        ` : isRetiro ? `
           <div style="background-color: #ECFDF5; border: 1.5px solid #A7F3D0; padding: 20px; border-radius: 14px; margin: 20px 0;">
             <p style="margin: 0 0 6px 0; color: #065F46; font-size: 12px; font-weight: 800; uppercase; letter-spacing: 0.5px;">📍 PUNTO DE RETIRO SELECCIONADO</p>
             <p style="margin: 0; color: #047857; font-size: 16px; font-weight: 800;">${order.pickupNodeName || 'Punto UrbanPoint'}</p>
